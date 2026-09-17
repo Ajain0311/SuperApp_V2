@@ -15,6 +15,7 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { notificationService } from '../../services/notificationService';
 
 interface NotificationItem {
   id: string;
@@ -59,8 +60,14 @@ const NOTIFICATIONS: NotificationItem[] = [
 export const NotificationsScreen: React.FC = () => {
   const navigation = useNavigation();
   const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<string | null>(null);
 
   useEffect(() => {
+    notificationService.getExpoPushToken().then((token) => {
+      setPushToken(token);
+    });
+
     apiClient
       .get<any>(ApiEndpoints.common.notifications)
       .then((res) => {
@@ -81,13 +88,104 @@ export const NotificationsScreen: React.FC = () => {
                 : n.category === 'RIDE'
                 ? colors.blue
                 : colors.secondary,
-            isUnread: !n.isRead,
+            isUnread: !n.IsRead,
           }));
           setNotifications(mapped);
         }
       })
       .catch(() => {});
   }, []);
+
+  const handleTestOrderNotification = async () => {
+    setTestStatus('Firing Food Order notification...');
+    await notificationService.scheduleLocalNotification({
+      title: 'Biryani Order #FO-1002 Out For Delivery! 🛵',
+      body: 'Your driver Rahul is 3 mins away. Tap to open live order tracking.',
+      data: {
+        module: 'FOOD_ORDER',
+        orderId: 'FO-1002',
+        orderNumericId: 1002,
+      },
+    });
+    setTestStatus('Sent! Tap the notification banner to test deep link.');
+    setTimeout(() => setTestStatus(null), 4000);
+  };
+
+  const handleTestRideNotification = async () => {
+    setTestStatus('Firing Ride alert...');
+    await notificationService.scheduleLocalNotification({
+      title: 'Driver Arrived at Pickup! 🚖',
+      body: 'Amit Singh (DL 04 AB 9821) is waiting at Connaught Place. Tap to view ride.',
+      data: {
+        module: 'RIDE',
+        rideId: 'RD-5021',
+        rideNumericId: 5021,
+      },
+    });
+    setTestStatus('Sent! Tap the notification banner to test deep link.');
+    setTimeout(() => setTestStatus(null), 4000);
+  };
+
+  const handleTestDelayedNotification = async () => {
+    setTestStatus('Scheduled for 3 seconds from now...');
+    await notificationService.scheduleLocalNotification({
+      title: 'Flash Sale: 50% Off Electronics! ⚡',
+      body: 'Check out newly listed gadgets in Bazaar. Tap to explore.',
+      data: {
+        module: 'MARKETPLACE',
+        listingId: '1',
+      },
+      delaySeconds: 3,
+    });
+    setTimeout(() => setTestStatus(null), 5000);
+  };
+
+  const renderDevTester = () => {
+    if (!__DEV__) return null;
+    return (
+      <View style={styles.devPanel}>
+        <View style={styles.devHeader}>
+          <MaterialIcons name="developer-mode" size={16} color={colors.primary} />
+          <Text style={styles.devTitle}>PUSH NOTIFICATION TESTER (DEV)</Text>
+        </View>
+
+        <Text style={styles.devTokenText} numberOfLines={1}>
+          Token: {pushToken || 'Fetching push token...'}
+        </Text>
+
+        {testStatus && <Text style={styles.devStatusText}>{testStatus}</Text>}
+
+        <View style={styles.devButtonsRow}>
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={handleTestOrderNotification}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="fastfood" size={14} color={colors.primary} />
+            <Text style={styles.devButtonText}>Food Alert</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={handleTestRideNotification}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="directions-car" size={14} color={colors.blue} />
+            <Text style={styles.devButtonText}>Ride Alert</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={handleTestDelayedNotification}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="timer" size={14} color={colors.secondary} />
+            <Text style={styles.devButtonText}>3s Delay</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -105,6 +203,7 @@ export const NotificationsScreen: React.FC = () => {
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderDevTester}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <View
@@ -203,5 +302,57 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textTertiary,
     marginTop: 6,
+  },
+  devPanel: {
+    backgroundColor: 'rgba(255, 107, 0, 0.08)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 0, 0.3)',
+    marginBottom: spacing.md,
+  },
+  devHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  devTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.8,
+  },
+  devTokenText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  devStatusText: {
+    fontSize: 11,
+    color: colors.secondary,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  devButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  devButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: colors.surface,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  devButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
 });

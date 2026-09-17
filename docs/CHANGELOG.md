@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-09-17
+
+### Device Push Notifications & Real Device Geolocation
+- **Expo Notifications Integration (`expo-notifications` ~57.0.19)**:
+  - Created centralized `NotificationService` in `src/services/notificationService.ts`.
+  - Configured Android `POST_NOTIFICATIONS` permission and iOS presentation options (alert, badge, sound).
+  - Implemented `requestPermission()` and `getPermissionStatus()` handling `granted`, `denied`, and `undetermined` permission states.
+  - Implemented `getExpoPushToken()` with safe handling for EAS project ID retrieval and fallback dev token identifier for simulators/local setups.
+  - Inspected backend `SuperApp.API/Controllers/NotificationsController.cs` and added `registerDeviceTokenWithBackend(token)` with graceful 404 handling.
+  - Implemented `scheduleLocalNotification()` supporting immediate delivery and delayed time-interval scheduling.
+  - Implemented deep-link response routing via `handleNotificationResponse(response, navigationRef)` routing to `FoodOrderTracking`, `ActiveRide`, `ListingDetail`, or `Notifications`.
+  - Built interactive Push Notification Tester panel (`__DEV__`) in `NotificationsScreen.tsx` for immediate triggering and routing validation.
+  - Ensured subscription teardown on unmount in `App.tsx` and services to prevent memory leaks.
+- **Expo Location Integration (`expo-location` ~57.0.18)**:
+  - Created centralized `LocationService` in `src/services/locationService.ts`.
+  - Configured Android `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, and iOS `NSLocationWhenInUseUsageDescription`.
+  - Implemented `checkPermission()`, `requestPermission()`, and `isLocationServicesEnabled()` (`Location.hasServicesEnabledAsync()`).
+  - Implemented `getCurrentLocation()` with configurable timeout protection (Promise race with timer clearance), reverse geocoding to human-readable street addresses, and fallback coordinates (`28.6304, 77.2177`).
+  - Implemented `watchLocation()` for foreground coordinate tracking with native unsubscribe teardown.
+  - Maintained Haversine distance (`calculateDistanceKm`) with 1.25 urban road tortuosity factor and travel duration estimation (`estimateDurationMinutes`).
+- **Ride Booking Screen Enhancement (`RideBookingScreen.tsx`)**:
+  - Added "Use Current GPS" button and GPS status badge (`GPS Online` / `Locating...` / `GPS Denied`).
+  - Connected device GPS to update pickup coordinates and reverse-geocoded address, dynamically re-querying `POST /api/ride/estimate` with customer coordinates.
+  - Maintained strict separation between customer device pickup GPS and driver vehicle telemetry (driver updates remain exclusively on SignalR `/hubs/ride` in `ActiveRideScreen.tsx`).
+- **Automated Testing & Health**:
+  - Added unit test suites `__tests__/services/notificationService.test.ts` (14 tests) and `__tests__/services/locationService.test.ts` (12 tests).
+  - Total automated test suite passing: **9 test suites, 50 tests passed**.
+  - Verified `npx tsc --noEmit` (0 errors) and `npx expo-doctor` (18/18 checks passed).
+  - Source repository `HTTP-FLUTnNET`: 100% clean and untouched.
+
+---
+
 ## [1.1.0] - 2026-09-17
 
 ### Real Backend Integration & Hardening

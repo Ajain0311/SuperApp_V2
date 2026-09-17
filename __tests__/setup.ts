@@ -48,6 +48,80 @@ jest.mock('react-native', () => ({
   },
 }));
 
+jest.mock('expo-constants', () => ({
+  expoConfig: {
+    extra: {
+      eas: {
+        projectId: 'test-eas-project-id',
+      },
+    },
+  },
+}));
+
+jest.mock('expo-notifications', () => {
+  return {
+    setNotificationHandler: jest.fn(),
+    getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+    requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+    getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'ExponentPushToken[mock-token-123]' }),
+    scheduleNotificationAsync: jest.fn().mockResolvedValue('mock-notification-id-123'),
+    cancelAllScheduledNotificationsAsync: jest.fn().mockResolvedValue(undefined),
+    addNotificationReceivedListener: jest.fn().mockReturnValue({
+      remove: jest.fn(),
+    }),
+    addNotificationResponseReceivedListener: jest.fn().mockReturnValue({
+      remove: jest.fn(),
+    }),
+    SchedulableTriggerInputTypes: {
+      TIME_INTERVAL: 'timeInterval',
+    },
+  };
+});
+
+jest.mock('expo-location', () => {
+  return {
+    PermissionStatus: {
+      GRANTED: 'granted',
+      DENIED: 'denied',
+      UNDETERMINED: 'undetermined',
+    },
+    Accuracy: {
+      Lowest: 1,
+      Low: 2,
+      Balanced: 3,
+      High: 4,
+      Highest: 5,
+      BestForNavigation: 6,
+    },
+    getForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+    requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+    hasServicesEnabledAsync: jest.fn().mockResolvedValue(true),
+    getCurrentPositionAsync: jest.fn().mockResolvedValue({
+      coords: {
+        latitude: 28.6304,
+        longitude: 77.2177,
+        accuracy: 5,
+        altitude: 216,
+        heading: 0,
+        speed: 0,
+      },
+      timestamp: 1726500000000,
+    }),
+    watchPositionAsync: jest.fn().mockResolvedValue({
+      remove: jest.fn(),
+    }),
+    reverseGeocodeAsync: jest.fn().mockResolvedValue([
+      {
+        name: 'Connaught Place',
+        street: 'Connaught Circle',
+        district: 'Central Delhi',
+        city: 'New Delhi',
+        region: 'Delhi',
+      },
+    ]),
+  };
+});
+
 beforeEach(() => {
   mockStorageMap.clear();
   jest.clearAllMocks();

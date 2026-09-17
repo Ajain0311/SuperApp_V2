@@ -74,7 +74,26 @@ To connect the React Native app to the backend:
 
 ---
 
-## 4. Git & Secrets Security Rules
+---
+
+## 5. Device Push Notifications & Geolocation Configuration
+
+### Device Push Notifications (`expo-notifications`)
+- **Android Permissions**: Requires `android.permission.POST_NOTIFICATIONS` in `app.json`.
+- **EAS Project ID**: For remote production push delivery via Expo Application Services, define your EAS Project ID in `app.json` (`expo.extra.eas.projectId`).
+- **Local Fallback**: In local development without an EAS project, `NotificationService` generates a local token format `ExponentPushToken[DEV-{Platform}-{Timestamp}]` and allows instantaneous local notification scheduling and testing.
+- **Backend Contract**: Device registration requests are dispatched to `POST /api/notifications/device-token`. If not provisioned on the current backend deployment, 404 responses are caught cleanly.
+
+### Device Geolocation (`expo-location`)
+- **Android Permissions**: `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`.
+- **iOS Usage Description**: `NSLocationWhenInUseUsageDescription` in `app.json`.
+- **Scope**: Foreground only. Background location tracking is intentionally excluded.
+- **Fallback Coordinates**: If hardware GPS is toggled off or permissions are denied, `LocationService` defaults to Connaught Place, Central Delhi (`28.6304, 77.2177`) with a visible UI banner.
+- **Driver GPS Isolation**: Driver location telemetry is managed exclusively via SignalR WebSocket events on `/hubs/ride` (`DriverLocationUpdated`), completely isolated from the customer's device GPS.
+
+---
+
+## 6. Git & Secrets Security Rules
 
 - Never commit `.env` or `.env*.local` containing private keys or credentials.
 - `.gitignore` explicitly filters:

@@ -11,8 +11,11 @@
 
 | Diagnostic Check | Tool | Result | Details |
 |---|---|---|---|
+| Automated Test Suite | `npm test` | **PASS (9/9 suites, 50/50 tests)** | Unit & E2E integration tests for Cart, Marketplace, Auth, SignalR, ApiClient, RideFlow, FoodFlow, LocationService, NotificationService. |
 | TypeScript Type Checking | `npx tsc --noEmit` | **PASS (0 errors)** | Strict typing validated across all screens, navigation, stores, and services. |
-| Expo Project Health | `npx expo-doctor` | **PASS (18/18 checks)** | Dependencies, SDK version compatibility, peer dependencies (`expo-font`) verified. |
+| Expo Project Health | `npx expo-doctor` | **PASS (18/18 checks)** | Dependencies, SDK version compatibility, peer dependencies verified. |
+| Push Notifications | `expo-notifications` | **PASS** | Permission flows, EAS token fetch, local scheduling, deep link response routing, dev tester panel. |
+| Device Geolocation | `expo-location` | **PASS** | Foreground GPS, reverse geocoding, watching teardown, pickup GPS integration. |
 | Backend Integration | `dotnet run` (SuperApp.API) | **PASS (200 OK)** | Auth, Food, Rides, Marketplace, and Notifications tested on live server. |
 | Real-Time Communication | `@microsoft/signalr` | **PASS** | OrderHub and RideTrackingHub event handlers wired with lifecycle cleanup. |
 | Engine Compatibility | Node.js v22 / npm 11 | **PASS** | Clean dependency resolution without warnings. |

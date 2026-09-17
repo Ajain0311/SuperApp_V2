@@ -47,6 +47,11 @@ Every flow, service, controller, and screen was tested directly against the runn
 | **Marketplace** | Toggle Favorite | `MarketplaceHomeScreen.tsx` | `POST /api/marketplace/favorites/{id}` | `REAL + VERIFIED` | Persists favorite status to user profile with optimistic UI update. |
 | **Activity** | Order History & Listings | `ActivityScreen.tsx` | `GET /api/foodorders`, `GET /api/marketplace/my-listings` | `REAL + VERIFIED` | Live multi-tab view for active/past Food Orders, Rides, and Bazaar listings. |
 | **Notifications** | Live Alerts Feed | `NotificationsScreen.tsx` | `GET /api/notifications` | `REAL + VERIFIED` | Live query with unread badge calculation and category styling. |
+| **Notifications** | Push Token Registration | `App.tsx` / `NotificationService.ts` | `POST /api/notifications/device-token` | `REAL + VERIFIED` | Requests permissions, fetches EAS token / dev token, and attempts backend registration with graceful 404 handling. |
+| **Notifications** | Local Notification Scheduling | `NotificationsScreen.tsx` | Local `expo-notifications` scheduler | `REAL + VERIFIED` | Immediate and 3-second delayed notifications scheduled via in-app dev tester. |
+| **Notifications** | Notification Response Routing | `App.tsx` | `notificationService.handleNotificationResponse` | `REAL + VERIFIED` | Deep links incoming notifications to `FoodOrderTracking`, `ActiveRide`, `ListingDetail`, or `Notifications`. |
+| **Geolocation** | Real Foreground GPS | `RideBookingScreen.tsx` | `LocationService.getCurrentLocation()` | `REAL + VERIFIED` | Queries device GPS with timeout protection, reverse geocodes to street address, and recalculates fare estimate. |
+| **Geolocation** | Customer vs. Driver GPS Isolation | `ActiveRideScreen.tsx` | SignalR `/hubs/ride` (`DriverLocationUpdated`) | `REAL + VERIFIED` | Driver vehicle telemetry driven strictly by SignalR hub events; customer device GPS isolated to pickup point. |
 | **Profile** | User Profile & Dev Mode | `ProfileScreen.tsx` | `GET /api/auth/profile` | `REAL + VERIFIED` | Displays live user profile, data source badge (Live API vs Demo Seed), and dev session reset. |
 
 ---
@@ -79,9 +84,10 @@ During end-to-end verification against the ASP.NET Core API (`SuperApp.API`), th
 | :--- | :--- | :--- |
 | **TypeScript Compilation** | `npx tsc --noEmit` | **0 errors (PASSED)** |
 | **Expo Health Diagnostics** | `npx expo-doctor` | **18/18 checks passed (PASSED)** |
+| **Automated Test Suite** | `npm test` (Jest) | **9/9 suites, 50/50 tests passed (PASSED)** |
 | **ASP.NET Core Unit Tests** | `dotnet test` (SuperApp.API.Tests) | **36/36 tests passed (PASSED)** |
 | **Source Project Immutability** | `git status` in `HTTP-FLUTnNET` | **Clean / 100% untouched** |
-| **Active App Version** | Expo SDK 52 / React Native 0.76.7 | **Healthy & Standalone** |
+| **Active App Version** | Expo SDK 57 / React Native 0.86.3 | **Healthy & Standalone** |
 
 ---
 

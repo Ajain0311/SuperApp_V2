@@ -17,6 +17,7 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { locationService } from '../../services/locationService';
 
 interface VehicleOption {
   type: string;
@@ -65,12 +66,18 @@ export const RideBookingScreen: React.FC = () => {
   const [routeMetrics, setRouteMetrics] = useState('16.4 km • ~34 mins • Moderate Traffic');
   const [isBooking, setIsBooking] = useState(false);
 
-  useEffect(() => {
+  // Real Customer Device GPS State
+  const [pickupCoords, setPickupCoords] = useState({ latitude: 28.6304, longitude: 77.2177 });
+  const [pickupAddress, setPickupAddress] = useState('Connaught Place, Central Delhi');
+  const [isLocating, setIsLocating] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState<'ONLINE' | 'LOCATING' | 'DENIED'>('ONLINE');
+
+  const fetchEstimate = (coords: { latitude: number; longitude: number }, address: string) => {
     apiClient
       .post<any>(ApiEndpoints.ride.estimate, {
-        pickupLat: 28.6304,
-        pickupLng: 77.2177,
-        pickupAddress: 'Connaught Place, Central Delhi',
+        pickupLat: coords.latitude,
+        pickupLng: coords.longitude,
+        pickupAddress: address,
         destinationLat: 28.5562,
         destinationLng: 77.1000,
         destinationAddress: 'Terminal 3, IGI Airport (DEL)',
@@ -108,6 +115,35 @@ export const RideBookingScreen: React.FC = () => {
         }
       })
       .catch(() => {});
+  };
+
+  const handleLocateMe = async () => {
+    setIsLocating(true);
+    setGpsStatus('LOCATING');
+    try {
+      const loc = await locationService.getCurrentLocation({ timeoutMs: 8000 });
+      const newCoords = { latitude: loc.latitude, longitude: loc.longitude };
+      const newAddress = loc.formattedAddress || `${loc.latitude.toFixed(4)}°, ${loc.longitude.toFixed(4)}°`;
+      setPickupCoords(newCoords);
+      setPickupAddress(newAddress);
+      setGpsStatus('ONLINE');
+      fetchEstimate(newCoords, newAddress);
+    } catch (error) {
+      console.warn('[RideBookingScreen] Could not retrieve GPS:', error);
+      setGpsStatus('DENIED');
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  useEffect(() => {
+    locationService.checkPermission().then((permission) => {
+      if (permission === 'granted') {
+        handleLocateMe();
+      } else {
+        fetchEstimate(pickupCoords, pickupAddress);
+      }
+    });
   }, []);
 
   const selectedVehicle = vehicles[selectedIndex] || vehicles[0];
@@ -117,9 +153,9 @@ export const RideBookingScreen: React.FC = () => {
     try {
       const res = await apiClient.post<any>(ApiEndpoints.ride.book, {
         vehicleType: selectedVehicle.type,
-        pickupAddress: 'Connaught Place, Central Delhi',
-        pickupLatitude: 28.6304,
-        pickupLongitude: 77.2177,
+        pickupAddress,
+        pickupLatitude: pickupCoords.latitude,
+        pickupLongitude: pickupCoords.longitude,
         dropoffAddress: 'Terminal 3, IGI Airport (DEL)',
         dropoffLatitude: 28.5562,
         dropoffLongitude: 77.1000,
@@ -155,10 +191,30 @@ export const RideBookingScreen: React.FC = () => {
           <MaterialIcons name="chevron-left" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Find Your Ride</Text>
-        <View style={styles.gpsChip}>
-          <MaterialIcons name="gps-fixed" size={13} color={colors.secondary} />
-          <Text style={styles.gpsText}>GPS Online</Text>
-        </View>
+        <TouchableOpacity
+          style={[
+            styles.gpsChip,
+            gpsStatus === 'DENIED' && styles.gpsChipDenied,
+            gpsStatus === 'LOCATING' && styles.gpsChipLocating,
+          ]}
+          onPress={handleLocateMe}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons
+            name={gpsStatus === 'DENIED' ? 'location-off' : isLocating ? 'sync' : 'gps-fixed'}
+            size={13}
+            color={gpsStatus === 'DENIED' ? colors.error : isLocating ? colors.blue : colors.secondary}
+          />
+          <Text
+            style={[
+              styles.gpsText,
+              gpsStatus === 'DENIED' && { color: colors.error },
+              gpsStatus === 'LOCATING' && { color: colors.blue },
+            ]}
+          >
+            {isLocating ? 'Locating...' : gpsStatus === 'DENIED' ? 'GPS Denied' : 'GPS Online'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -167,8 +223,22 @@ export const RideBookingScreen: React.FC = () => {
           <View style={styles.locationRow}>
             <View style={[styles.dot, { backgroundColor: colors.secondary }]} />
             <View style={styles.locationTextGroup}>
-              <Text style={styles.locationLabel}>PICKUP LOCATION</Text>
-              <Text style={styles.locationValue}>Connaught Place, Central Delhi</Text>
+              <View style={styles.pickupHeaderRow}>
+                <Text style={styles.locationLabel}>PICKUP LOCATION</Text>
+                <TouchableOpacity
+                  onPress={handleLocateMe}
+                  disabled={isLocating}
+                  style={styles.locateMeButton}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="my-location" size={12} color={colors.primary} />
+                  <Text style={styles.locateMeText}>{isLocating ? 'Locating...' : 'Use Current GPS'}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.locationValue} numberOfLines={2}>{pickupAddress}</Text>
+              <Text style={styles.coordsSubtitle}>
+                GPS: {pickupCoords.latitude.toFixed(4)}°, {pickupCoords.longitude.toFixed(4)}°
+              </Text>
             </View>
           </View>
 
@@ -327,6 +397,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 200, 83, 0.3)',
     gap: 4,
   },
+  gpsChipDenied: {
+    backgroundColor: 'rgba(244, 67, 54, 0.15)',
+    borderColor: 'rgba(244, 67, 54, 0.3)',
+  },
+  gpsChipLocating: {
+    backgroundColor: 'rgba(33, 150, 243, 0.15)',
+    borderColor: 'rgba(33, 150, 243, 0.3)',
+  },
   gpsText: {
     ...typography.caption,
     color: colors.secondary,
@@ -356,6 +434,25 @@ const styles = StyleSheet.create({
   locationTextGroup: {
     flex: 1,
   },
+  pickupHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  locateMeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 107, 0, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  locateMeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+  },
   locationLabel: {
     fontSize: 10,
     fontWeight: '700',
@@ -366,6 +463,11 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.textPrimary,
     fontWeight: '700',
+    marginTop: 2,
+  },
+  coordsSubtitle: {
+    fontSize: 10,
+    color: colors.textTertiary,
     marginTop: 2,
   },
   dividerRow: {
