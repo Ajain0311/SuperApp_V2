@@ -275,5 +275,80 @@ public class DatabaseProviderTests
             Environment.SetEnvironmentVariable("ConnectionStrings__SupabaseConnection", null);
         }
     }
+
+    private readonly Xunit.Abstractions.ITestOutputHelper? _output;
+    public DatabaseProviderTests(Xunit.Abstractions.ITestOutputHelper? output = null)
+    {
+        _output = output;
+    }
+
+    [Fact]
+    public async Task Supabase_LiveConnection_AndSchemaVerification()
+    {
+        var config = new ConfigurationBuilder()
+            .AddUserSecrets("c87933eb-3eec-4973-a4bc-9d7524e812f9")
+            .AddEnvironmentVariables()
+            .Build();
+
+        var connString = Environment.GetEnvironmentVariable("ConnectionStrings__SupabaseConnection")
+            ?? config.GetConnectionString("SupabaseConnection");
+
+        Assert.False(string.IsNullOrEmpty(connString), "SupabaseConnection must be configured in User Secrets or environment");
+
+        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+        optionsBuilder.UseNpgsql(connString);
+        optionsBuilder.UseSnakeCaseNamingConvention();
+
+        using var db = new AppDbContext(optionsBuilder.Options);
+        var canConnect = await db.Database.CanConnectAsync();
+        Assert.True(canConnect, "PostgreSQL connection failed");
+
+        using var conn = db.Database.GetDbConnection();
+        await conn.OpenAsync();
+        using var cmd = conn.CreateCommand();
+
+        // 1. SELECT current_database(), current_user
+        cmd.CommandText = "SELECT current_database(), current_user;";
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            if (await reader.ReadAsync())
+            {
+                _output?.WriteLine($"[SUPABASE_INFO] current_database: {reader.GetString(0)}, current_user: {reader.GetString(1)}");
+            }
+        }
+
+        // 2. Query public tables
+        cmd.CommandText = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name;";
+        var tables = new List<string>();
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                tables.Add(reader.GetString(0));
+            }
+        }
+        _output?.WriteLine($"[SUPABASE_TABLES] ({tables.Count} tables): {string.Join(", ", tables)}");
+
+        // 3. Query roles
+        var roles = await db.Roles.AsNoTracking().Select(r => new { r.Id, r.Name, r.IsActive }).ToListAsync();
+        _output?.WriteLine($"[SUPABASE_ROLES] ({roles.Count}): " + string.Join(", ", roles.Select(r => $"{r.Id}:{r.Name}")));
+
+        // 4. Query users (safe fields only)
+        var users = await db.Users.AsNoTracking().Select(u => new { u.Id, u.MobileNumber, u.FullName, u.IsActive }).ToListAsync();
+        _output?.WriteLine($"[SUPABASE_USERS] ({users.Count}): " + string.Join(", ", users.Select(u => $"{u.Id}:{u.MobileNumber}({u.FullName})")));
+
+        // 5. Query other master tables row counts
+        var restaurantsCount = await db.Restaurants.CountAsync();
+        var foodItemsCount = await db.FoodItems.CountAsync();
+        var driversCount = await db.Drivers.CountAsync();
+        var vehiclesCount = await db.Vehicles.CountAsync();
+        var ridesCount = await db.Rides.CountAsync();
+        var mktCatCount = await db.MarketplaceCategories.CountAsync();
+        var mktListCount = await db.MarketplaceListings.CountAsync();
+        var notifCount = await db.Notifications.CountAsync();
+        var deviceTokensCount = await db.UserDeviceTokens.CountAsync();
+
+        _output?.WriteLine($"[SUPABASE_COUNTS] restaurants:{restaurantsCount}, food_items:{foodItemsCount}, drivers:{driversCount}, vehicles:{vehiclesCount}, rides:{ridesCount}, mkt_cats:{mktCatCount}, mkt_listings:{mktListCount}, notifications:{notifCount}, device_tokens:{deviceTokensCount}");
+    }
 }
 
