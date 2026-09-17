@@ -13,13 +13,15 @@ public class UserDeviceToken
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!;
 
-    [Required, MaxLength(500)]
+    // Maps to expo_push_token column in Supabase schema
+    [Required, MaxLength(500), Column("expo_push_token")]
     public string DeviceToken { get; set; } = string.Empty;
 
     [MaxLength(50)]
     public string Platform { get; set; } = "expo";
 
-    [MaxLength(100)]
+    // Maps to device_name column in Supabase schema
+    [MaxLength(100), Column("device_name")]
     public string? DeviceType { get; set; }
 
     public bool IsActive { get; set; } = true;
@@ -28,3 +30,4 @@ public class UserDeviceToken
 
     public DateTime? UpdatedAt { get; set; }
 }
+

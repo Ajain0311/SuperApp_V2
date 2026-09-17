@@ -283,7 +283,7 @@ public class MarketplaceController : ControllerBase
                     Title = request.Title.Trim(),
                     Description = request.Description?.Trim(),
                     Price = request.Price.Value,
-                    Condition = string.IsNullOrWhiteSpace(request.Condition) ? "USED" : request.Condition.Trim().ToUpperInvariant(),
+                    Condition = NormalizeListingCondition(request.Condition),
                     Location = request.Location?.Trim() ?? "Bengaluru",
                     Latitude = request.Latitude,
                     Longitude = request.Longitude,
