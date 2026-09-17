@@ -70,6 +70,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         </View>
 
+        <TouchableOpacity
+          style={styles.payTestBanner}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('PaymentTest')}
+        >
+          <View style={styles.payTestIcon}>
+            <Ionicons name="card" size={22} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.payTestKicker}>TEST PAYMENT</Text>
+            <Text style={styles.payTestTitle}>Pay ₹1 now (no real money)</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={AppColors.textPrimary} />
+        </TouchableOpacity>
+
         {/* Live Ride Card */}
         <View style={styles.liveRideCard}>
           <View style={styles.liveRideHeader}>
@@ -392,6 +407,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginRight: 2,
+  },
+  payTestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: AppColors.primary,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+  },
+  payTestIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: AppColors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payTestKicker: {
+    color: AppColors.primary,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  payTestTitle: {
+    color: AppColors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 2,
   },
   sectionMargin: {
     marginBottom: 14,

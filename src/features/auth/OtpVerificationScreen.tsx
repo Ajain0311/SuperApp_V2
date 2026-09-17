@@ -93,10 +93,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       return;
     }
 
-    if (isNewUser && !fullName.trim()) {
-      Alert.alert('Name Required', 'Please enter your name');
-      return;
-    }
+    const resolvedName = fullName.trim() || (isNewUser ? 'Guest User' : undefined);
 
     if (isAdmin && !adminPassword.trim()) {
       Alert.alert('Password Required', 'Please enter admin password');
@@ -108,11 +105,11 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       if (isAdmin) {
         await adminLogin(mobileNumber, adminPassword, fullOtp);
       } else {
-        await verifyOtp(mobileNumber, fullOtp, isNewUser ? fullName.trim() : undefined);
+        await verifyOtp(mobileNumber, fullOtp, isNewUser ? resolvedName : undefined);
       }
       navigation.reset({
         index: 0,
-        routes: [{ name: 'MainShell' }],
+        routes: [{ name: 'MainTabs' }],
       });
     } catch (err: any) {
       // If offline or backend error occurs, verify against dev OTP so user/tester isn't blocked
@@ -120,7 +117,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
         Alert.alert('Dev Verification', 'Bypassed authentication with dev OTP 123456');
         navigation.reset({
           index: 0,
-          routes: [{ name: 'MainShell' }],
+          routes: [{ name: 'MainTabs' }],
         });
       } else {
         Alert.alert('Verification Failed', err.message || 'Invalid or expired OTP');

@@ -33,6 +33,7 @@ export type RootStackParamList = {
   };
   AddListing: undefined;
   Profile: undefined;
+  PaymentTest: undefined;
   Notifications: undefined;
   Activity: {
     initialTab?: number;

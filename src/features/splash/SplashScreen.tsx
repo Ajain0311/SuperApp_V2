@@ -34,7 +34,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
     const timer = setTimeout(async () => {
       const isAuthenticated = await checkAuth();
       if (isAuthenticated) {
-        navigation.replace('MainShell');
+        navigation.replace('MainTabs');
       } else {
         navigation.replace('PhoneEntry');
       }

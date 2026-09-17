@@ -47,8 +47,11 @@ export const ApiEndpoints = {
     markNotificationRead: (id: string | number) => `/notifications/${id}/read`,
     banners: '/banners',
     reviews: '/reviews',
+    paymentsKit: '/payments/kit',
     paymentsCreate: '/payments/create-order',
     paymentsVerify: '/payments/verify',
+    paymentsMockComplete: '/payments/mock-complete',
+    paymentsMine: '/payments/my-payments',
   },
 
   // SignalR Hub Paths

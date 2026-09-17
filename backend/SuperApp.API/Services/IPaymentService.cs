@@ -8,6 +8,9 @@ public class PaymentOrderResult
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "INR";
     public string? KeyId { get; set; }
+    public string? AccessKey { get; set; }
+    public string? PayUrl { get; set; }
+    public string? Env { get; set; }
     public string? ErrorMessage { get; set; }
 }
 

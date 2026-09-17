@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -45,18 +46,36 @@ export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, logout } = useAuthStore();
 
+  const performLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'PhoneEntry' }],
+      });
+    }
+  };
+
   const handleLogout = () => {
+    // RN Web Alert.alert does not run button callbacks, so confirm() is required on web.
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof window === 'undefined' ||
+        window.confirm('Are you sure you want to log out?');
+      if (confirmed) {
+        void performLogout();
+      }
+      return;
+    }
+
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: async () => {
-          await logout();
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'PhoneEntry' }],
-          });
+        onPress: () => {
+          void performLogout();
         },
       },
     ]);
@@ -161,7 +180,7 @@ export const ProfileScreen: React.FC = () => {
             title="Payment Methods"
             subtitle="Cards, UPI, & Wallet balance"
             color={colors.secondary}
-            onPress={() => Alert.alert('Payment Methods', 'Manage UPI & cards')}
+            onPress={() => navigation.navigate('PaymentTest')}
           />
           <View style={styles.itemDivider} />
           <MenuItem

@@ -5,18 +5,30 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
-      "applicationUrl": "http://localhost:5139",
+      "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DATABASE_PROVIDER": "InMemory",
+        "PAYMENT_PROVIDER": "Easebuzz",
+        "PAYMENT_KEY": "",
+        "PAYMENT_SECRET": "",
+        "PAYMENT_ENV": "test",
+        "PAYMENT_RETURN_URL": "http://localhost:5000/api/payments/easebuzz-return"
       }
     },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
-      "applicationUrl": "https://localhost:7017;http://localhost:5139",
+      "applicationUrl": "https://localhost:7017;http://localhost:5000",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DATABASE_PROVIDER": "InMemory",
+        "PAYMENT_PROVIDER": "Easebuzz",
+        "PAYMENT_KEY": "",
+        "PAYMENT_SECRET": "",
+        "PAYMENT_ENV": "test",
+        "PAYMENT_RETURN_URL": "http://localhost:5000/api/payments/easebuzz-return"
       }
     }
   }

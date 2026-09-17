@@ -219,8 +219,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    await storage.clearAll();
-    await signalRService.disconnectAll();
+    try {
+      await storage.clearAll();
+    } catch {
+      // Token must still be cleared in memory even if storage fails.
+    }
+    try {
+      await signalRService.disconnectAll();
+    } catch {
+      // Ignore hub disconnect errors so logout always completes.
+    }
     set({ user: null, token: null, isAuthenticated: false, error: null, isFallbackSession: false });
   },
 

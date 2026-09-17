@@ -115,11 +115,31 @@ var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER")
     ?? "Mock";
 builder.Services.AddScoped<IOtpService, MockOtpService>();
 
-// 3. Payment Gateway Provider (Mock in development; Razorpay/Cashfree in production)
-var paymentProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER") 
-    ?? builder.Configuration["Providers:Payment"] 
+// 3. Payment Gateway Provider (Easebuzz test/live; Mock fallback)
+var paymentProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER")
+    ?? builder.Configuration["Providers:Payment"]
     ?? "Mock";
-builder.Services.AddScoped<IPaymentService, MockPaymentService>();
+var paymentKey = Environment.GetEnvironmentVariable("PAYMENT_KEY")
+    ?? builder.Configuration["Payment:Key"];
+var paymentSalt = Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+    ?? builder.Configuration["Payment:Salt"]
+    ?? builder.Configuration["Payment:Secret"];
+builder.Services.AddScoped<MockPaymentService>();
+builder.Services.AddHttpClient<EasebuzzPaymentService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+var useEasebuzz = string.Equals(paymentProvider, "Easebuzz", StringComparison.OrdinalIgnoreCase)
+    && !string.IsNullOrWhiteSpace(paymentKey)
+    && !string.IsNullOrWhiteSpace(paymentSalt);
+if (useEasebuzz)
+{
+    builder.Services.AddScoped<IPaymentService>(sp => sp.GetRequiredService<EasebuzzPaymentService>());
+}
+else
+{
+    builder.Services.AddScoped<IPaymentService>(sp => sp.GetRequiredService<MockPaymentService>());
+}
 
 // 4. Map & Location Provider (Mock in development; Google Maps/Mapbox in production)
 var mapProvider = Environment.GetEnvironmentVariable("MAP_PROVIDER") 
