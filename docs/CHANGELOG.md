@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Verification Metrics**:
   - `npx tsc --noEmit`: 0 errors.
   - `npx expo-doctor`: 18/18 checks passed.
+  - `npm test`: 7/7 test suites passed, 22/22 unit & E2E integration tests passed.
   - Source repository `HTTP-FLUTnNET`: 100% clean and untouched.
 
 ## [1.0.0] - 2026-09-17
