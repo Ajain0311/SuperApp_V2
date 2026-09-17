@@ -50,12 +50,12 @@ EXPO_PUBLIC_REQUEST_TIMEOUT_MS="15000"
 
 To connect the React Native app to the backend:
 
-1. **Start the ASP.NET Core API** in the backend directory:
+1. **Start the ASP.NET Core API** in the active backend directory:
    ```powershell
-   cd D:\FREELANCER\HTTP-FLUTnNET\SuperApp.API
-   dotnet run
+   cd D:\FREELANCER\HTTP-EXPNAT-NET\backend\SuperApp.API
+   dotnet run --urls "http://localhost:5000"
    ```
-   Confirm it starts listening on `http://localhost:5000` or `https://localhost:5001`.
+   Confirm it starts listening on `http://localhost:5000`.
 
 2. **Configure CORS in Backend (if not already enabled)**:
    The backend's `Program.cs` is already configured with CORS policy allowing origins during development.

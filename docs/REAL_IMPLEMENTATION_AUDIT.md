@@ -3,9 +3,10 @@
 **Audit Date**: September 17, 2026  
 **Auditor**: Antigravity AI  
 **Active Mobile Repository**: `D:\FREELANCER\HTTP-EXPNAT-NET`  
-**Backend Repository (Read-Only)**: `D:\FREELANCER\HTTP-FLUTnNET\SuperApp.API`  
-**Live API Host**: `http://localhost:5000` (ASP.NET Core 8.0)  
-**Database Architecture**: SQL Server / InMemory Multi-Provider  
+**Active Backend Repository**: `D:\FREELANCER\HTTP-EXPNAT-NET\backend\SuperApp.API`  
+**Reference Source (Untouched)**: `D:\FREELANCER\HTTP-FLUTnNET`  
+**Live API Host**: `http://localhost:5000` (ASP.NET Core 8.0 / .NET 10)  
+**Database Architecture**: InMemory / SQL Server / Supabase PostgreSQL Multi-Provider  
 
 ---
 

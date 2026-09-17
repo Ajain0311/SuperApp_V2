@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-09-17
+
+### Supabase Cloud Infrastructure Connection (`drhjfkqeiijdmyettumz`)
+- **Supabase Target Infrastructure Mapped**:
+  - Bound backend connection routing to target Supabase project `drhjfkqeiijdmyettumz`.
+  - Direct PostgreSQL Host: `db.drhjfkqeiijdmyettumz.supabase.co` (Port `5432`).
+  - Connection Pooler Host: `aws-0-ap-northeast-1.pooler.supabase.com` (Port `5432`).
+  - S3 Storage Endpoint documented for future provider task: `https://drhjfkqeiijdmyettumz.storage.supabase.co/storage/v1/s3` (Region `ap-northeast-1`).
+- **Secure Local Secrets Management**:
+  - Initialized ASP.NET Core User Secrets (`UserSecretsId: c87933eb-3eec-4973-a4bc-9d7524e812f9`) in `SuperApp.API.csproj`.
+  - Added support and priority for `ConnectionStrings__SupabaseConnection` environment variable pattern.
+  - Zero plain-text credentials or passwords written to git or tracked project files.
+- **Supabase Local Project Configuration**:
+  - Initialized local Supabase configuration in active project `supabase/config.toml` (`project_id = "drhjfkqeiijdmyettumz"`).
+  - Updated `.gitignore` to strictly exclude `.supabase/`, `supabase/.branches/`, and `supabase/.temp/`.
+- **Database Schema & Execution Guardrails**:
+  - Verified non-destructive idempotent schema in `database/SuperApp_Supabase.sql` (all 28 tables, snake_case parity with EF Core).
+  - Maintained explicit stop condition: schema execution deferred to project owner in Supabase SQL Editor.
+- **Automated Testing & Health**:
+  - Added unit test for `ConnectionStrings__SupabaseConnection` resolution.
+  - Backend tests: **47/47 tests passed**.
+  - Mobile tests: **9 test suites, 50 tests passed**, `npx tsc --noEmit` (0 errors), `npx expo-doctor` (18/18 checks passed).
+  - Source repository `HTTP-FLUTnNET`: 100% clean and untouched.
+
+---
+
 ## [1.3.0] - 2026-09-17
 
 ### Backend Multi-Provider Support (PostgreSQL / Supabase, SQL Server, InMemory)

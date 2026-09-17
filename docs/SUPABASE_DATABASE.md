@@ -103,45 +103,48 @@ Mobile (+91 Phone) ──> POST /api/auth/send-otp ──> SMS / Dev OTP (123456
 
 To connect the ASP.NET Core backend (`SuperApp.API`) to Supabase PostgreSQL:
 
-### 1. NuGet Package Dependency
-Install the official Npgsql Entity Framework Core provider in `SuperApp.API.csproj`:
+### 1. NuGet Packages Added to `SuperApp.API.csproj`
 ```xml
-<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
-<PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
+<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+<PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
 ```
 
 ### 2. Multi-Provider Configuration in `Program.cs`
-Update `Program.cs` to dynamically select the provider based on `DATABASE_PROVIDER`:
+The active backend dynamically resolves the provider from `DATABASE_PROVIDER` and prioritizes `ConnectionStrings__SupabaseConnection`:
 ```csharp
-var dbProvider = builder.Configuration["DATABASE_PROVIDER"] ?? "SqlServer";
+var dbProvider = Environment.GetEnvironmentVariable("DATABASE_PROVIDER") 
+    ?? builder.Configuration["Database:Provider"] 
+    ?? "SqlServer";
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+if (string.Equals(dbProvider, "InMemory", StringComparison.OrdinalIgnoreCase))
 {
-    if (dbProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
-    {
-        options.UseNpgsql(builder.Configuration.GetConnectionString("SupabaseConnection"))
-               .UseSnakeCaseNamingConvention();
-    }
-    else if (dbProvider.Equals("InMemory", StringComparison.OrdinalIgnoreCase))
-    {
-        options.UseInMemoryDatabase("SuperAppDb");
-    }
-    else
-    {
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
-    }
-});
-```
-
-### 3. Supabase Connection String in `appsettings.json`
-Supabase provides two connection strings in Project Settings -> Database:
-- **Transaction Pooler (Port 6543)**: Recommended for serverless or high-concurrency environments.
-- **Session / Direct Connection (Port 5432)**: Recommended for persistent backend servers and EF Core migrations.
-
-```json
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseInMemoryDatabase("SuperAppInMemoryDb"));
+}
+else if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(dbProvider, "PostgreSQL", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(dbProvider, "Supabase", StringComparison.OrdinalIgnoreCase))
 {
-  "ConnectionStrings": {
-    "SupabaseConnection": "Host=aws-0-ap-south-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.your-project-id;Password=YourSecurePassword;SSL Mode=Require;Trust Server Certificate=true"
-  }
+    var pgConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__SupabaseConnection")
+        ?? Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
+        ?? builder.Configuration.GetConnectionString("SupabaseConnection")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
+    builder.Services.AddDbContext<AppDbContext>(options =>
+    {
+        options.UseNpgsql(pgConnectionString, npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null);
+            npgsqlOptions.CommandTimeout(30);
+        });
+        options.UseSnakeCaseNamingConvention();
+    });
 }
 ```
+
+### 3. Target Supabase Infrastructure Details
+- **Project Reference**: `drhjfkqeiijdmyettumz`
+- **Host**: `db.drhjfkqeiijdmyettumz.supabase.co` (Port `5432`)
+- **API URL**: `https://drhjfkqeiijdmyettumz.supabase.co`
+- **S3 Storage Endpoint**: `https://drhjfkqeiijdmyettumz.storage.supabase.co/storage/v1/s3` (Region: `ap-northeast-1`)
+- **Secrets Policy**: Configured strictly via `dotnet user-secrets` or local session environment variables. Zero credentials committed to git.

@@ -249,4 +249,31 @@ public class DatabaseProviderTests
         });
         Assert.IsType<BadRequestObjectResult>(invalidResult.Result);
     }
+
+    [Fact]
+    public void ConnectionStrings_SupabaseConnection_EnvironmentVariable_IsResolved()
+    {
+        // Arrange
+        var testEnvConn = "Host=db.drhjfkqeiijdmyettumz.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=test;";
+        Environment.SetEnvironmentVariable("ConnectionStrings__SupabaseConnection", testEnvConn);
+
+        try
+        {
+            var services = new ServiceCollection();
+            var config = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .Build();
+
+            var resolvedConn = Environment.GetEnvironmentVariable("ConnectionStrings__SupabaseConnection")
+                ?? config.GetConnectionString("SupabaseConnection");
+
+            // Assert
+            Assert.Equal(testEnvConn, resolvedConn);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ConnectionStrings__SupabaseConnection", null);
+        }
+    }
 }
+

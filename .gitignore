@@ -56,3 +56,8 @@ _ReSharper*/
 *.DotSettings.user
 *.nupkg
 TestResults/
+
+# Supabase local state
+.supabase/
+supabase/.branches/
+supabase/.temp/

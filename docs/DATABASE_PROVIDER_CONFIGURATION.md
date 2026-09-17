@@ -47,45 +47,46 @@ Supabase provides two connection types in **Project Settings -> Database**:
 - **Port**: `5432` (Session Mode) or `6543` (Transaction Mode)
 - **Database**: `postgres`
 - **User**: `postgres.[YOUR-PROJECT-REF]`
-- **Password**: `[YOUR-DATABASE-PASSWORD]`
+- **Password**: `<LOCAL_SECRET>`
 
 ```bash
 DATABASE_PROVIDER=Postgres
-DATABASE_CONNECTION_STRING="Host=aws-0-ap-south-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.[YOUR-PROJECT-REF];Password=[YOUR-PASSWORD];SSL Mode=Require;Trust Server Certificate=true;"
+ConnectionStrings__SupabaseConnection="Host=aws-0-ap-northeast-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.drhjfkqeiijdmyettumz;Password=<LOCAL_SECRET>;SSL Mode=Require;Trust Server Certificate=true;"
 ```
 
 #### Option B: Direct Connection (IPv6 or Dedicated IPv4)
-- **Host**: `db.[YOUR-PROJECT-REF].supabase.co`
+- **Host**: `db.drhjfkqeiijdmyettumz.supabase.co`
 - **Port**: `5432`
 - **Database**: `postgres`
 - **User**: `postgres`
-- **Password**: `[YOUR-DATABASE-PASSWORD]`
+- **Password**: `<LOCAL_SECRET>`
 
 ```bash
 DATABASE_PROVIDER=Postgres
-DATABASE_CONNECTION_STRING="Host=db.[YOUR-PROJECT-REF].supabase.co;Port=5432;Database=postgres;Username=postgres;Password=[YOUR-PASSWORD];SSL Mode=Require;Trust Server Certificate=true;"
+ConnectionStrings__SupabaseConnection="Host=db.drhjfkqeiijdmyettumz.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<LOCAL_SECRET>;SSL Mode=Require;Trust Server Certificate=true;"
 ```
 
 ---
 
 ## 4. Setup Steps for Supabase
 
-1. **Create Supabase Project**:
-   - Log into [Supabase Dashboard](https://supabase.com/dashboard).
-   - Create a new project (note your project reference and database password).
+1. **Target Supabase Project Details**:
+   - **Project Reference**: `drhjfkqeiijdmyettumz`
+   - **Dashboard**: `https://supabase.com/dashboard/project/drhjfkqeiijdmyettumz`
+   - **Region**: `ap-northeast-1`
 
 2. **Execute Database Schema**:
-   - In your Supabase project, open the **SQL Editor**.
+   - In the Supabase project dashboard, open the **SQL Editor**.
    - Copy and paste the complete content of [`database/SuperApp_Supabase.sql`](file:///D:/FREELANCER/HTTP-EXPNAT-NET/database/SuperApp_Supabase.sql).
    - Click **Run** to execute the script.
    - All 28 tables, indexes, constraints, and seed data (roles, categories, admin user) will be created idempotently.
 
-3. **Start ASP.NET Core Backend**:
-   - Set environment variables and run:
+3. **Configure Local Secrets & Start Backend**:
+   - Set via `dotnet user-secrets` (recommended):
      ```powershell
      cd D:\FREELANCER\HTTP-EXPNAT-NET\backend\SuperApp.API
+     dotnet user-secrets set "ConnectionStrings:SupabaseConnection" "Host=db.drhjfkqeiijdmyettumz.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<YOUR_DATABASE_PASSWORD>;SSL Mode=Require;Trust Server Certificate=true;"
      $env:DATABASE_PROVIDER="Postgres"
-     $env:DATABASE_CONNECTION_STRING="Host=aws-0-ap-south-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.[YOUR-PROJECT-REF];Password=[YOUR-PASSWORD];SSL Mode=Require;Trust Server Certificate=true;"
      dotnet run --urls "http://localhost:5000"
      ```
 

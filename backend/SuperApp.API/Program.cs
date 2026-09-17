@@ -25,7 +25,8 @@ else if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCas
          string.Equals(dbProvider, "Supabase", StringComparison.OrdinalIgnoreCase) ||
          string.Equals(dbProvider, "Npgsql", StringComparison.OrdinalIgnoreCase))
 {
-    var pgConnectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
+    var pgConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__SupabaseConnection")
+        ?? Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
         ?? builder.Configuration.GetConnectionString("SupabaseConnection")
         ?? builder.Configuration.GetConnectionString("PostgresConnection")
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
