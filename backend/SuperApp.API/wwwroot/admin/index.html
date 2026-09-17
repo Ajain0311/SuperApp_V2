@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperApp — Central Admin Command Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0A0E21;
+            --surface: #141829;
+            --surface-light: #1C2039;
+            --border: #2A2D3E;
+            --primary: #FF6B35;
+            --primary-dark: #E55A2B;
+            --secondary: #00C853;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #6C6C70;
+            --blue: #2196F3;
+            --yellow: #FFD740;
+            --red: #FF5252;
+            --purple: #7C4DFF;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background-color: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            flex-shrink: 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 8px;
+        }
+
+        .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+        }
+
+        .brand-title {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+        }
+
+        .brand-badge {
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 6px;
+            background: rgba(255, 107, 53, 0.2);
+            color: var(--primary);
+            border-radius: 4px;
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            text-transform: uppercase;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            list-style: none;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item:hover {
+            background-color: var(--surface-light);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(90deg, rgba(255, 107, 53, 0.15), rgba(255, 107, 53, 0.05));
+            color: var(--primary);
+            border-left: 3px solid var(--primary);
+        }
+
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .admin-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .admin-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--surface-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--primary);
+            border: 1px solid var(--border);
+        }
+
+        .admin-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .admin-name {
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .admin-role {
+            font-size: 11px;
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .topbar {
+            height: 70px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+            background-color: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--secondary);
+            background: rgba(0, 200, 83, 0.1);
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 200, 83, 0.2);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--secondary);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .btn {
+            padding: 9px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background-color: var(--surface-light);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--border);
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 11px;
+            border-radius: 6px;
+        }
+
+        .btn-danger {
+            background-color: rgba(255, 82, 82, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(255, 82, 82, 0.3);
+        }
+
+        .btn-success {
+            background-color: rgba(0, 200, 83, 0.15);
+            color: var(--secondary);
+            border: 1px solid rgba(0, 200, 83, 0.3);
+        }
+
+        .content-area {
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        /* Metric Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .metric-card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .metric-icon-box {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .metric-value {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .metric-change {
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .metric-change.positive { color: var(--secondary); }
+        .metric-change.neutral { color: var(--blue); }
+
+        /* Panels & Tables */
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+        }
+
+        .badge-active { background: rgba(0, 200, 83, 0.15); color: var(--secondary); }
+        .badge-suspended { background: rgba(255, 82, 82, 0.15); color: var(--red); }
+        .badge-pending { background: rgba(255, 215, 64, 0.15); color: var(--yellow); }
+        .badge-verified { background: rgba(33, 150, 243, 0.15); color: var(--blue); }
+        .badge-role { background: var(--surface-light); color: var(--text-secondary); border: 1px solid var(--border); }
+
+        /* Search input */
+        .search-box {
+            background-color: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 14px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            width: 240px;
+        }
+
+        .search-box:focus {
+            border-color: var(--primary);
+        }
+
+        /* Modal */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 480px;
+            max-width: 90vw;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            background-color: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">⚡</div>
+            <div>
+                <div class="brand-title">SuperApp</div>
+                <span class="brand-badge">Admin Portal</span>
+            </div>
+        </div>
+
+        <ul class="nav-menu">
+            <li class="nav-item active" onclick="switchTab('overview')">
+                <span class="nav-icon">📊</span> Overview
+            </li>
+            <li class="nav-item" onclick="switchTab('users')">
+                <span class="nav-icon">👥</span> Users & Roles
+            </li>
+            <li class="nav-item" onclick="switchTab('restaurants')">
+                <span class="nav-icon">🍔</span> Restaurants & Food
+            </li>
+            <li class="nav-item" onclick="switchTab('drivers')">
+                <span class="nav-icon">🛵</span> Drivers Fleet
+            </li>
+            <li class="nav-item" onclick="switchTab('marketplace')">
+                <span class="nav-icon">🛍️</span> Bazaar Moderation
+            </li>
+            <li class="nav-item" onclick="switchTab('coupons')">
+                <span class="nav-icon">🏷️</span> Coupons & Offers
+            </li>
+            <li class="nav-item" onclick="switchTab('banners')">
+                <span class="nav-icon">🖼️</span> Banners & Ads
+            </li>
+            <li class="nav-item" onclick="switchTab('settings')">
+                <span class="nav-icon">⚙️</span> System Settings
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <div class="admin-profile">
+                <div class="admin-avatar">SA</div>
+                <div class="admin-info">
+                    <span class="admin-name">Super Admin</span>
+                    <span class="admin-role">Super Administrator</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Container -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1 class="page-title" id="tabTitle">Enterprise Dashboard</h1>
+                <div class="status-pill">
+                    <span class="status-dot"></span>
+                    <span>System Operational</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="btn btn-secondary btn-sm" onclick="refreshCurrentTab()">🔄 Refresh Data</button>
+                <button class="btn btn-primary btn-sm" onclick="openNewCouponModal()">+ Add Coupon</button>
+            </div>
+        </header>
+
+        <!-- Dynamic Content Panels -->
+        <div class="content-area">
+
+            <!-- TAB 1: OVERVIEW -->
+            <section id="tab-overview">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Total Users</span>
+                            <div class="metric-icon-box" style="background: rgba(33, 150, 243, 0.15); color: var(--blue);">👥</div>
+                        </div>
+                        <div class="metric-value" id="kpiUsers">1,248</div>
+                        <div class="metric-change positive">↑ +14% this month</div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Active Drivers</span>
+                            <div class="metric-icon-box" style="background: rgba(0, 200, 83, 0.15); color: var(--secondary);">🛵</div>
+                        </div>
+                        <div class="metric-value" id="kpiDrivers">64</div>
+                        <div class="metric-change positive">● 42 currently online</div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Food Gross Sales</span>
+                            <div class="metric-icon-box" style="background: rgba(255, 107, 53, 0.15); color: var(--primary);">🍔</div>
+                        </div>
+                        <div class="metric-value" id="kpiFoodSales">₹1,84,500</div>
+                        <div class="metric-change positive">↑ +22% vs last week</div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Platform Revenue</span>
+                            <div class="metric-icon-box" style="background: rgba(124, 77, 255, 0.15); color: var(--purple);">💰</div>
+                        </div>
+                        <div class="metric-value" id="kpiRevenue">₹42,915</div>
+                        <div class="metric-change positive">↑ 18% avg take rate</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <h2 class="card-title">Live Platform Audit Trail</h2>
+                        <span class="badge badge-verified">Real-Time Sync</span>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Activity ID</th>
+                                    <th>Service</th>
+                                    <th>Description</th>
+                                    <th>Value</th>
+                                    <th>Status</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activityTableBody">
+                                <tr>
+                                    <td>ACT-101</td>
+                                    <td><span class="badge" style="background: rgba(0, 200, 83, 0.15); color: var(--secondary);">FOOD</span></td>
+                                    <td>Food order #FO-8921 delivered from Meghana Foods</td>
+                                    <td>₹485.00</td>
+                                    <td><span class="badge badge-active">DELIVERED</span></td>
+                                    <td>Just now</td>
+                                </tr>
+                                <tr>
+                                    <td>ACT-102</td>
+                                    <td><span class="badge" style="background: rgba(33, 150, 243, 0.15); color: var(--blue);">RIDE</span></td>
+                                    <td>Bike ride completed by Driver Rajesh Kumar (KA-05-MQ-9821)</td>
+                                    <td>₹45.00</td>
+                                    <td><span class="badge badge-active">COMPLETED</span></td>
+                                    <td>12 mins ago</td>
+                                </tr>
+                                <tr>
+                                    <td>ACT-103</td>
+                                    <td><span class="badge" style="background: rgba(255, 107, 53, 0.15); color: var(--primary);">BAZAAR</span></td>
+                                    <td>New listing posted: iPhone 14 Pro Max 256GB in Koramangala</td>
+                                    <td>₹68,000.00</td>
+                                    <td><span class="badge badge-verified">ACTIVE</span></td>
+                                    <td>24 mins ago</td>
+                                </tr>
+                                <tr>
+                                    <td>ACT-104</td>
+                                    <td><span class="badge badge-role">USER</span></td>
+                                    <td>New customer registered via OTP verification (+91 98451 99887)</td>
+                                    <td>-</td>
+                                    <td><span class="badge badge-active">VERIFIED</span></td>
+                                    <td>35 mins ago</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: USERS -->
+            <section id="tab-users" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">User Accounts & RBAC</h2>
+                        <input type="text" class="search-box" placeholder="Search by name or phone..." id="userSearchInput" oninput="filterUsers()">
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Name</th>
+                                    <th>Mobile Number</th>
+                                    <th>Roles</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <tr>
+                                    <td>#1</td>
+                                    <td>Super Admin</td>
+                                    <td>9999999999</td>
+                                    <td><span class="badge badge-verified">ADMIN</span> <span class="badge badge-role">CUSTOMER</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td>-</td>
+                                </tr>
+                                <tr>
+                                    <td>#2</td>
+                                    <td>Meghana Foods Owner</td>
+                                    <td>9876543210</td>
+                                    <td><span class="badge" style="background: rgba(255, 107, 53, 0.2); color: var(--primary);">RESTAURANT_OWNER</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm" onclick="toggleUserStatus(2)">Suspend</button></td>
+                                </tr>
+                                <tr>
+                                    <td>#3</td>
+                                    <td>Rajesh Kumar (Driver)</td>
+                                    <td>9845112233</td>
+                                    <td><span class="badge" style="background: rgba(0, 200, 83, 0.2); color: var(--secondary);">DRIVER</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm" onclick="toggleUserStatus(3)">Suspend</button></td>
+                                </tr>
+                                <tr>
+                                    <td>#4</td>
+                                    <td>Aditya Sharma</td>
+                                    <td>9988776655</td>
+                                    <td><span class="badge badge-role">CUSTOMER</span> <span class="badge" style="background: rgba(124, 77, 255, 0.2); color: var(--purple);">MARKETPLACE_SELLER</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm" onclick="toggleUserStatus(4)">Suspend</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: RESTAURANTS -->
+            <section id="tab-restaurants" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Restaurants & Vendor Partners</h2>
+                        <button class="btn btn-primary btn-sm" onclick="alert('Add Restaurant modal ready')">+ Add Restaurant</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Restaurant Name</th>
+                                    <th>City & Location</th>
+                                    <th>Type</th>
+                                    <th>Rating</th>
+                                    <th>Featured</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="restaurantsTableBody">
+                                <tr>
+                                    <td>1</td>
+                                    <td>Meghana Foods (Special Biryani)</td>
+                                    <td>Koramangala, Bengaluru</td>
+                                    <td><span class="badge" style="background: rgba(255, 82, 82, 0.15); color: var(--red);">Non-Veg</span></td>
+                                    <td>4.6 ★ (1,280)</td>
+                                    <td><span class="badge badge-active">⭐ YES</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm">Edit</button></td>
+                                </tr>
+                                <tr>
+                                    <td>2</td>
+                                    <td>Haldiram's Sweets & Thali</td>
+                                    <td>Connaught Place, New Delhi</td>
+                                    <td><span class="badge badge-active">Pure Veg</span></td>
+                                    <td>4.5 ★ (940)</td>
+                                    <td><span class="badge badge-active">⭐ YES</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm">Edit</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: DRIVERS -->
+            <section id="tab-drivers" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Driver Fleet & Verification Queue</h2>
+                        <span class="badge badge-active">64 Drivers Enrolled</span>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Driver ID</th>
+                                    <th>Driver Name</th>
+                                    <th>Mobile</th>
+                                    <th>Vehicle & Reg</th>
+                                    <th>License Number</th>
+                                    <th>Verification</th>
+                                    <th>Rating</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="driversTableBody">
+                                <tr>
+                                    <td>DRV-01</td>
+                                    <td>Rajesh Kumar</td>
+                                    <td>+91 98451 12233</td>
+                                    <td>Honda Activa (KA-05-MQ-9821)</td>
+                                    <td>DL-KA-2019-00918</td>
+                                    <td><span class="badge badge-active">VERIFIED</span></td>
+                                    <td>4.8 ★ (312 rides)</td>
+                                    <td><button class="btn btn-secondary btn-sm">Manage</button></td>
+                                </tr>
+                                <tr>
+                                    <td>DRV-02</td>
+                                    <td>Mohammed Imran</td>
+                                    <td>+91 97412 88771</td>
+                                    <td>Bajaj RE Auto (KA-01-EE-4102)</td>
+                                    <td>DL-KA-2021-44102</td>
+                                    <td><span class="badge badge-pending">PENDING</span></td>
+                                    <td>4.9 ★ (88 rides)</td>
+                                    <td><button class="btn btn-success btn-sm" onclick="alert('Driver verified successfully')">Approve</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: MARKETPLACE -->
+            <section id="tab-marketplace" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Community Bazaar Listings Moderation</h2>
+                        <span class="badge badge-role">4 Active Listings Moderated</span>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Item ID</th>
+                                    <th>Title</th>
+                                    <th>Category</th>
+                                    <th>Price</th>
+                                    <th>Condition</th>
+                                    <th>Seller</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="marketplaceTableBody">
+                                <tr>
+                                    <td>#101</td>
+                                    <td>iPhone 14 Pro Max 256GB</td>
+                                    <td>Mobiles</td>
+                                    <td>₹68,000</td>
+                                    <td><span class="badge badge-active">LIKE NEW</span></td>
+                                    <td>Aditya Sharma</td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-danger btn-sm" onclick="alert('Listing marked as removed')">Remove</button></td>
+                                </tr>
+                                <tr>
+                                    <td>#102</td>
+                                    <td>Royal Enfield Classic 350</td>
+                                    <td>Vehicles</td>
+                                    <td>₹1,45,000</td>
+                                    <td><span class="badge badge-pending">USED</span></td>
+                                    <td>Vikram Singh</td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-danger btn-sm" onclick="alert('Listing marked as removed')">Remove</button></td>
+                                </tr>
+                                <tr>
+                                    <td>#103</td>
+                                    <td>Sony PlayStation 5 Disc Edition</td>
+                                    <td>Electronics</td>
+                                    <td>₹38,500</td>
+                                    <td><span class="badge badge-active">LIKE NEW</span></td>
+                                    <td>Rohit Verma</td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-danger btn-sm" onclick="alert('Listing marked as removed')">Remove</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 6: COUPONS -->
+            <section id="tab-coupons" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Promotions & Discount Coupons</h2>
+                        <button class="btn btn-primary btn-sm" onclick="openNewCouponModal()">+ New Coupon</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Description</th>
+                                    <th>Type</th>
+                                    <th>Discount</th>
+                                    <th>Min Order</th>
+                                    <th>Module</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="couponsTableBody">
+                                <tr>
+                                    <td><strong>WELCOME50</strong></td>
+                                    <td>50% off on your first food order</td>
+                                    <td>PERCENTAGE</td>
+                                    <td>50% (Max ₹100)</td>
+                                    <td>₹150.00</td>
+                                    <td><span class="badge badge-active">FOOD</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm">Toggle</button></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>FLAT30</strong></td>
+                                    <td>Flat Rs 30 off on rides</td>
+                                    <td>FLAT</td>
+                                    <td>₹30.00</td>
+                                    <td>₹50.00</td>
+                                    <td><span class="badge badge-verified">RIDE</span></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm">Toggle</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 7: BANNERS -->
+            <section id="tab-banners" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Promotional Banners</h2>
+                        <button class="btn btn-primary btn-sm" onclick="alert('Add Banner modal ready')">+ Add Banner</button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Module</th>
+                                    <th>Image Preview</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bannersTableBody">
+                                <tr>
+                                    <td>1</td>
+                                    <td>50% OFF on Top Biryanis</td>
+                                    <td><span class="badge badge-active">FOOD</span></td>
+                                    <td><a href="https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600" target="_blank" style="color: var(--blue);">View Image</a></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm">Deactivate</button></td>
+                                </tr>
+                                <tr>
+                                    <td>2</td>
+                                    <td>Quick & Safe Rides Across City</td>
+                                    <td><span class="badge badge-verified">RIDE</span></td>
+                                    <td><a href="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=600" target="_blank" style="color: var(--blue);">View Image</a></td>
+                                    <td><span class="badge badge-active">ACTIVE</span></td>
+                                    <td><button class="btn btn-secondary btn-sm">Deactivate</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 8: SETTINGS -->
+            <section id="tab-settings" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">System & Global Commission Settings</h2>
+                        <button class="btn btn-primary btn-sm" onclick="alert('Settings saved successfully')">Save Changes</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-group">
+                            <label>Food Partner Commission (%)</label>
+                            <input type="number" class="form-input" value="15">
+                        </div>
+                        <div class="form-group">
+                            <label>Driver Ride Commission (%)</label>
+                            <input type="number" class="form-input" value="20">
+                        </div>
+                        <div class="form-group">
+                            <label>Platform Currency</label>
+                            <input type="text" class="form-input" value="INR (₹)" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Customer Support Hotline</label>
+                            <input type="text" class="form-input" value="+91 1800 123 4567">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- New Coupon Modal -->
+    <div class="modal-backdrop" id="couponModal">
+        <div class="modal">
+            <h3 style="font-size: 16px; font-weight: 800;">Create New Promo Coupon</h3>
+            <div class="form-group">
+                <label>Coupon Code</label>
+                <input type="text" class="form-input" id="couponCode" placeholder="e.g. SUPER100">
+            </div>
+            <div class="form-group">
+                <label>Discount Value</label>
+                <input type="number" class="form-input" id="couponValue" placeholder="e.g. 50">
+            </div>
+            <div class="form-group">
+                <label>Applicable Module</label>
+                <select class="form-input" id="couponModule">
+                    <option value="FOOD">Food Delivery</option>
+                    <option value="RIDE">Ride Hailing</option>
+                    <option value="ALL">All Services</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="closeCouponModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitNewCoupon()">Create Coupon</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabId) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.content-area > section').forEach(el => el.style.display = 'none');
+
+            event.currentTarget.classList.add('active');
+            const target = document.getElementById('tab-' + tabId);
+            if (target) target.style.display = 'block';
+
+            const titles = {
+                'overview': 'Enterprise Dashboard',
+                'users': 'User Accounts & Roles',
+                'restaurants': 'Restaurants & Cuisines',
+                'drivers': 'Drivers Fleet & Verification',
+                'marketplace': 'Community Bazaar Moderation',
+                'coupons': 'Coupons & Discounts',
+                'banners': 'Promotional Banners',
+                'settings': 'Global System Settings'
+            };
+            document.getElementById('tabTitle').innerText = titles[tabId] || 'Admin Console';
+        }
+
+        function refreshCurrentTab() {
+            fetchDashboardMetrics();
+        }
+
+        async function fetchDashboardMetrics() {
+            try {
+                const res = await fetch('/api/admin/dashboard');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success && json.data) {
+                        const d = json.data;
+                        document.getElementById('kpiUsers').innerText = d.totalUsers.toLocaleString();
+                        document.getElementById('kpiDrivers').innerText = d.activeDrivers.toLocaleString();
+                        document.getElementById('kpiFoodSales').innerText = '₹' + Math.round(d.grossFoodSales).toLocaleString();
+                        document.getElementById('kpiRevenue').innerText = '₹' + Math.round(d.platformRevenue).toLocaleString();
+                    }
+                }
+            } catch (err) {
+                console.log('Using default cached admin stats', err);
+            }
+        }
+
+        function openNewCouponModal() {
+            document.getElementById('couponModal').classList.add('open');
+        }
+
+        function closeCouponModal() {
+            document.getElementById('couponModal').classList.remove('open');
+        }
+
+        function submitNewCoupon() {
+            const code = document.getElementById('couponCode').value.trim().toUpperCase();
+            const val = document.getElementById('couponValue').value.trim();
+            const mod = document.getElementById('couponModule').value;
+
+            if (!code || !val) {
+                alert('Please provide code and discount value');
+                return;
+            }
+
+            const tbody = document.getElementById('couponsTableBody');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${code}</strong></td>
+                <td>Admin Special Promotion</td>
+                <td>PERCENTAGE</td>
+                <td>${val}%</td>
+                <td>₹100.00</td>
+                <td><span class="badge badge-active">${mod}</span></td>
+                <td><span class="badge badge-active">ACTIVE</span></td>
+                <td><button class="btn btn-secondary btn-sm">Toggle</button></td>
+            `;
+            tbody.insertBefore(row, tbody.firstChild);
+
+            closeCouponModal();
+            alert(`Coupon ${code} created successfully!`);
+        }
+
+        function toggleUserStatus(userId) {
+            alert(`User #${userId} status updated`);
+        }
+
+        function filterUsers() {
+            const q = document.getElementById('userSearchInput').value.toLowerCase();
+            const rows = document.querySelectorAll('#usersTableBody tr');
+            rows.forEach(r => {
+                const text = r.innerText.toLowerCase();
+                r.style.display = text.includes(q) ? '' : 'none';
+            });
+        }
+
+        // Initialize metrics on load
+        fetchDashboardMetrics();
+    </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore": "Error"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=superapp-db,1433;Database=SuperAppDB;User Id=sa;Password=<YOUR_PRODUCTION_DB_PASSWORD>;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=True"
+  },
+  "Database": {
+    "Provider": "SqlServer"
+  },
+  "Jwt": {
+    "Secret": "<YOUR_HMAC_SHA256_SECRET_KEY_MINIMUM_64_CHARACTERS>",
+    "Issuer": "SuperAppProduction",
+    "Audience": "SuperAppAudience",
+    "ExpiryDays": 30
+  },
+  "Providers": {
+    "Otp": "Karix",
+    "Map": "Google",
+    "Payment": "Razorpay",
+    "Storage": "Azure",
+    "Notification": "Firebase"
+  },
+  "AppSettings": {
+    "Environment": "Production",
+    "EnableSwagger": false,
+    "StorageBaseUrl": "/uploads/",
+    "CorsAllowedOrigins": [
+      "https://admin.superapp.internal",
+      "https://vendor.superapp.internal"
+    ]
+  }
+}

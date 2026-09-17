@@ -17,6 +17,7 @@
 | Push Notifications | `expo-notifications` | **PASS** | Permission flows, EAS token fetch, local scheduling, deep link response routing, dev tester panel. |
 | Device Geolocation | `expo-location` | **PASS** | Foreground GPS, reverse geocoding, watching teardown, pickup GPS integration. |
 | Backend Integration | `dotnet run` (SuperApp.API) | **PASS (200 OK)** | Auth, Food, Rides, Marketplace, and Notifications tested on live server. |
+| Backend Multi-Provider | EF Core 10 / Npgsql | **PASS (46/46 tests)** | Triad provider switching: InMemory, SqlServer, Postgres/Supabase with snake_case. |
 | Real-Time Communication | `@microsoft/signalr` | **PASS** | OrderHub and RideTrackingHub event handlers wired with lifecycle cleanup. |
 | Engine Compatibility | Node.js v22 / npm 11 | **PASS** | Clean dependency resolution without warnings. |
 | Source Integrity | `git status` in Flutter repo | **VERIFIED UNTOUCHED** | 0 files modified, deleted, or staged in `D:\FREELANCER\HTTP-FLUTnNET`. |

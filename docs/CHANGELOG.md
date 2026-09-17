@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-09-17
+
+### Backend Multi-Provider Support (PostgreSQL / Supabase, SQL Server, InMemory)
+- **Standalone Active Backend Copied to `HTTP-EXPNAT-NET/backend`**:
+  - Copied `SuperApp.API` and `SuperApp.API.Tests` to `D:\FREELANCER\HTTP-EXPNAT-NET\backend\` to guarantee complete independence from the read-only Flutter repository.
+  - Source codebase `D:\FREELANCER\HTTP-FLUTnNET` remains 100% clean and untouched.
+- **PostgreSQL / Supabase Support via Npgsql**:
+  - Added package `Npgsql.EntityFrameworkCore.PostgreSQL` (v10.0.3) to `SuperApp.API`.
+  - Added package `EFCore.NamingConventions` (v10.0.1) for automatic snake_case table and column name mapping (`users`, `roles`, `created_at`, etc.), perfectly matching `database/SuperApp_Supabase.sql`.
+  - Configured provider-aware partial indexing on `User.Email` (`"email" IS NOT NULL` on Postgres, `[Email] IS NOT NULL` on SQL Server).
+- **Environment-Driven Provider Triad in `Program.cs`**:
+  - `DATABASE_PROVIDER=InMemory`: zero-dependency RAM database with automated `EnsureCreated()` seeding on startup.
+  - `DATABASE_PROVIDER=SqlServer`: SQL Server driver with connection retry policy.
+  - `DATABASE_PROVIDER=Postgres` / `PostgreSQL` / `Supabase`: Npgsql driver with retry policy and snake_case naming.
+- **Push Token Registration Endpoint**:
+  - Added `UserDeviceToken` entity model and `DbSet<UserDeviceToken>` (table #28).
+  - Added `POST /api/notifications/device-token` in `NotificationsController.cs` for device push token persistence and updates.
+- **Unit Testing & Diagnostics**:
+  - Added `DatabaseProviderTests.cs` (10 tests) covering provider DI resolution, options generation, and device token operations.
+  - Full .NET backend test suite passing: **46/46 tests passed**.
+  - Verified live endpoint responses on `http://localhost:5000` for `GET /api/restaurants` and `POST /api/notifications/device-token`.
+  - Mobile test suite passing: **9 test suites, 50 tests passed**, `npx tsc --noEmit` (0 errors), `npx expo-doctor` (18/18 checks passed).
+
+---
+
 ## [1.2.0] - 2026-09-17
 
 ### Device Push Notifications & Real Device Geolocation

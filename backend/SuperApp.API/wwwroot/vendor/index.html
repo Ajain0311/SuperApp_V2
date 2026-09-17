@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperApp — Restaurant Vendor Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0A0E21;
+            --surface: #141829;
+            --surface-light: #1C2039;
+            --border: #2A2D3E;
+            --primary: #FF6B35;
+            --primary-dark: #E55A2B;
+            --secondary: #00C853;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #6C6C70;
+            --blue: #2196F3;
+            --yellow: #FFD740;
+            --red: #FF5252;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background-color: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 8px;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .brand-title {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-sub {
+            font-size: 11px;
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: var(--surface-light);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            border-left: 3px solid var(--primary);
+            color: var(--primary);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+
+        .restaurant-badge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background-color: var(--surface);
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--secondary);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--secondary);
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+            margin-bottom: 32px;
+        }
+
+        .metric-card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .metric-val {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        /* Section Cards */
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-success {
+            background-color: var(--secondary);
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            color: var(--text-tertiary);
+            font-size: 12px;
+            font-weight: 700;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 14px;
+            border-bottom: 1px solid rgba(42, 45, 62, 0.4);
+            font-size: 13px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .badge-pending { background: rgba(255, 215, 64, 0.15); color: var(--yellow); }
+        .badge-accepted { background: rgba(33, 150, 243, 0.15); color: var(--blue); }
+        .badge-preparing { background: rgba(255, 107, 53, 0.15); color: var(--primary); }
+        .badge-ready { background: rgba(0, 200, 83, 0.15); color: var(--secondary); }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">🍔</div>
+            <div>
+                <div class="brand-title">SuperApp Vendor</div>
+                <div class="brand-sub">Restaurant Manager</div>
+            </div>
+        </div>
+
+        <ul class="nav-list">
+            <li class="nav-item active" onclick="showSection('dashboard')">📊 Dashboard</li>
+            <li class="nav-item" onclick="showSection('orders')">🍳 Live Orders</li>
+            <li class="nav-item" onclick="showSection('menu')">📜 Menu & Items</li>
+            <li class="nav-item" onclick="showSection('settings')">⚙️ Store Settings</li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <div>
+                <h1 id="page-title" style="font-size: 24px; font-weight: 800;">Vendor Dashboard</h1>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Welcome back to your kitchen management console.</p>
+            </div>
+            <div class="restaurant-badge">
+                <div class="status-dot"></div>
+                <div>
+                    <div id="rest-name" style="font-weight: 700; font-size: 13px;">Meghana Foods (Special Biryani)</div>
+                    <div style="font-size: 11px; color: var(--secondary); font-weight: 600;">OPEN • ACCEPTING ORDERS</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Metrics -->
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <span class="metric-label">TODAY'S ORDERS</span>
+                <span class="metric-val" id="metric-today-orders">14</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">KITCHEN PENDING</span>
+                <span class="metric-val" id="metric-pending" style="color: var(--yellow);">3</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">COMPLETED TODAY</span>
+                <span class="metric-val" id="metric-completed" style="color: var(--secondary);">11</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">TODAY'S SALES</span>
+                <span class="metric-val" id="metric-sales" style="color: var(--primary);">₹4,890</span>
+            </div>
+        </section>
+
+        <!-- Live Kitchen Queue -->
+        <section class="card" id="orders-section">
+            <div class="card-header">
+                <div>
+                    <h2 style="font-size: 18px; font-weight: 700;">Live Kitchen Queue</h2>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Orders awaiting preparation or delivery pickup</p>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="loadDashboard()">🔄 Refresh Orders</button>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Order #</th>
+                        <th>Items & Customizations</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="orders-table-body">
+                    <tr>
+                        <td><strong>#FO-1002</strong><br><small style="color:var(--text-tertiary);">8 mins ago</small></td>
+                        <td>1x Meghana Special Chicken Biryani (Regular)<br><small style="color:var(--primary);">+ Boondi Raita Bowl</small></td>
+                        <td>₹375</td>
+                        <td><span class="badge badge-preparing">PREPARING</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-success" onclick="advanceOrderStatus(1002, 'READY')">Mark Ready</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>#FO-1003</strong><br><small style="color:var(--text-tertiary);">2 mins ago</small></td>
+                        <td>1x Paneer 65 Biryani (Dum Style)<br><small style="color:var(--primary);">+ Extra Mirchi Ka Salan</small></td>
+                        <td>₹335</td>
+                        <td><span class="badge badge-pending">PENDING</span></td>
+                        <td>
+                            <button class="btn btn-sm" onclick="advanceOrderStatus(1003, 'ACCEPTED')">Accept Order</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Menu & Stock Management -->
+        <section class="card" id="menu-section">
+            <div class="card-header">
+                <div>
+                    <h2 style="font-size: 18px; font-weight: 700;">Menu Dishes & In-Stock Availability</h2>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Directly toggle dishes in stock or adjust base prices</p>
+                </div>
+                <button class="btn btn-sm" onclick="openAddDishModal()">+ Add New Dish</button>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Dish Name</th>
+                        <th>Category</th>
+                        <th>Price</th>
+                        <th>Bestseller</th>
+                        <th>Stock Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="menu-table-body">
+                    <tr>
+                        <td><strong>Meghana Special Chicken Biryani</strong></td>
+                        <td>Biryani Specials</td>
+                        <td>₹340</td>
+                        <td><span style="color:var(--yellow); font-size:12px;">★ BESTSELLER</span></td>
+                        <td><span class="badge badge-ready">IN STOCK</span></td>
+                        <td><button class="btn btn-sm btn-outline">Toggle Stock</button></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Paneer 65 Biryani (Dum Style)</strong></td>
+                        <td>Biryani Specials</td>
+                        <td>₹290</td>
+                        <td><span style="color:var(--yellow); font-size:12px;">★ BESTSELLER</span></td>
+                        <td><span class="badge badge-ready">IN STOCK</span></td>
+                        <td><button class="btn btn-sm btn-outline">Toggle Stock</button></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Apollo Fish Fry</strong></td>
+                        <td>Starters</td>
+                        <td>₹360</td>
+                        <td>—</td>
+                        <td><span class="badge badge-ready">IN STOCK</span></td>
+                        <td><button class="btn btn-sm btn-outline">Toggle Stock</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <script>
+        async function loadDashboard() {
+            try {
+                const res = await fetch('/api/vendor/dashboard');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.data) {
+                        const d = data.data;
+                        document.getElementById('rest-name').innerText = d.restaurantName;
+                        document.getElementById('metric-today-orders').innerText = d.todayOrdersCount;
+                        document.getElementById('metric-pending').innerText = d.pendingOrdersCount;
+                        document.getElementById('metric-completed').innerText = d.completedOrdersCount;
+                        document.getElementById('metric-sales').innerText = '₹' + Math.round(d.todaySalesAmount);
+                    }
+                }
+            } catch (e) {
+                console.log('Using active mock state for vendor dashboard');
+            }
+        }
+
+        async function advanceOrderStatus(orderId, newStatus) {
+            alert(`Order #${orderId} transitioned to ${newStatus}!`);
+            loadDashboard();
+        }
+
+        function showSection(name) {
+            alert(`Navigating to ${name}`);
+        }
+
+        function openAddDishModal() {
+            const name = prompt('Enter Dish Name:');
+            const price = prompt('Enter Base Price (₹):');
+            if (name && price) {
+                alert(`Added ${name} (₹${price}) directly to menu!`);
+            }
+        }
+
+        window.onload = loadDashboard;
+    </script>
+</body>
+</html>

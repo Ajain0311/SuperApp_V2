@@ -43,3 +43,16 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# .NET / C# build outputs
+**/[Bb]in/
+**/[Oo]bj/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.vs/
+_ReSharper*/
+*.DotSettings.user
+*.nupkg
+TestResults/
