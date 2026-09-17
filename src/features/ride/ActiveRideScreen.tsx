@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -15,11 +16,110 @@ import { RootStackParamList } from '../../navigation/types';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { signalRService, DriverLocationEvent, RideStatusEvent } from '../../services/signalr';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 export const ActiveRideScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'ActiveRide'>>();
   const rideId = route.params?.rideId || 'RD-5021';
+  const rideNumericId = route.params?.rideNumericId;
+  const initialRideData = route.params?.rideData;
+
+  const [otpCode, setOtpCode] = useState<string>(initialRideData?.otpCode || '4829');
+  const [driverName, setDriverName] = useState<string>(initialRideData?.driver?.fullName || 'Amit Singh');
+  const [driverRating, setDriverRating] = useState<string>(
+    initialRideData?.driver?.rating ? String(initialRideData.driver.rating) : '4.9'
+  );
+  const [driverTrips, setDriverTrips] = useState<string>(
+    initialRideData?.driver?.totalRides ? `(${initialRideData.driver.totalRides} trips)` : '(1,240 trips)'
+  );
+  const [vehicleModel, setVehicleModel] = useState<string>(
+    initialRideData?.driver?.vehicleModel || 'Hero Splendor Plus (Black)'
+  );
+  const [registrationNumber, setRegistrationNumber] = useState<string>(
+    initialRideData?.driver?.registrationNumber || 'DL 04 AB 9821'
+  );
+  const [transitStatus, setTransitStatus] = useState<string>('Driver Assigned & In Transit');
+  const [arrivalEta, setArrivalEta] = useState<string>('3 mins away (0.8 km)');
+  const [fareText, setFareText] = useState<string>(
+    initialRideData?.estimatedFare ? `₹${initialRideData.estimatedFare}` : '₹45'
+  );
+  const [rideStatus, setRideStatus] = useState<string>(initialRideData?.status || 'ACCEPTED');
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  useEffect(() => {
+    if (!rideNumericId) return;
+
+    let unsubLocation: (() => void) | undefined;
+    let unsubStatus: (() => void) | undefined;
+
+    signalRService
+      .connectRideHub()
+      .then(() => {
+        signalRService.joinRide(rideNumericId);
+
+        unsubLocation = signalRService.onDriverLocationUpdated((data: DriverLocationEvent) => {
+          if (data.rideId === rideNumericId) {
+            setArrivalEta(`Driver updating: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`);
+          }
+        });
+
+        unsubStatus = signalRService.onRideStatusChanged((data: RideStatusEvent) => {
+          if (data.rideId === rideNumericId) {
+            setRideStatus(data.status);
+            if (data.status === 'STARTED') {
+              setTransitStatus('Ride in Progress');
+              setArrivalEta('Heading to Destination');
+            } else if (data.status === 'COMPLETED') {
+              setTransitStatus('Ride Completed');
+              setArrivalEta('Arrived at Destination');
+            }
+          }
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      if (rideNumericId) {
+        signalRService.leaveRide(rideNumericId);
+      }
+      if (unsubLocation) unsubLocation();
+      if (unsubStatus) unsubStatus();
+    };
+  }, [rideNumericId]);
+
+  const handleCancelRide = () => {
+    Alert.alert(
+      'Cancel Ride',
+      'Are you sure you want to cancel this ride?',
+      [
+        { text: 'Keep Ride', style: 'cancel' },
+        {
+          text: 'Cancel Ride',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCancelling(true);
+            try {
+              if (rideNumericId) {
+                await apiClient.post(ApiEndpoints.ride.cancel(rideNumericId));
+              }
+              Alert.alert('Ride Cancelled', 'Your ride has been cancelled.');
+              navigation.navigate('MainTabs', { screen: 'Home' });
+            } catch (err: any) {
+              const msg = err.response?.data?.message || 'Unable to cancel ride.';
+              Alert.alert('Cancel Error', msg);
+            } finally {
+              setIsCancelling(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const otpDigits = otpCode.split('').slice(0, 4);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -33,7 +133,7 @@ export const ActiveRideScreen: React.FC = () => {
         >
           <MaterialIcons name="chevron-left" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Active Ride</Text>
+        <Text style={styles.headerTitle}>Active Ride ({rideId})</Text>
         <View style={styles.sosChip}>
           <MaterialIcons name="shield" size={14} color={colors.error} />
           <Text style={styles.sosText}>SOS Emergency</Text>
@@ -46,9 +146,9 @@ export const ActiveRideScreen: React.FC = () => {
           <View style={styles.arrivalInfo}>
             <View style={styles.transitStatusRow}>
               <View style={styles.greenPulseDot} />
-              <Text style={styles.transitStatusText}>Rapido Bike In Transit</Text>
+              <Text style={styles.transitStatusText}>{transitStatus}</Text>
             </View>
-            <Text style={styles.arrivalEtaText}>3 mins away (0.8 km)</Text>
+            <Text style={styles.arrivalEtaText}>{arrivalEta}</Text>
           </View>
           <View style={styles.vehicleTypeCircle}>
             <MaterialIcons name="two-wheeler" size={28} color={colors.secondary} />
@@ -59,7 +159,7 @@ export const ActiveRideScreen: React.FC = () => {
         <View style={styles.otpBox}>
           <Text style={styles.otpTitle}>START RIDE OTP</Text>
           <View style={styles.otpDigitsRow}>
-            {['4', '8', '2', '9'].map((digit, idx) => (
+            {otpDigits.map((digit, idx) => (
               <View key={idx} style={styles.otpDigitBox}>
                 <Text style={styles.otpDigitText}>{digit}</Text>
               </View>
@@ -78,19 +178,25 @@ export const ActiveRideScreen: React.FC = () => {
             </View>
 
             <View style={styles.driverMeta}>
-              <Text style={styles.driverName}>Amit Singh</Text>
+              <Text style={styles.driverName}>{driverName}</Text>
               <View style={styles.ratingRow}>
                 <MaterialIcons name="star" size={14} color={colors.yellow} />
-                <Text style={styles.ratingNumber}>4.9</Text>
-                <Text style={styles.tripsCount}> (1,240 trips)</Text>
+                <Text style={styles.ratingNumber}>{driverRating}</Text>
+                <Text style={styles.tripsCount}> {driverTrips}</Text>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.callButton}>
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={() => Alert.alert('Calling Driver', `Calling ${driverName}...`)}
+            >
               <MaterialIcons name="call" size={20} color={colors.secondary} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.chatButton}>
+            <TouchableOpacity
+              style={styles.chatButton}
+              onPress={() => Alert.alert('Chat Driver', `Opening chat with ${driverName}...`)}
+            >
               <MaterialIcons name="chat-bubble-outline" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -98,61 +204,117 @@ export const ActiveRideScreen: React.FC = () => {
           <View style={styles.cardDivider} />
 
           <View style={styles.vehicleRow}>
-            <View>
-              <Text style={styles.vehicleModelLabel}>VEHICLE MODEL</Text>
-              <Text style={styles.vehicleModelName}>Hero Splendor Plus (Black)</Text>
+            <View style={styles.vehicleModelInfo}>
+              <Text style={styles.vehicleModelText}>{vehicleModel}</Text>
+              <Text style={styles.vehicleColorText}>Verified Commercial Vehicle</Text>
             </View>
-            <View style={styles.plateBadge}>
-              <Text style={styles.plateText}>DL 04 AB 9821</Text>
+            <View style={styles.regNumberBadge}>
+              <Text style={styles.regNumberText}>{registrationNumber}</Text>
             </View>
           </View>
         </View>
 
-        {/* Trip Stepper */}
-        <View style={styles.stepperCard}>
-          <Text style={styles.stepperTitle}>Trip Status</Text>
+        {/* Live Trip Timeline */}
+        <View style={styles.timelineCard}>
+          <Text style={styles.timelineTitle}>TRIP PROGRESS</Text>
 
-          <View style={styles.stepperBody}>
+          <View style={styles.timelineSteps}>
             {/* Step 1 */}
             <View style={styles.stepItem}>
               <View style={[styles.stepCircle, styles.stepCircleDone]}>
-                <MaterialIcons name="check" size={12} color={colors.secondary} />
+                <MaterialIcons name="check" size={12} color="#FFFFFF" />
               </View>
               <View style={styles.stepTextContent}>
                 <Text style={styles.stepTitleDone}>Driver Assigned</Text>
-                <Text style={styles.stepSubtitle}>Amit accepted your ride request</Text>
+                <Text style={styles.stepSubtitle}>{driverName} accepted your ride request</Text>
               </View>
             </View>
             <View style={[styles.stepLine, styles.stepLineDone]} />
 
             {/* Step 2 */}
             <View style={styles.stepItem}>
-              <View style={[styles.stepCircle, styles.stepCircleActive]}>
-                <MaterialIcons name="check" size={12} color={colors.primary} />
+              <View
+                style={[
+                  styles.stepCircle,
+                  rideStatus === 'ACCEPTED' ? styles.stepCircleActive : styles.stepCircleDone,
+                ]}
+              >
+                <MaterialIcons
+                  name="check"
+                  size={12}
+                  color={rideStatus === 'ACCEPTED' ? colors.primary : '#FFFFFF'}
+                />
               </View>
               <View style={styles.stepTextContent}>
-                <Text style={styles.stepTitleActive}>Arriving at Pickup</Text>
-                <Text style={styles.stepSubtitle}>Driver is 3 mins away at Janpath</Text>
+                <Text
+                  style={
+                    rideStatus === 'ACCEPTED' ? styles.stepTitleActive : styles.stepTitleDone
+                  }
+                >
+                  Arriving at Pickup
+                </Text>
+                <Text style={styles.stepSubtitle}>Driver is on the way</Text>
               </View>
             </View>
-            <View style={styles.stepLine} />
+            <View
+              style={[
+                styles.stepLine,
+                rideStatus === 'STARTED' || rideStatus === 'COMPLETED'
+                  ? styles.stepLineDone
+                  : null,
+              ]}
+            />
 
             {/* Step 3 */}
             <View style={styles.stepItem}>
-              <View style={styles.stepCircle} />
+              <View
+                style={[
+                  styles.stepCircle,
+                  rideStatus === 'STARTED'
+                    ? styles.stepCircleActive
+                    : rideStatus === 'COMPLETED'
+                    ? styles.stepCircleDone
+                    : null,
+                ]}
+              />
               <View style={styles.stepTextContent}>
-                <Text style={styles.stepTitlePending}>Ride Started</Text>
+                <Text
+                  style={
+                    rideStatus === 'STARTED'
+                      ? styles.stepTitleActive
+                      : rideStatus === 'COMPLETED'
+                      ? styles.stepTitleDone
+                      : styles.stepTitlePending
+                  }
+                >
+                  Ride Started
+                </Text>
                 <Text style={styles.stepSubtitle}>Heading to Terminal 3, IGI Airport</Text>
               </View>
             </View>
-            <View style={styles.stepLine} />
+            <View
+              style={[styles.stepLine, rideStatus === 'COMPLETED' ? styles.stepLineDone : null]}
+            />
 
             {/* Step 4 */}
             <View style={styles.stepItem}>
-              <View style={styles.stepCircle} />
+              <View
+                style={[
+                  styles.stepCircle,
+                  rideStatus === 'COMPLETED' ? styles.stepCircleActive : null,
+                ]}
+              />
               <View style={styles.stepTextContent}>
-                <Text style={styles.stepTitlePending}>Drop-off Completed</Text>
-                <Text style={styles.stepSubtitle}>Pay ₹45 via Cash or UPI</Text>
+                <Text
+                  style={
+                    rideStatus === 'COMPLETED'
+                      ? styles.stepTitleActive
+                      : styles.stepTitlePending
+                  }
+                >
+                  Drop-off Completed
+                </Text>
+                <Text style={styles.stepSubtitle}>Pay {fareText} via Cash or UPI</Text>
               </View>
             </View>
           </View>
@@ -161,10 +323,13 @@ export const ActiveRideScreen: React.FC = () => {
         {/* Cancel Ride Button */}
         <TouchableOpacity
           activeOpacity={0.8}
-          style={styles.cancelButton}
-          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
+          style={[styles.cancelButton, isCancelling && { opacity: 0.7 }]}
+          disabled={isCancelling}
+          onPress={handleCancelRide}
         >
-          <Text style={styles.cancelButtonText}>Cancel Ride</Text>
+          <Text style={styles.cancelButtonText}>
+            {isCancelling ? 'Cancelling...' : 'Cancel Ride'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -368,18 +533,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  vehicleModelLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textTertiary,
+  vehicleModelInfo: {
+    flex: 1,
   },
-  vehicleModelName: {
-    ...typography.bodySmall,
+  vehicleModelText: {
+    ...typography.bodyMedium,
     color: colors.textPrimary,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  vehicleColorText: {
+    ...typography.caption,
+    color: colors.secondary,
     marginTop: 2,
   },
-  plateBadge: {
+  regNumberBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
@@ -387,13 +554,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  plateText: {
+  regNumberText: {
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 1.0,
     color: colors.textPrimary,
   },
-  stepperCard: {
+  timelineCard: {
     backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 18,
@@ -401,13 +568,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginTop: spacing.md,
   },
-  stepperTitle: {
-    ...typography.bodyLarge,
-    color: colors.textPrimary,
-    fontWeight: '700',
+  timelineTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textTertiary,
+    letterSpacing: 1.2,
     marginBottom: 14,
   },
-  stepperBody: {
+  timelineSteps: {
     paddingLeft: 4,
   },
   stepItem: {

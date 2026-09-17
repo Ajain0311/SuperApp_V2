@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import { ListingSummary, MarketplaceCategory } from '../../models/marketplace';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 const CATEGORIES: MarketplaceCategory[] = [
   { id: 0, name: 'All' },
@@ -40,8 +42,35 @@ export const MarketplaceHomeScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(0);
   const [selectedFilter, setSelectedFilter] = useState('All');
+  const [categories, setCategories] = useState<MarketplaceCategory[]>(CATEGORIES);
+  const [serverListings, setServerListings] = useState<ListingSummary[]>([]);
 
   const { customListings, favorites, toggleFavorite } = useMarketplaceStore();
+
+  useEffect(() => {
+    // Fetch live categories from backend API
+    apiClient
+      .get<any>(ApiEndpoints.marketplace.categories)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          setCategories([{ id: 0, name: 'All' }, ...data]);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch live listings from backend API
+    apiClient
+      .get<any>(ApiEndpoints.marketplace.listings)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        const items = data?.items || data;
+        if (Array.isArray(items) && items.length > 0) {
+          setServerListings(items);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const initialListings: ListingSummary[] = useMemo(() => [
     {
@@ -131,8 +160,9 @@ export const MarketplaceHomeScreen: React.FC = () => {
   ], []);
 
   const allListings = useMemo(() => {
-    return [...customListings, ...initialListings];
-  }, [customListings, initialListings]);
+    const base = serverListings.length > 0 ? serverListings : initialListings;
+    return [...customListings, ...base];
+  }, [customListings, serverListings, initialListings]);
 
   const filteredListings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -155,6 +185,11 @@ export const MarketplaceHomeScreen: React.FC = () => {
       return matchesCategory && matchesQuery && matchesFilter;
     });
   }, [allListings, searchQuery, selectedCategoryId, selectedFilter]);
+
+  const handleToggleFavorite = (id: number) => {
+    toggleFavorite(id);
+    apiClient.post(ApiEndpoints.marketplace.toggleFavorite(id)).catch(() => {});
+  };
 
   const getCategoryIcon = (name: string): keyof typeof MaterialIcons.glyphMap => {
     switch (name) {
@@ -215,7 +250,7 @@ export const MarketplaceHomeScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.heartButton}
-            onPress={() => toggleFavorite(item.id)}
+            onPress={() => handleToggleFavorite(item.id)}
           >
             <MaterialIcons
               name={isFav ? 'favorite' : 'favorite-border'}
@@ -291,7 +326,7 @@ export const MarketplaceHomeScreen: React.FC = () => {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoriesList}
-          data={CATEGORIES}
+          data={categories}
           keyExtractor={(c) => String(c.id)}
           renderItem={({ item }) => {
             const isSelected = item.id === selectedCategoryId;

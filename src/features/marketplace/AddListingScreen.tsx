@@ -22,6 +22,8 @@ import { ListingSummary } from '../../models/marketplace';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 const CATEGORIES = [
   { id: 1, name: 'Mobiles' },
@@ -83,13 +85,32 @@ export const AddListingScreen: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setIsSubmitting(false);
+    let serverId: number | undefined;
+    try {
+      const res = await apiClient.post<any>(ApiEndpoints.marketplace.manageListings, {
+        action: 'ADD',
+        title: title.trim(),
+        description: description.trim() || title.trim(),
+        price: parseFloat(price.trim()) || 0,
+        condition: selectedCondition,
+        categoryId: selectedCategoryId,
+        location: location.trim(),
+        imageUrls: photos,
+      });
+      const data = res.data?.data || res.data;
+      if (data?.id) {
+        serverId = data.id;
+      }
+    } catch (err) {
+      // Safe offline fallback
+    } finally {
+      setIsSubmitting(false);
+    }
 
     const cat = CATEGORIES.find((c) => c.id === selectedCategoryId) || CATEGORIES[0];
 
     const newListing: ListingSummary = {
-      id: Date.now(),
+      id: serverId || Date.now(),
       title: title.trim(),
       price: parseFloat(price.trim()) || 0,
       condition: selectedCondition,

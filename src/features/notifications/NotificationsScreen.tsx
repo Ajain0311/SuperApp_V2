@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 interface NotificationItem {
   id: string;
@@ -56,6 +58,36 @@ const NOTIFICATIONS: NotificationItem[] = [
 
 export const NotificationsScreen: React.FC = () => {
   const navigation = useNavigation();
+  const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
+
+  useEffect(() => {
+    apiClient
+      .get<any>(ApiEndpoints.common.notifications)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+        if (items.length > 0) {
+          const mapped: NotificationItem[] = items.map((n: any) => ({
+            id: String(n.id),
+            title: n.title,
+            body: n.body || n.message || '',
+            time: n.createdAt
+              ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Just now',
+            icon: (n.iconName as any) || 'notifications',
+            color:
+              n.category === 'OFFER'
+                ? colors.primary
+                : n.category === 'RIDE'
+                ? colors.blue
+                : colors.secondary,
+            isUnread: !n.isRead,
+          }));
+          setNotifications(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -71,7 +103,7 @@ export const NotificationsScreen: React.FC = () => {
       </View>
 
       <FlatList
-        data={NOTIFICATIONS}
+        data={notifications}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (

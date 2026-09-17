@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import { useMarketplaceStore } from '../../store/marketplaceStore';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 const { width } = Dimensions.get('window');
 
@@ -40,7 +42,7 @@ export const ListingDetailScreen: React.FC = () => {
   const isFav = favorites.includes(idNum);
 
   // Mock detail data matching Flutter implementation
-  const detail: ListingDetail = {
+  const initialDetail: ListingDetail = {
     id: idNum,
     title: 'iPhone 14 Pro Max 256GB Deep Purple (Like New)',
     description:
@@ -65,6 +67,44 @@ export const ListingDetailScreen: React.FC = () => {
     dealsCount: 28,
     isFavorite: isFav,
   };
+
+  const [detail, setDetail] = useState<ListingDetail>(initialDetail);
+
+  useEffect(() => {
+    apiClient
+      .get<any>(ApiEndpoints.marketplace.listingDetail(listingId))
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (data && data.title) {
+          setDetail({
+            id: data.id || idNum,
+            title: data.title,
+            description: data.description || '',
+            price: Number(data.price) || 0,
+            condition: data.condition || 'USED',
+            location: data.location || 'Bengaluru',
+            images:
+              data.images && data.images.length > 0
+                ? data.images.map((im: any) => im.imageUrl || im)
+                : data.primaryImageUrl
+                ? [data.primaryImageUrl]
+                : ['https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=800'],
+            isFeatured: Boolean(data.isFeatured),
+            viewCount: data.viewCount || 1,
+            createdAt: data.createdAt || new Date().toISOString(),
+            categoryId: data.categoryId || 1,
+            categoryName: data.categoryName || 'General',
+            sellerId: data.sellerId || 1,
+            sellerName: data.sellerName || 'Verified Seller',
+            sellerPhone: data.sellerPhone || '+91 98450 12345',
+            sellerRating: Number(data.sellerRating) || 4.9,
+            dealsCount: data.dealsCount || 12,
+            isFavorite: favorites.includes(data.id || idNum),
+          });
+        }
+      })
+      .catch(() => {});
+  }, [listingId]);
 
   const handleSendOffer = () => {
     setShowOfferModal(false);

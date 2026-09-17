@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { AppButton } from '../../components/common/AppButton';
+import { signalRService, OrderStatusEvent } from '../../services/signalr';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 interface FoodOrderTrackingScreenProps {
   route: {
     params: {
       orderId?: string;
+      orderNumericId?: number;
     };
   };
   navigation: any;
@@ -28,37 +32,131 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
   navigation,
 }) => {
   const orderId = route.params?.orderId || 'FO-1002';
+  const orderNumericId = route.params?.orderNumericId;
+  const [currentStepIndex, setCurrentStepIndex] = useState(1); // Default Kitchen Preparing
+  const [etaText, setEtaText] = useState('22 Mins • On Time');
+  const [restaurantName, setRestaurantName] = useState('Meghana Foods');
+  const [orderStatus, setOrderStatus] = useState<string>('Preparing');
+
+  const mapStatusToStep = (status: string): number => {
+    const s = status.toUpperCase();
+    if (s === 'PENDING' || s === 'CONFIRMED') return 0;
+    if (s === 'PREPARING' || s === 'ACCEPTED') return 1;
+    if (s === 'READY' || s === 'READYFORPICKUP') return 2;
+    if (s === 'OUT_FOR_DELIVERY' || s === 'PICKEDUP' || s === 'ONTHEWAY') return 3;
+    if (s === 'DELIVERED' || s === 'COMPLETED') return 4;
+    return 1;
+  };
+
+  useEffect(() => {
+    if (!orderNumericId) return;
+
+    // Fetch initial order state from API
+    apiClient
+      .get<any>(ApiEndpoints.food.orderDetail(orderNumericId))
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (data) {
+          if (data.status) {
+            setOrderStatus(data.status);
+            setCurrentStepIndex(mapStatusToStep(data.status));
+          }
+          if (data.restaurantName) {
+            setRestaurantName(data.restaurantName);
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback gracefully
+      });
+
+    // Subscribe to live SignalR order hub
+    let unsubscribe: (() => void) | undefined;
+    signalRService
+      .connectOrderHub()
+      .then(() => {
+        signalRService.joinOrder(orderNumericId);
+        unsubscribe = signalRService.onOrderStatusUpdated((event: OrderStatusEvent) => {
+          if (event.orderId === orderNumericId) {
+            setOrderStatus(event.status);
+            setCurrentStepIndex(mapStatusToStep(event.status));
+            if (event.estimatedMinutes) {
+              setEtaText(`${event.estimatedMinutes} Mins • On Time`);
+            }
+          }
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      if (orderNumericId) {
+        signalRService.leaveOrder(orderNumericId);
+      }
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [orderNumericId]);
+
+  const handleCancelOrder = () => {
+    if (!orderNumericId) {
+      Alert.alert('Order Cancelled', 'Your order was cancelled successfully.');
+      navigation.navigate('MainTabs', { screen: 'Food' });
+      return;
+    }
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.post(ApiEndpoints.food.cancelOrder(orderNumericId));
+              Alert.alert('Order Cancelled', 'Your order has been cancelled.');
+              navigation.navigate('MainTabs', { screen: 'Food' });
+            } catch (err: any) {
+              const msg = err.response?.data?.message || 'Unable to cancel order at this stage.';
+              Alert.alert('Cannot Cancel', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const steps = [
     {
       title: 'Order Received',
-      subtitle: 'Restaurant confirmed your order',
-      isCompleted: true,
-      isCurrent: false,
+      subtitle: `${restaurantName} confirmed your order`,
+      isCompleted: currentStepIndex > 0,
+      isCurrent: currentStepIndex === 0,
     },
     {
       title: 'Kitchen Preparing',
       subtitle: 'Chef is cooking your fresh dishes',
-      isCompleted: true,
-      isCurrent: true,
+      isCompleted: currentStepIndex > 1,
+      isCurrent: currentStepIndex === 1,
     },
     {
       title: 'Ready for Pickup',
       subtitle: 'Delivery partner arrives at restaurant',
-      isCompleted: false,
-      isCurrent: false,
+      isCompleted: currentStepIndex > 2,
+      isCurrent: currentStepIndex === 2,
     },
     {
       title: 'Out for Delivery',
       subtitle: 'Heading to Connaught Place',
-      isCompleted: false,
-      isCurrent: false,
+      isCompleted: currentStepIndex > 3,
+      isCurrent: currentStepIndex === 3,
     },
     {
       title: 'Delivered',
       subtitle: 'Enjoy your meal!',
-      isCompleted: false,
-      isCurrent: false,
+      isCompleted: currentStepIndex >= 4,
+      isCurrent: currentStepIndex === 4,
     },
   ];
 
@@ -67,7 +165,7 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
       {/* App Bar */}
       <View style={styles.appBar}>
         <TouchableOpacity
-          onPress={() => navigation.navigate('MainShell')}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Food' })}
           style={styles.backButton}
         >
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
@@ -182,10 +280,21 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
           </TouchableOpacity>
         </View>
 
+        {/* Cancel Button if eligible */}
+        {currentStepIndex <= 1 && (
+          <TouchableOpacity
+            style={styles.cancelOrderButton}
+            onPress={handleCancelOrder}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelOrderButtonText}>Cancel Food Order</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Return Button */}
         <AppButton
           text="Return to SuperApp Home"
-          onPressed={() => navigation.navigate('MainShell')}
+          onPressed={() => navigation.navigate('MainTabs', { screen: 'Home' })}
           style={styles.returnButton}
         />
       </ScrollView>
@@ -355,5 +464,20 @@ const styles = StyleSheet.create({
   },
   returnButton: {
     marginBottom: 20,
+  },
+  cancelOrderButton: {
+    paddingVertical: 14,
+    borderRadius: AppRadius.lg,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  cancelOrderButtonText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

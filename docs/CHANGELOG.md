@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-09-17
+
+### Real Backend Integration & Hardening
+- **ASP.NET Core Server Validation**:
+  - Validated ASP.NET Core backend in `SuperApp.API` (`dotnet test` passed 36/36 tests; server runs on `http://localhost:5000`).
+  - Executed live HTTP calls verifying `POST /api/auth/send-otp` (200 OK), `POST /api/rides/estimate` (200 OK), `GET /api/marketplace/categories` (200 OK), and `GET /api/marketplace` (200 OK).
+- **Route Alignments & Bug Fixes**:
+  - Corrected `FoodOrdersController` route from `/food-orders` (404) to `/foodorders` (200 OK) in `src/constants/api.ts`.
+  - Fixed `FoodOrderTrackingScreen` invalid navigation target from `MainShell` to `MainTabs`.
+  - Installed missing peer dependency `expo-font` required by `@expo/vector-icons`.
+- **Feature Screen API Wiring**:
+  - `FoodHomeScreen.tsx`: Connected `GET /api/restaurants` with dynamic category filtering and fallback.
+  - `RestaurantDetailScreen.tsx`: Connected `GET /api/restaurants/{id}` for live menus and wired `POST /api/foodorders` with loading spinner.
+  - `FoodOrderTrackingScreen.tsx`: Subscribed to SignalR `/hubs/order` for live `OrderStatusUpdated` events and wired `POST /api/foodorders/{id}/cancel`.
+  - `RideBookingScreen.tsx`: Connected `POST /api/rides/estimate` for real live fare calculation and `POST /api/rides/book` for instant driver assignment.
+  - `ActiveRideScreen.tsx`: Subscribed to SignalR `/hubs/ride` for `DriverLocationUpdated` and `RideStatusChanged`, display dynamic 4-digit ride OTP, and wired `POST /api/rides/{id}/cancel`.
+  - `MarketplaceHomeScreen.tsx`: Connected `GET /api/marketplace/categories` and `GET /api/marketplace` with live item feed and `POST /api/marketplace/favorites/{id}`.
+  - `ListingDetailScreen.tsx`: Connected `GET /api/marketplace/{id}` for live seller and item metadata.
+  - `AddListingScreen.tsx`: Wired `POST /api/marketplace/listings` (`action: ADD`) to persist new items into backend DB.
+  - `ActivityScreen.tsx`: Connected `GET /api/foodorders` and `GET /api/marketplace/my-listings`.
+  - `NotificationsScreen.tsx`: Connected `GET /api/notifications`.
+- **Data Source Transparency**:
+  - Created `DataSourceBadge.tsx` to clearly indicate Live API Connected vs Demo Seed Data.
+  - Hardened auth session fallback (`isFallbackSession: true`) for seamless development.
+- **Verification Metrics**:
+  - `npx tsc --noEmit`: 0 errors.
+  - `npx expo-doctor`: 18/18 checks passed.
+  - Source repository `HTTP-FLUTnNET`: 100% clean and untouched.
+
 ## [1.0.0] - 2026-09-17
 
 ### Added

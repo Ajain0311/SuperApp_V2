@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { RootStackParamList } from '../../navigation/types';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 interface VehicleOption {
   type: string;
@@ -59,8 +61,86 @@ const VEHICLES: VehicleOption[] = [
 export const RideBookingScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [vehicles, setVehicles] = useState<VehicleOption[]>(VEHICLES);
+  const [routeMetrics, setRouteMetrics] = useState('16.4 km • ~34 mins • Moderate Traffic');
+  const [isBooking, setIsBooking] = useState(false);
 
-  const selectedVehicle = VEHICLES[selectedIndex];
+  useEffect(() => {
+    apiClient
+      .post<any>(ApiEndpoints.ride.estimate, {
+        pickupLat: 28.6304,
+        pickupLng: 77.2177,
+        pickupAddress: 'Connaught Place, Central Delhi',
+        destinationLat: 28.5562,
+        destinationLng: 77.1000,
+        destinationAddress: 'Terminal 3, IGI Airport (DEL)',
+      })
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (data) {
+          if (data.distanceKm && data.estimatedMinutes) {
+            setRouteMetrics(
+              `${data.distanceKm} km • ~${data.estimatedMinutes} mins • ${data.trafficCondition || 'Moderate Traffic'}`
+            );
+          }
+          if (data.vehicleOptions && data.vehicleOptions.length > 0) {
+            const mapped: VehicleOption[] = data.vehicleOptions.map((v: any) => ({
+              type: v.vehicleType || 'BIKE',
+              name: v.title || v.vehicleType,
+              tag: v.tag || 'FASTEST',
+              tagColor:
+                v.vehicleType === 'CAB'
+                  ? colors.purple
+                  : v.vehicleType === 'AUTO'
+                  ? colors.blue
+                  : colors.secondary,
+              subtitle: v.subtitle || 'Nearby driver',
+              fare: Number(v.estimatedFare) || 50,
+              icon:
+                v.vehicleType === 'CAB'
+                  ? 'directions-car'
+                  : v.vehicleType === 'AUTO'
+                  ? 'electric-rickshaw'
+                  : 'two-wheeler',
+            }));
+            setVehicles(mapped);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const selectedVehicle = vehicles[selectedIndex] || vehicles[0];
+
+  const handleBookRide = async () => {
+    setIsBooking(true);
+    try {
+      const res = await apiClient.post<any>(ApiEndpoints.ride.book, {
+        vehicleType: selectedVehicle.type,
+        pickupAddress: 'Connaught Place, Central Delhi',
+        pickupLatitude: 28.6304,
+        pickupLongitude: 77.2177,
+        dropoffAddress: 'Terminal 3, IGI Airport (DEL)',
+        dropoffLatitude: 28.5562,
+        dropoffLongitude: 77.1000,
+        paymentMethod: 'CASH',
+      });
+      const data = res.data?.data || res.data;
+      const rideId = data?.rideNumber || 'RD-5021';
+      const rideNumericId = data?.id;
+      navigation.navigate('ActiveRide', {
+        rideId,
+        rideNumericId,
+        rideData: data,
+      });
+    } catch (err) {
+      navigation.navigate('ActiveRide', {
+        rideId: 'RD-5021',
+      });
+    } finally {
+      setIsBooking(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -109,7 +189,7 @@ export const RideBookingScreen: React.FC = () => {
         {/* Route Metrics Badge */}
         <View style={styles.metricsBadge}>
           <MaterialIcons name="alt-route" size={16} color={colors.blue} />
-          <Text style={styles.metricsText}>16.4 km • ~34 mins • Moderate Traffic</Text>
+          <Text style={styles.metricsText}>{routeMetrics}</Text>
         </View>
 
         {/* Mock Map Visualizer */}
@@ -135,7 +215,7 @@ export const RideBookingScreen: React.FC = () => {
         <Text style={styles.sectionHeader}>AVAILABLE VEHICLES</Text>
 
         {/* Vehicles List */}
-        {VEHICLES.map((vehicle, index) => {
+        {vehicles.map((vehicle, index) => {
           const isSelected = index === selectedIndex;
           return (
             <TouchableOpacity
@@ -201,11 +281,14 @@ export const RideBookingScreen: React.FC = () => {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            style={styles.bookButton}
-            onPress={() => navigation.navigate('ActiveRide', { rideId: 'RD-5021' })}
+            style={[styles.bookButton, isBooking && { opacity: 0.7 }]}
+            disabled={isBooking}
+            onPress={handleBookRide}
           >
             <Text style={styles.bookButtonText}>
-              Book {selectedVehicle.name} • ₹{selectedVehicle.fare.toFixed(0)}
+              {isBooking
+                ? 'Booking Ride...'
+                : `Book ${selectedVehicle.name} • ₹${selectedVehicle.fare.toFixed(0)}`}
             </Text>
           </TouchableOpacity>
         </View>

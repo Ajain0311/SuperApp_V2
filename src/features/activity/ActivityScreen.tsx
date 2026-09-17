@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 const TABS = ['Food Orders', 'Rides', 'Marketplace'];
 
@@ -24,7 +26,7 @@ export const ActivityScreen: React.FC = () => {
   const initialTab = route.params?.initialTab ?? 0;
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  const foodOrders = [
+  const initialFoodOrders = [
     {
       id: '#FO-1002',
       restaurant: 'Meghana Foods (Special Biryani)',
@@ -64,7 +66,7 @@ export const ActivityScreen: React.FC = () => {
     },
   ];
 
-  const listings = [
+  const initialListings = [
     {
       id: '1',
       title: 'iPhone 15 Pro Max 256GB - Natural Titanium',
@@ -82,6 +84,49 @@ export const ActivityScreen: React.FC = () => {
       date: 'Listed 3 days ago',
     },
   ];
+
+  const [foodOrders, setFoodOrders] = useState(initialFoodOrders);
+  const [listings, setListings] = useState(initialListings);
+
+  useEffect(() => {
+    // Fetch user food orders
+    apiClient
+      .get<any>(ApiEndpoints.food.orders)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((o: any) => ({
+            id: `#${o.orderNumber || `FO-${o.id}`}`,
+            restaurant: o.restaurantName || 'Restaurant',
+            items: o.items?.map((i: any) => `${i.quantity}x ${i.itemName}`).join(', ') || 'Items ordered',
+            total: `₹${o.grandTotal || 0}`,
+            status: String(o.status || 'PENDING').toUpperCase(),
+            date: o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'Recent',
+          }));
+          setFoodOrders(mapped);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch user marketplace listings
+    apiClient
+      .get<any>(ApiEndpoints.marketplace.myListings)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((l: any) => ({
+            id: String(l.id),
+            title: l.title,
+            price: `₹${l.price}`,
+            views: `${l.viewCount || 0} views`,
+            status: String(l.status || 'ACTIVE').toUpperCase(),
+            date: l.createdAt ? new Date(l.createdAt).toLocaleDateString() : 'Recent',
+          }));
+          setListings(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>

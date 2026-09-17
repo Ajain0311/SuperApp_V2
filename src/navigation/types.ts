@@ -21,9 +21,12 @@ export type RootStackParamList = {
   };
   FoodOrderTracking: {
     orderId: string;
+    orderNumericId?: number;
   };
   ActiveRide: {
     rideId: string;
+    rideNumericId?: number;
+    rideData?: any;
   };
   ListingDetail: {
     listingId: string;

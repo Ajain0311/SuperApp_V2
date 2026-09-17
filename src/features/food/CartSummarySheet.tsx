@@ -20,6 +20,7 @@ interface CartSummarySheetProps {
   cartItems: CartItem[];
   onClear: () => void;
   onOrderPlaced: () => void;
+  isSubmitting?: boolean;
 }
 
 export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
@@ -29,6 +30,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   cartItems,
   onClear,
   onOrderPlaced,
+  isSubmitting = false,
 }) => {
   const itemTotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const deliveryFee = 0; // FREE
@@ -126,16 +128,15 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.placeOrderButton}
-              onPress={() => {
-                onClose();
-                onOrderPlaced();
-              }}
+              style={[styles.placeOrderButton, isSubmitting && { opacity: 0.7 }]}
+              onPress={onOrderPlaced}
+              disabled={isSubmitting}
               activeOpacity={0.85}
             >
               <Text style={styles.placeOrderText}>
-                Place Food Order    {AppConstants.currency}
-                {grandTotal.toFixed(0)}
+                {isSubmitting
+                  ? 'Placing Order...'
+                  : `Place Food Order    ${AppConstants.currency}${grandTotal.toFixed(0)}`}
               </Text>
             </TouchableOpacity>
           </View>

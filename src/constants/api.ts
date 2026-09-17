@@ -11,9 +11,9 @@ export const ApiEndpoints = {
   food: {
     restaurants: '/restaurants',
     restaurantDetail: (id: string | number) => `/restaurants/${id}`,
-    orders: '/food-orders',
-    orderDetail: (id: string | number) => `/food-orders/${id}`,
-    cancelOrder: (id: string | number) => `/food-orders/${id}/cancel`,
+    orders: '/foodorders',
+    orderDetail: (id: string | number) => `/foodorders/${id}`,
+    cancelOrder: (id: string | number) => `/foodorders/${id}/cancel`,
     validateCoupon: '/coupons/validate',
   },
 
