@@ -42,7 +42,7 @@ public class AuthTests
     }
 
     [Fact]
-    public async Task MockOtpService_AlwaysAccepts_DevOtp()
+    public async Task MockOtpService_Accepts_GeneratedRandomOtp()
     {
         // Arrange
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
@@ -54,12 +54,13 @@ public class AuthTests
 
         // Act
         var otp = await otpService.GenerateAndSendOtpAsync(phone, "LOGIN");
-        var isValidDev = await otpService.VerifyOtpAsync(phone, "123456", "LOGIN");
         var isInvalid = await otpService.VerifyOtpAsync(phone, "000000", "LOGIN");
+        var isValid = await otpService.VerifyOtpAsync(phone, otp, "LOGIN");
 
         // Assert
-        Assert.Equal("123456", otp);
-        Assert.True(isValidDev);
+        Assert.Equal(6, otp.Length);
+        Assert.True(int.TryParse(otp, out _));
         Assert.False(isInvalid);
+        Assert.True(isValid);
     }
 }

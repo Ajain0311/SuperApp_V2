@@ -46,10 +46,12 @@ public class AdminLoginRequest
     [Required]
     [MaxLength(255)]
     public string Password { get; set; } = string.Empty;
-    
-    [Required]
+
+    /// <summary>
+    /// Optional. Admin login is password-only; OTP is ignored when present.
+    /// </summary>
     [MaxLength(10)]
-    public string OtpCode { get; set; } = string.Empty;
+    public string? OtpCode { get; set; }
 }
 
 public class AuthResponse

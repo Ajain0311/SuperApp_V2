@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { RatingBadge } from '../../components/common/RatingBadge';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { RestaurantSummary } from '../../models/food';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface FoodHomeScreenProps {
   navigation: any;
@@ -86,20 +87,39 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
   const [filterRating4Plus, setFilterRating4Plus] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>(DEFAULT_RESTAURANTS);
+  const [deliverTo, setDeliverTo] = useState('Connaught Place, New Delhi');
 
   useEffect(() => {
     // Attempt backend fetch; defaults gracefully to seeded data
     apiClient
       .get<any>(ApiEndpoints.food.restaurants)
       .then((res) => {
-        if (res.data?.items && res.data.items.length > 0) {
-          setRestaurants(res.data.items);
+        const payload = res.data?.data || res.data;
+        const items = payload?.items || payload;
+        if (Array.isArray(items) && items.length > 0) {
+          setRestaurants(items);
         }
       })
       .catch(() => {
         // Safe offline default
       });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      apiClient
+        .get<any>(ApiEndpoints.common.addresses)
+        .then((res) => {
+          const items = Array.isArray(res?.data) ? res.data : [];
+          const def = items.find((a: any) => a.isDefault) || items[0];
+          if (def) {
+            const line = [def.addressLine1, def.city].filter(Boolean).join(', ');
+            setDeliverTo(line);
+          }
+        })
+        .catch(() => {});
+    }, [])
+  );
 
   const filteredRestaurants = restaurants.filter((r) => {
     if (filterVegOnly && !r.isVeg) return false;
@@ -121,18 +141,24 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
       >
         {/* Top Location Bar */}
         <View style={styles.topBar}>
-          <View style={styles.locationGroup}>
+          <TouchableOpacity
+            style={styles.locationGroup}
+            onPress={() => navigation.navigate('SavedAddresses')}
+            activeOpacity={0.8}
+          >
             <View style={styles.locationIconBox}>
               <Ionicons name="location-sharp" size={20} color={AppColors.error} />
             </View>
             <View style={styles.locationTextColumn}>
               <Text style={styles.deliverToCaption}>DELIVER TO</Text>
               <View style={styles.cityRow}>
-                <Text style={styles.cityName}>Connaught Place, New Delhi</Text>
+                <Text style={styles.cityName} numberOfLines={1}>
+                  {deliverTo}
+                </Text>
                 <Ionicons name="chevron-down" size={16} color={AppColors.textSecondary} />
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.profileAvatar}

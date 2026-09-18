@@ -84,7 +84,7 @@ describe('AuthStore - State Transitions & Fallback Hardening', () => {
       },
     });
 
-    const res = await useAuthStore.getState().adminLogin('+919999999999', 'Admin@123', '123456');
+    const res = await useAuthStore.getState().adminLogin('9999999999', 'Admin@123');
     expect(res.success).toBe(true);
 
     const state = useAuthStore.getState();

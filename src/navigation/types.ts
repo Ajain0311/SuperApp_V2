@@ -14,7 +14,9 @@ export type RootStackParamList = {
     mobileNumber: string;
     isNewUser?: boolean;
     isAdmin?: boolean;
+    devOtp?: string;
   };
+  AdminPortal: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   RestaurantDetail: {
     restaurantId: string;
@@ -33,6 +35,7 @@ export type RootStackParamList = {
   };
   AddListing: undefined;
   Profile: undefined;
+  SavedAddresses: undefined;
   PaymentTest: undefined;
   Notifications: undefined;
   Activity: {

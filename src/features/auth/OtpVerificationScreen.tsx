@@ -24,6 +24,7 @@ interface OtpVerificationScreenProps {
       mobileNumber: string;
       isNewUser?: boolean;
       isAdmin?: boolean;
+      devOtp?: string;
     };
   };
   navigation: any;
@@ -33,11 +34,17 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   route,
   navigation,
 }) => {
-  const { mobileNumber, isNewUser = false, isAdmin = false } = route.params;
+  const {
+    mobileNumber,
+    isNewUser = false,
+    isAdmin = false,
+    devOtp: initialDevOtp,
+  } = route.params;
 
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [fullName, setFullName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [displayedOtp, setDisplayedOtp] = useState<string | undefined>(initialDevOtp);
   const [isLoading, setIsLoading] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState<number>(AppConstants.otpTimeoutSeconds);
 
@@ -47,21 +54,19 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 
   const inputRefs = useRef<Array<TextInput | null>>([]);
 
-  // Countdown timer matching Flutter implementation
   useEffect(() => {
-    if (timerSeconds <= 0) return;
+    if (isAdmin || timerSeconds <= 0) return;
     const interval = setInterval(() => {
       setTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(interval);
-  }, [timerSeconds]);
+  }, [timerSeconds, isAdmin]);
 
   const handleDigitChange = (value: string, index: number) => {
     const clean = value.replace(/\D/g, '');
     const newDigits = [...otpDigits];
 
     if (clean.length > 1) {
-      // Pasted full OTP
       const pasted = clean.slice(0, 6).split('');
       pasted.forEach((digit, i) => {
         if (i < 6) newDigits[i] = digit;
@@ -86,6 +91,26 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     }
   };
 
+  const handleAdminLogin = async () => {
+    if (!adminPassword.trim()) {
+      Alert.alert('Password Required', 'Please enter admin password');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await adminLogin(mobileNumber, adminPassword.trim());
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'AdminPortal' }],
+      });
+    } catch (err: any) {
+      Alert.alert('Login Failed', err.message || 'Invalid admin credentials');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleVerify = async () => {
     const fullOtp = otpDigits.join('');
     if (fullOtp.length < AppConstants.otpLength) {
@@ -95,33 +120,15 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 
     const resolvedName = fullName.trim() || (isNewUser ? 'Guest User' : undefined);
 
-    if (isAdmin && !adminPassword.trim()) {
-      Alert.alert('Password Required', 'Please enter admin password');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      if (isAdmin) {
-        await adminLogin(mobileNumber, adminPassword, fullOtp);
-      } else {
-        await verifyOtp(mobileNumber, fullOtp, isNewUser ? resolvedName : undefined);
-      }
+      await verifyOtp(mobileNumber, fullOtp, isNewUser ? resolvedName : undefined);
       navigation.reset({
         index: 0,
         routes: [{ name: 'MainTabs' }],
       });
     } catch (err: any) {
-      // If offline or backend error occurs, verify against dev OTP so user/tester isn't blocked
-      if (fullOtp === AppConstants.devOtp) {
-        Alert.alert('Dev Verification', 'Bypassed authentication with dev OTP 123456');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
-      } else {
-        Alert.alert('Verification Failed', err.message || 'Invalid or expired OTP');
-      }
+      Alert.alert('Verification Failed', err.message || 'Invalid or expired OTP');
     } finally {
       setIsLoading(false);
     }
@@ -129,12 +136,14 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 
   const handleResend = async () => {
     try {
-      await sendOtp(mobileNumber);
+      const response = await sendOtp(mobileNumber);
+      setDisplayedOtp(response.devOtp);
+      setOtpDigits(['', '', '', '', '', '']);
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
-      Alert.alert('Success', 'OTP resent successfully');
+      Alert.alert('Success', response.devOtp ? `New OTP: ${response.devOtp}` : 'OTP resent successfully');
     } catch (err: any) {
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
-      Alert.alert('Notice', 'OTP resent (Mock active in dev)');
+      Alert.alert('Notice', err.message || 'Could not resend OTP');
     }
   };
 
@@ -156,7 +165,6 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back Header */}
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -166,82 +174,96 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 
           <Text style={styles.title}>{isAdmin ? 'Admin Login' : 'Verify OTP'}</Text>
           <Text style={styles.subtitle}>
-            Enter the OTP sent to <Text style={styles.phoneHighlight}>+91 {mobileNumber}</Text>
+            {isAdmin
+              ? `Enter password for +91 ${mobileNumber}`
+              : (
+                <>
+                  Enter the OTP sent to <Text style={styles.phoneHighlight}>+91 {mobileNumber}</Text>
+                </>
+              )}
           </Text>
 
-          <Text style={styles.devOtpHint}>Dev OTP: {AppConstants.devOtp}</Text>
+          {!isAdmin && displayedOtp ? (
+            <Text style={styles.devOtpHint}>Test OTP: {displayedOtp}</Text>
+          ) : null}
 
-          {/* Name field for new registration */}
-          {isNewUser && (
-            <View style={styles.extraInputContainer}>
-              <Ionicons name="person-outline" size={20} color={AppColors.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.extraInput}
-                placeholder="Full Name"
-                placeholderTextColor={AppColors.textHint}
-                value={fullName}
-                onChangeText={setFullName}
+          {isAdmin ? (
+            <>
+              <View style={styles.extraInputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color={AppColors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.extraInput}
+                  placeholder="Admin Password"
+                  placeholderTextColor={AppColors.textHint}
+                  secureTextEntry
+                  value={adminPassword}
+                  onChangeText={setAdminPassword}
+                  autoFocus
+                />
+              </View>
+              <AppButton
+                text="Login to Admin Portal"
+                onPressed={handleAdminLogin}
+                isLoading={isLoading}
+                style={styles.verifyButton}
               />
-            </View>
+            </>
+          ) : (
+            <>
+              {isNewUser && (
+                <View style={styles.extraInputContainer}>
+                  <Ionicons name="person-outline" size={20} color={AppColors.textSecondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.extraInput}
+                    placeholder="Full Name"
+                    placeholderTextColor={AppColors.textHint}
+                    value={fullName}
+                    onChangeText={setFullName}
+                  />
+                </View>
+              )}
+
+              <View style={styles.otpRow}>
+                {otpDigits.map((digit, idx) => (
+                  <TextInput
+                    key={idx}
+                    ref={(el) => {
+                      inputRefs.current[idx] = el;
+                    }}
+                    style={[
+                      styles.otpBox,
+                      digit ? styles.otpBoxFilled : null,
+                    ]}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    value={digit}
+                    onChangeText={(val) => handleDigitChange(val, idx)}
+                    onKeyPress={(e) => handleKeyPress(e, idx)}
+                    textAlign="center"
+                  />
+                ))}
+              </View>
+
+              <View style={styles.resendContainer}>
+                {timerSeconds > 0 ? (
+                  <Text style={styles.timerText}>
+                    Resend OTP in <Text style={styles.timerCountdown}>{formatTimer()}</Text>
+                  </Text>
+                ) : (
+                  <TouchableOpacity onPress={handleResend}>
+                    <Text style={styles.resendAction}>Resend OTP</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <AppButton
+                text="Verify & Continue"
+                onPressed={handleVerify}
+                isLoading={isLoading}
+                style={styles.verifyButton}
+              />
+            </>
           )}
-
-          {/* Admin password */}
-          {isAdmin && (
-            <View style={styles.extraInputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color={AppColors.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.extraInput}
-                placeholder="Admin Password"
-                placeholderTextColor={AppColors.textHint}
-                secureTextEntry
-                value={adminPassword}
-                onChangeText={setAdminPassword}
-              />
-            </View>
-          )}
-
-          {/* 6-Digit OTP Boxes */}
-          <View style={styles.otpRow}>
-            {otpDigits.map((digit, idx) => (
-              <TextInput
-                key={idx}
-                ref={(el) => {
-                  inputRefs.current[idx] = el;
-                }}
-                style={[
-                  styles.otpBox,
-                  digit ? styles.otpBoxFilled : null,
-                ]}
-                keyboardType="number-pad"
-                maxLength={1}
-                value={digit}
-                onChangeText={(val) => handleDigitChange(val, idx)}
-                onKeyPress={(e) => handleKeyPress(e, idx)}
-                textAlign="center"
-              />
-            ))}
-          </View>
-
-          {/* Resend Timer */}
-          <View style={styles.resendContainer}>
-            {timerSeconds > 0 ? (
-              <Text style={styles.timerText}>
-                Resend OTP in <Text style={styles.timerCountdown}>{formatTimer()}</Text>
-              </Text>
-            ) : (
-              <TouchableOpacity onPress={handleResend}>
-                <Text style={styles.resendAction}>Resend OTP</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Verify CTA */}
-          <AppButton
-            text="Verify & Continue"
-            onPressed={handleVerify}
-            isLoading={isLoading}
-            style={styles.verifyButton}
-          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -286,10 +308,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   devOtpHint: {
-    fontSize: 12,
+    fontSize: 14,
     color: AppColors.secondary,
-    fontStyle: 'italic',
+    fontWeight: '700',
     marginBottom: 28,
+    marginTop: 8,
   },
   extraInputContainer: {
     height: 52,
@@ -301,6 +324,7 @@ const styles = StyleSheet.create({
     borderColor: AppColors.border,
     paddingHorizontal: 16,
     marginBottom: 16,
+    marginTop: 16,
   },
   inputIcon: {
     marginRight: 10,
@@ -314,6 +338,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
+    marginTop: 8,
   },
   otpBox: {
     width: 48,

@@ -5,13 +5,12 @@ using SuperApp.API.Models;
 namespace SuperApp.API.Services;
 
 /// <summary>
-/// Development OTP service. Always generates "123456" as OTP.
-/// Replace with RealOtpService when integrating SMS provider.
+/// Development OTP service. Generates a random 6-digit OTP and returns it
+/// so the client can display it for testing. Replace with RealOtpService for SMS.
 /// </summary>
 public class MockOtpService : IOtpService
 {
     private readonly AppDbContext _db;
-    private const string DevOtp = "123456";
     private const int OtpExpiryMinutes = 5;
     private const int MaxAttempts = 5;
 
@@ -32,10 +31,12 @@ public class MockOtpService : IOtpService
             otp.IsUsed = true;
         }
 
+        var otpCode = Random.Shared.Next(100000, 1000000).ToString();
+
         var otpRequest = new OtpRequest
         {
             MobileNumber = mobileNumber,
-            OtpCode = DevOtp,
+            OtpCode = otpCode,
             Purpose = purpose,
             ExpiresAt = DateTime.UtcNow.AddMinutes(OtpExpiryMinutes),
             CreatedAt = DateTime.UtcNow
@@ -46,7 +47,7 @@ public class MockOtpService : IOtpService
 
         // In development, we return the OTP directly for testing convenience
         // In production, this would send SMS and NOT return the OTP
-        return DevOtp;
+        return otpCode;
     }
 
     public async Task<bool> VerifyOtpAsync(string mobileNumber, string otpCode, string purpose = "LOGIN")

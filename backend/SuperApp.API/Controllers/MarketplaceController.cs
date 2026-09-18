@@ -26,6 +26,16 @@ public class MarketplaceController : ControllerBase
         return 1; // Default development user
     }
 
+    private static string NormalizeListingCondition(string? condition)
+    {
+        var normalized = condition?.Trim().ToUpperInvariant();
+        return normalized switch
+        {
+            "NEW" or "LIKE_NEW" or "USED" or "FAIR" => normalized,
+            _ => "USED"
+        };
+    }
+
     /// <summary>
     /// Get all marketplace categories with listing count
     /// </summary>
@@ -353,7 +363,7 @@ public class MarketplaceController : ControllerBase
                 if (!string.IsNullOrWhiteSpace(request.Title)) listingToEdit.Title = request.Title.Trim();
                 if (!string.IsNullOrWhiteSpace(request.Description)) listingToEdit.Description = request.Description.Trim();
                 if (request.Price.HasValue && request.Price.Value >= 0) listingToEdit.Price = request.Price.Value;
-                if (!string.IsNullOrWhiteSpace(request.Condition)) listingToEdit.Condition = request.Condition.Trim().ToUpperInvariant();
+                if (!string.IsNullOrWhiteSpace(request.Condition)) listingToEdit.Condition = NormalizeListingCondition(request.Condition);
                 if (!string.IsNullOrWhiteSpace(request.Location)) listingToEdit.Location = request.Location.Trim();
                 if (request.CategoryId.HasValue && request.CategoryId.Value > 0) listingToEdit.CategoryId = request.CategoryId.Value;
                 listingToEdit.UpdatedAt = DateTime.UtcNow;

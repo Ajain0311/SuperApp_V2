@@ -44,17 +44,22 @@ public class AuthController : ControllerBase
         if (user != null && !user.IsActive)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Account is deactivated. Please contact support." });
 
-        var devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
+        // Admins authenticate with password only — no OTP for admin path.
+        string? devOtp = null;
+        if (!isAdmin)
+        {
+            devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
+        }
 
         return Ok(new SendOtpResponse
         {
             Success = true,
-            Message = isAdmin 
-                ? "Admin detected. Please provide password and OTP." 
+            Message = isAdmin
+                ? "Admin detected. Please enter your password."
                 : "OTP sent successfully",
             IsNewUser = isNewUser,
             IsAdmin = isAdmin,
-            DevOtp = devOtp // Remove in production
+            DevOtp = devOtp // Testing only — remove in production SMS flow
         });
     }
 
@@ -130,7 +135,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Admin login with password + OTP.
+    /// Admin login with password only (OTP not required).
     /// </summary>
     [HttpPost("admin-login")]
     public async Task<ActionResult<AuthResponse>> AdminLogin([FromBody] AdminLoginRequest request)
@@ -156,11 +161,6 @@ public class AuthController : ControllerBase
         // Verify password
         if (string.IsNullOrEmpty(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid credentials" });
-
-        // Verify OTP
-        var isOtpValid = await _otpService.VerifyOtpAsync(request.MobileNumber, request.OtpCode);
-        if (!isOtpValid)
-            return BadRequest(new AuthResponse { Success = false, Message = "Invalid or expired OTP" });
 
         user.LastLoginAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();

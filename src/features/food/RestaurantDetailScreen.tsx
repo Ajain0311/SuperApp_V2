@@ -131,18 +131,35 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         const data = res.data?.data || res.data;
         if (data) {
           if (data.name) setRestaurantName(data.name);
-          if (data.items && data.items.length > 0) {
-            const mapped: FoodItemRow[] = data.items.map((it: any) => ({
+          const categoryList: any[] = Array.isArray(data.categories) ? data.categories : [];
+          const fromCategories: FoodItemRow[] = categoryList.flatMap((cat: any) =>
+            (cat.items || []).map((it: any) => ({
               id: it.id,
               name: it.name,
-              category: it.category || 'Specials',
-              price: it.discountedPrice || it.price,
+              category: cat.name || it.category || 'Specials',
+              price: it.discountedPrice || it.basePrice || it.price,
               description: it.description || '',
               isVeg: Boolean(it.isVeg),
               isBestseller: Boolean(it.isBestseller),
               isCustomizable: Boolean(it.variants?.length || it.addons?.length),
               image: it.imageUrl || 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300',
-            }));
+            }))
+          );
+          const fromItems: FoodItemRow[] = Array.isArray(data.items)
+            ? data.items.map((it: any) => ({
+                id: it.id,
+                name: it.name,
+                category: it.category || 'Specials',
+                price: it.discountedPrice || it.basePrice || it.price,
+                description: it.description || '',
+                isVeg: Boolean(it.isVeg),
+                isBestseller: Boolean(it.isBestseller),
+                isCustomizable: Boolean(it.variants?.length || it.addons?.length),
+                image: it.imageUrl || 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300',
+              }))
+            : [];
+          const mapped = fromCategories.length > 0 ? fromCategories : fromItems;
+          if (mapped.length > 0) {
             setFoodItems(mapped);
             const cats = ['All', ...Array.from(new Set(mapped.map((m: FoodItemRow) => m.category)))];
             setMenuCategories(cats as string[]);
@@ -163,6 +180,15 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
     setIsPlacingOrder(true);
     try {
       const restId = Number(route.params?.restaurantId) || 1;
+      let addressId: number | null = null;
+      try {
+        const addrRes = await apiClient.get<any>(ApiEndpoints.common.addresses);
+        const items = Array.isArray(addrRes?.data) ? addrRes.data : [];
+        const def = items.find((a: any) => a.isDefault) || items[0];
+        if (def?.id) addressId = def.id;
+      } catch {
+        addressId = null;
+      }
       const payload = {
         restaurantId: restId,
         items: cartItems.map((c) => ({
@@ -171,7 +197,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
           variantId: null,
           selectedAddonIds: [],
         })),
-        addressId: null,
+        addressId,
         paymentMethod: 'CASH_ON_DELIVERY',
         deliveryInstructions: 'Leave at front door',
       };

@@ -28,7 +28,7 @@ export interface VerifyOtpRequest {
 export interface AdminLoginRequest {
   mobileNumber: string;
   password: string;
-  otpCode: string;
+  otpCode?: string;
 }
 
 export interface AuthResponse {

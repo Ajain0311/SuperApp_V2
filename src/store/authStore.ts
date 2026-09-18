@@ -16,7 +16,7 @@ interface AuthState {
   checkAuth: () => Promise<boolean>;
   sendOtp: (mobileNumber: string) => Promise<SendOtpResponse>;
   verifyOtp: (mobileNumber: string, otpCode: string, fullName?: string) => Promise<AuthResponse>;
-  adminLogin: (mobileNumber: string, password: string, otpCode: string) => Promise<AuthResponse>;
+  adminLogin: (mobileNumber: string, password: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
   clearError: () => void;
@@ -86,13 +86,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // In development fallback mode, permit seamless OTP entry
       const isDev = process.env.EXPO_PUBLIC_ENV !== 'production';
       if (isDev) {
+        const offlineOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        const isAdmin = mobileNumber === '9999999999' || mobileNumber.endsWith('9999');
         console.warn('[Auth] Backend OTP endpoint unreachable or error. Using development mock OTP.');
         return {
           success: true,
-          message: 'Development Mock OTP: 123456',
-          isNewUser: true,
-          isAdmin: mobileNumber.endsWith('9999'),
-          devOtp: '123456',
+          message: isAdmin ? 'Admin detected (offline). Enter password.' : `Development Mock OTP: ${offlineOtp}`,
+          isNewUser: !isAdmin,
+          isAdmin,
+          devOtp: isAdmin ? undefined : offlineOtp,
         };
       }
       const msg = e.message || 'Failed to send OTP';
@@ -161,13 +163,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  adminLogin: async (mobileNumber: string, password: string, otpCode: string) => {
+  adminLogin: async (mobileNumber: string, password: string) => {
     set({ error: null });
     try {
       const response = await apiClient.post<AuthResponse>(ApiEndpoints.auth.adminLogin, {
         mobileNumber,
         password,
-        otpCode,
       });
 
       if (response.success && response.token) {
@@ -187,7 +188,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return response;
     } catch (e: any) {
       const isDev = process.env.EXPO_PUBLIC_ENV !== 'production';
-      if (isDev && password === 'Admin@123' && otpCode === '123456') {
+      if (isDev && password === 'Admin@123' && (mobileNumber === '9999999999' || mobileNumber.endsWith('9999'))) {
         const devToken = `dev_admin_token_${Date.now()}`;
         const adminUser: User = {
           id: 1,

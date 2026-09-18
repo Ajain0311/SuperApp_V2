@@ -34,7 +34,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
     const timer = setTimeout(async () => {
       const isAuthenticated = await checkAuth();
       if (isAuthenticated) {
-        navigation.replace('MainTabs');
+        const roles = useAuthStore.getState().user?.roles ?? [];
+        const isAdmin = roles.some((role) => role.toUpperCase() === 'ADMIN');
+        navigation.replace(isAdmin ? 'AdminPortal' : 'MainTabs');
       } else {
         navigation.replace('PhoneEntry');
       }

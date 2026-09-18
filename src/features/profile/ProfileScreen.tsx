@@ -164,7 +164,7 @@ export const ProfileScreen: React.FC = () => {
             title="Saved Addresses"
             subtitle="Home, Work, and other addresses"
             color={colors.yellow}
-            onPress={() => Alert.alert('Addresses', 'Manage saved locations')}
+            onPress={() => navigation.navigate('SavedAddresses')}
           />
           <View style={styles.itemDivider} />
           <MenuItem
