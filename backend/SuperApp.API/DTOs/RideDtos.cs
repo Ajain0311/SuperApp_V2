@@ -1,18 +1,44 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace SuperApp.API.DTOs;
 
 public class RideEstimateRequest
 {
     [Required]
+    [JsonPropertyName("pickupAddress")]
     public string PickupAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("pickupLatitude")]
     public decimal PickupLatitude { get; set; } = 28.6315m;
+
+    [JsonPropertyName("pickupLat")]
+    public decimal PickupLat { set => PickupLatitude = value; }
+
+    [JsonPropertyName("pickupLongitude")]
     public decimal PickupLongitude { get; set; } = 77.2167m;
 
+    [JsonPropertyName("pickupLng")]
+    public decimal PickupLng { set => PickupLongitude = value; }
+
     [Required]
+    [JsonPropertyName("dropoffAddress")]
     public string DropoffAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("destinationAddress")]
+    public string DestinationAddress { set => DropoffAddress = value; }
+
+    [JsonPropertyName("dropoffLatitude")]
     public decimal DropoffLatitude { get; set; } = 28.5562m;
+
+    [JsonPropertyName("destinationLat")]
+    public decimal DestinationLat { set => DropoffLatitude = value; }
+
+    [JsonPropertyName("dropoffLongitude")]
     public decimal DropoffLongitude { get; set; } = 77.1000m;
+
+    [JsonPropertyName("destinationLng")]
+    public decimal DestinationLng { set => DropoffLongitude = value; }
 }
 
 public class RideEstimateResponse

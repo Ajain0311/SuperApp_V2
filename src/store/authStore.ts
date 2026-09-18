@@ -16,7 +16,7 @@ interface AuthState {
   checkAuth: () => Promise<boolean>;
   sendOtp: (mobileNumber: string) => Promise<SendOtpResponse>;
   verifyOtp: (mobileNumber: string, otpCode: string, fullName?: string) => Promise<AuthResponse>;
-  adminLogin: (mobileNumber: string, password: string) => Promise<AuthResponse>;
+  adminLogin: (mobileNumber: string, password: string, otpCode: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
   clearError: () => void;
@@ -52,19 +52,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ user: res.data, token, isAuthenticated: true, isLoading: false, isFallbackSession: false });
         }
       } catch {
-        // If profile endpoint fails, keep cached session if token exists
+        // If profile endpoint fails, keep cached session ONLY if cachedUser exists
         if (cachedUser) {
           set({ user: cachedUser, token, isAuthenticated: true, isLoading: false, isFallbackSession: token.startsWith('dev_') });
         } else {
-          // Fallback mock customer user
-          const fallbackUser: User = {
-            id: 1,
-            mobileNumber: '9876543210',
-            fullName: 'John Doe',
-            email: 'john.doe@superapp.com',
-            roles: ['Customer'],
-          };
-          set({ user: fallbackUser, token, isAuthenticated: true, isLoading: false, isFallbackSession: true });
+          // Token is invalid/stale with no valid user; clear session
+          await storage.clearAll();
+          set({ user: null, token: null, isAuthenticated: false, isLoading: false, isFallbackSession: false });
+          return false;
         }
       }
 
@@ -163,12 +158,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  adminLogin: async (mobileNumber: string, password: string) => {
+  adminLogin: async (mobileNumber: string, password: string, otpCode: string) => {
     set({ error: null });
     try {
       const response = await apiClient.post<AuthResponse>(ApiEndpoints.auth.adminLogin, {
         mobileNumber,
         password,
+        otpCode,
       });
 
       if (response.success && response.token) {

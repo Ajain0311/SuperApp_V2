@@ -20,27 +20,30 @@ interface AdminPortalScreenProps {
 export const AdminPortalScreen: React.FC<AdminPortalScreenProps> = ({ navigation }) => {
   const adminUrl = `${AppEnvironment.hubBaseUrl}/admin/`;
 
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      // On web, leave the Expo app and open the static admin portal.
-      if (typeof window !== 'undefined') {
-        window.location.href = adminUrl;
-      } else {
-        Linking.openURL(adminUrl);
-      }
-    }
-  }, [adminUrl]);
-
   if (Platform.OS === 'web') {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.redirectBox}>
-          <Text style={styles.redirectTitle}>Opening Admin Portal…</Text>
-          <Text style={styles.redirectUrl}>{adminUrl}</Text>
-          <TouchableOpacity style={styles.openButton} onPress={() => Linking.openURL(adminUrl)}>
-            <Text style={styles.openButtonText}>Open Admin Portal</Text>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Admin Portal</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(adminUrl)}>
+            <Ionicons name="open-outline" size={20} color={AppColors.primary} />
           </TouchableOpacity>
         </View>
+        {/* @ts-ignore iframe for web rendering */}
+        <iframe
+          src={adminUrl}
+          style={{
+            flex: 1,
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            backgroundColor: AppColors.background,
+          }}
+          title="Admin Command Portal"
+        />
       </SafeAreaView>
     );
   }

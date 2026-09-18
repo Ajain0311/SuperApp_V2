@@ -75,12 +75,12 @@ export const RideBookingScreen: React.FC = () => {
   const fetchEstimate = (coords: { latitude: number; longitude: number }, address: string) => {
     apiClient
       .post<any>(ApiEndpoints.ride.estimate, {
-        pickupLat: coords.latitude,
-        pickupLng: coords.longitude,
+        pickupLatitude: coords.latitude,
+        pickupLongitude: coords.longitude,
         pickupAddress: address,
-        destinationLat: 28.5562,
-        destinationLng: 77.1000,
-        destinationAddress: 'Terminal 3, IGI Airport (DEL)',
+        dropoffLatitude: 28.5562,
+        dropoffLongitude: 77.1000,
+        dropoffAddress: 'Terminal 3, IGI Airport (DEL)',
       })
       .then((res) => {
         const data = res.data?.data || res.data;

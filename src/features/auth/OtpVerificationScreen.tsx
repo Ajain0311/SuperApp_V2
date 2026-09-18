@@ -97,15 +97,21 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       return;
     }
 
+    const fullOtp = otpDigits.join('');
+    if (fullOtp.length < AppConstants.otpLength) {
+      Alert.alert('Incomplete OTP', 'Please enter complete 6-digit OTP');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await adminLogin(mobileNumber, adminPassword.trim());
+      await adminLogin(mobileNumber, adminPassword.trim(), fullOtp);
       navigation.reset({
         index: 0,
         routes: [{ name: 'AdminPortal' }],
       });
     } catch (err: any) {
-      Alert.alert('Login Failed', err.message || 'Invalid admin credentials');
+      Alert.alert('Login Failed', err.message || 'Invalid admin credentials or OTP');
     } finally {
       setIsLoading(false);
     }
@@ -172,10 +178,10 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <Text style={styles.title}>{isAdmin ? 'Admin Login' : 'Verify OTP'}</Text>
+          <Text style={styles.title}>{isAdmin ? 'Admin Authentication' : 'Verify OTP'}</Text>
           <Text style={styles.subtitle}>
             {isAdmin
-              ? `Enter password for +91 ${mobileNumber}`
+              ? `Enter password & OTP sent to +91 ${mobileNumber}`
               : (
                 <>
                   Enter the OTP sent to <Text style={styles.phoneHighlight}>+91 {mobileNumber}</Text>
@@ -183,7 +189,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
               )}
           </Text>
 
-          {!isAdmin && displayedOtp ? (
+          {displayedOtp ? (
             <Text style={styles.devOtpHint}>Test OTP: {displayedOtp}</Text>
           ) : null}
 
@@ -201,8 +207,43 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                   autoFocus
                 />
               </View>
+
+              <Text style={[styles.subtitle, { marginTop: 12, marginBottom: 8 }]}>Enter 6-digit OTP:</Text>
+              <View style={styles.otpRow}>
+                {otpDigits.map((digit, idx) => (
+                  <TextInput
+                    key={idx}
+                    ref={(el) => {
+                      inputRefs.current[idx] = el;
+                    }}
+                    style={[
+                      styles.otpBox,
+                      digit ? styles.otpBoxFilled : null,
+                    ]}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    value={digit}
+                    onChangeText={(val) => handleDigitChange(val, idx)}
+                    onKeyPress={(e) => handleKeyPress(e, idx)}
+                    textAlign="center"
+                  />
+                ))}
+              </View>
+
+              <View style={styles.resendContainer}>
+                {timerSeconds > 0 ? (
+                  <Text style={styles.timerText}>
+                    Resend OTP in <Text style={styles.timerCountdown}>{formatTimer()}</Text>
+                  </Text>
+                ) : (
+                  <TouchableOpacity onPress={handleResend}>
+                    <Text style={styles.resendAction}>Resend OTP</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <AppButton
-                text="Login to Admin Portal"
+                text="Verify & Login to Admin Portal"
                 onPressed={handleAdminLogin}
                 isLoading={isLoading}
                 style={styles.verifyButton}

@@ -27,6 +27,9 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Send OTP to mobile number. Creates user if not exists.
     /// </summary>
+    /// <summary>
+    /// Send OTP to mobile number. Creates user if not exists.
+    /// </summary>
     [HttpPost("send-otp")]
     public async Task<ActionResult<SendOtpResponse>> SendOtp([FromBody] SendOtpRequest request)
     {
@@ -44,18 +47,14 @@ public class AuthController : ControllerBase
         if (user != null && !user.IsActive)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Account is deactivated. Please contact support." });
 
-        // Admins authenticate with password only — no OTP for admin path.
-        string? devOtp = null;
-        if (!isAdmin)
-        {
-            devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
-        }
+        // Generate OTP for both Citizen and Admin (Admin requires Password + OTP)
+        string devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
 
         return Ok(new SendOtpResponse
         {
             Success = true,
             Message = isAdmin
-                ? "Admin detected. Please enter your password."
+                ? "Admin detected. Password and OTP verification required."
                 : "OTP sent successfully",
             IsNewUser = isNewUser,
             IsAdmin = isAdmin,
@@ -64,7 +63,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Verify OTP for normal user login/registration.
+    /// Verify OTP for normal Citizen user login/registration.
     /// </summary>
     [HttpPost("verify-otp")]
     public async Task<ActionResult<AuthResponse>> VerifyOtp([FromBody] VerifyOtpRequest request)
@@ -111,9 +110,9 @@ public class AuthController : ControllerBase
         }
         else
         {
-            // Check if user is admin - they must use admin-login endpoint
+            // Check if user is admin - admins must use the admin-login endpoint with Password + OTP
             if (user.UserRoles.Any(ur => ur.Role.Name == RoleNames.Admin))
-                return BadRequest(new AuthResponse { Success = false, Message = "Admin users must use the admin login endpoint" });
+                return BadRequest(new AuthResponse { Success = false, Message = "Admin users must use the admin login endpoint with Password & OTP" });
 
             if (!user.IsActive)
                 return BadRequest(new AuthResponse { Success = false, Message = "Account is deactivated" });
@@ -135,13 +134,16 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Admin login with password only (OTP not required).
+    /// Admin login requiring both Password and OTP.
     /// </summary>
     [HttpPost("admin-login")]
     public async Task<ActionResult<AuthResponse>> AdminLogin([FromBody] AdminLoginRequest request)
     {
         if (!ModelState.IsValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid request" });
+
+        if (string.IsNullOrWhiteSpace(request.OtpCode))
+            return BadRequest(new AuthResponse { Success = false, Message = "OTP code is required for admin authentication" });
 
         var user = await _db.Users
             .Include(u => u.UserRoles)
@@ -156,11 +158,16 @@ public class AuthController : ControllerBase
 
         // Check admin role
         if (!user.UserRoles.Any(ur => ur.Role.Name == RoleNames.Admin))
-            return BadRequest(new AuthResponse { Success = false, Message = "Invalid credentials" });
+            return BadRequest(new AuthResponse { Success = false, Message = "Access denied. User is not an admin." });
 
-        // Verify password
+        // 1. Verify Password
         if (string.IsNullOrEmpty(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            return BadRequest(new AuthResponse { Success = false, Message = "Invalid credentials" });
+            return BadRequest(new AuthResponse { Success = false, Message = "Invalid password" });
+
+        // 2. Verify OTP
+        var isOtpValid = await _otpService.VerifyOtpAsync(request.MobileNumber, request.OtpCode);
+        if (!isOtpValid)
+            return BadRequest(new AuthResponse { Success = false, Message = "Invalid or expired OTP" });
 
         user.LastLoginAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
