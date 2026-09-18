@@ -488,12 +488,108 @@
         .form-input:focus {
             border-color: var(--primary);
         }
+
+        /* Mobile Responsive Drawer & Media Queries */
+        .mobile-menu-btn {
+            display: none;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 40;
+            backdrop-filter: blur(2px);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -280px;
+                width: 270px;
+                height: 100vh;
+                z-index: 50;
+                transition: left 0.3s ease;
+                box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+            }
+
+            .sidebar.open {
+                left: 0;
+            }
+
+            .sidebar-overlay.active {
+                display: block;
+            }
+
+            .topbar {
+                padding: 0 16px;
+                height: 60px;
+            }
+
+            .page-title {
+                font-size: 15px;
+            }
+
+            .status-pill {
+                display: none;
+            }
+
+            .content-area {
+                padding: 16px;
+                gap: 16px;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .card {
+                padding: 16px;
+                border-radius: 12px;
+            }
+
+            .card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
 
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="adminSidebar">
         <div class="brand">
             <div class="brand-icon">⚡</div>
             <div>
@@ -545,6 +641,7 @@
         <!-- Top Bar -->
         <header class="topbar">
             <div class="topbar-left">
+                <button class="mobile-menu-btn" onclick="toggleSidebar(true)">☰</button>
                 <h1 class="page-title" id="tabTitle">Enterprise Dashboard</h1>
                 <div class="status-pill">
                     <span class="status-dot"></span>
@@ -552,8 +649,8 @@
                 </div>
             </div>
             <div class="topbar-right">
-                <button class="btn btn-secondary btn-sm" onclick="refreshCurrentTab()">🔄 Refresh Data</button>
-                <button class="btn btn-primary btn-sm" onclick="openNewCouponModal()">+ Add Coupon</button>
+                <button class="btn btn-secondary btn-sm" onclick="refreshCurrentTab()">🔄</button>
+                <button class="btn btn-primary btn-sm" onclick="openNewCouponModal()">+ Coupon</button>
             </div>
         </header>
 
@@ -1017,11 +1114,25 @@
     </div>
 
     <script>
+        function toggleSidebar(show) {
+            const sidebar = document.getElementById('adminSidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (show) {
+                sidebar.classList.add('open');
+                overlay.classList.add('active');
+            } else {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            }
+        }
+
         function switchTab(tabId) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.content-area > section').forEach(el => el.style.display = 'none');
 
-            event.currentTarget.classList.add('active');
+            if (window.event && window.event.currentTarget) {
+                window.event.currentTarget.classList.add('active');
+            }
             const target = document.getElementById('tab-' + tabId);
             if (target) target.style.display = 'block';
 
@@ -1036,6 +1147,7 @@
                 'settings': 'Global System Settings'
             };
             document.getElementById('tabTitle').innerText = titles[tabId] || 'Admin Console';
+            toggleSidebar(false);
         }
 
         function refreshCurrentTab() {
