@@ -512,36 +512,48 @@
             width: 100vw;
             height: 100vh;
             background: rgba(0, 0, 0, 0.6);
-            z-index: 40;
-            backdrop-filter: blur(2px);
+            z-index: 99;
+            backdrop-filter: blur(3px);
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) {
             body {
                 flex-direction: column;
+                width: 100%;
+                overflow-x: hidden;
             }
 
             .mobile-menu-btn {
                 display: flex;
             }
 
+            #sidebarCloseBtn {
+                display: flex !important;
+            }
+
             .sidebar {
-                position: fixed;
-                top: 0;
-                left: -280px;
-                width: 270px;
-                height: 100vh;
-                z-index: 50;
-                transition: left 0.3s ease;
-                box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+                position: fixed !important;
+                top: 0 !important;
+                left: -300px !important;
+                width: 280px !important;
+                height: 100vh !important;
+                z-index: 100 !important;
+                transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                box-shadow: 6px 0 24px rgba(0,0,0,0.6);
+                background-color: var(--surface) !important;
             }
 
             .sidebar.open {
-                left: 0;
+                left: 0 !important;
             }
 
             .sidebar-overlay.active {
-                display: block;
+                display: block !important;
+            }
+
+            .main-content {
+                width: 100%;
+                overflow-x: hidden;
             }
 
             .topbar {
@@ -590,12 +602,15 @@
 
     <!-- Sidebar -->
     <aside class="sidebar" id="adminSidebar">
-        <div class="brand">
-            <div class="brand-icon">⚡</div>
-            <div>
-                <div class="brand-title">SuperApp</div>
-                <span class="brand-badge">Admin Portal</span>
+        <div class="brand" style="justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="brand-icon">⚡</div>
+                <div>
+                    <div class="brand-title">SuperApp</div>
+                    <span class="brand-badge">Admin Portal</span>
+                </div>
             </div>
+            <button class="mobile-menu-btn" onclick="toggleSidebar(false)" style="display: none; background: transparent; border: none; font-size: 18px; color: var(--text-secondary);" id="sidebarCloseBtn">✕</button>
         </div>
 
         <ul class="nav-menu">
