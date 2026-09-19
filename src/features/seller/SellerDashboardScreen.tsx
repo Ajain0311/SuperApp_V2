@@ -60,6 +60,30 @@ export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigatio
     ]);
   };
 
+  const handleMarkSold = (id: number) => {
+    Alert.alert('Mark as Sold', 'Has this item been sold?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Yes, Mark Sold',
+        onPress: async () => {
+          try {
+            await apiClient.post(ApiEndpoints.marketplace.manageListings, {
+              action: 'STATUS',
+              id,
+              status: 'SOLD',
+            });
+            setListings((prev) =>
+              prev.map((l) => (l.id === id ? { ...l, status: 'SOLD' } : l))
+            );
+            Alert.alert('Updated', 'Item has been marked as SOLD.');
+          } catch (e: any) {
+            Alert.alert('Error', e.message || 'Could not update status');
+          }
+        },
+      },
+    ]);
+  };
+
   const activeCount = listings.filter((l) => l.status === 'ACTIVE' || l.isActive).length;
 
   const renderListing = ({ item }: { item: any }) => (
@@ -71,8 +95,10 @@ export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigatio
         </View>
         <View style={styles.priceCol}>
           <Text style={styles.priceText}>₹{item.price}</Text>
-          <View style={styles.activePill}>
-            <Text style={styles.activePillText}>{item.status || 'ACTIVE'}</Text>
+          <View style={[styles.activePill, item.status === 'SOLD' && { backgroundColor: '#10B98120' }]}>
+            <Text style={[styles.activePillText, item.status === 'SOLD' && { color: '#10B981' }]}>
+              {item.status || 'ACTIVE'}
+            </Text>
           </View>
         </View>
       </View>
@@ -80,11 +106,21 @@ export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigatio
       <View style={styles.cardActions}>
         <TouchableOpacity
           style={styles.viewBtn}
-          onPress={() => navigation.navigate('ListingDetail', { id: item.id })}
+          onPress={() => navigation.navigate('ListingDetail', { listingId: item.id.toString() })}
         >
           <Ionicons name="eye-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.btnText}>Preview</Text>
         </TouchableOpacity>
+
+        {item.status !== 'SOLD' && (
+          <TouchableOpacity
+            style={styles.soldBtn}
+            onPress={() => handleMarkSold(item.id)}
+          >
+            <Ionicons name="checkmark-circle-outline" size={16} color="#10B981" />
+            <Text style={styles.soldBtnText}>Mark Sold</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={styles.deleteBtn}
@@ -291,6 +327,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.surfaceSecondary,
     gap: 4,
+  },
+  soldBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#10B98115',
+    gap: 4,
+  },
+  soldBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
   },
   btnText: {
     fontSize: 12,

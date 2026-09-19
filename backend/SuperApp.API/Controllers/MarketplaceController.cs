@@ -543,6 +543,33 @@ public class MarketplaceController : ControllerBase
         return Ok(ApiResponse<List<ListingSummaryDto>>.Ok(listings));
     }
 
+    /// <summary>
+    /// Report a listing for moderation
+    /// </summary>
+    [HttpPost("listings/{id:long}/report")]
+    public async Task<ActionResult<ApiResponse>> ReportListing(long id, [FromBody] ReportListingRequest request)
+    {
+        var listing = await _db.MarketplaceListings.FirstOrDefaultAsync(l => l.Id == id);
+        if (listing == null)
+            return NotFound(ApiResponse.Fail("Listing not found"));
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return BadRequest(ApiResponse.Fail("Reason is required to report a listing"));
+
+        // In minimum cost design, flag the listing if flagged as offensive
+        if (request.Reason.Equals("SPAM", StringComparison.OrdinalIgnoreCase) ||
+            request.Reason.Equals("OFFENSIVE", StringComparison.OrdinalIgnoreCase) ||
+            request.Reason.Equals("FRAUD", StringComparison.OrdinalIgnoreCase))
+        {
+            // Auto-flag for admin review
+            listing.Status = "FLAGGED";
+            listing.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(ApiResponse.Ok("Listing reported successfully. Our moderation team will review it shortly."));
+    }
+
     // --- Helpers & Seed Fallbacks ---
     private static List<MarketplaceCategoryDto> GetFallbackCategories() => new()
     {

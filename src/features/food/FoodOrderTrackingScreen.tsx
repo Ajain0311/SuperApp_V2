@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { AppButton } from '../../components/common/AppButton';
+import { RatingModal } from '../../components/RatingModal';
 import { signalRService, OrderStatusEvent } from '../../services/signalr';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
@@ -36,7 +37,9 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
   const [currentStepIndex, setCurrentStepIndex] = useState(1); // Default Kitchen Preparing
   const [etaText, setEtaText] = useState('22 Mins • On Time');
   const [restaurantName, setRestaurantName] = useState('Meghana Foods');
+  const [restaurantId, setRestaurantId] = useState<number>(1);
   const [orderStatus, setOrderStatus] = useState<string>('Preparing');
+  const [showRatingModal, setShowRatingModal] = useState<boolean>(false);
 
   const mapStatusToStep = (status: string): number => {
     const s = status.toUpperCase();
@@ -291,6 +294,18 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
           </TouchableOpacity>
         )}
 
+        {/* Rate Order Button when Delivered */}
+        {currentStepIndex >= 4 && (
+          <TouchableOpacity
+            style={styles.rateOrderButton}
+            onPress={() => setShowRatingModal(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="star" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.rateOrderButtonText}>Rate Restaurant & Food</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Return Button */}
         <AppButton
           text="Return to SuperApp Home"
@@ -298,6 +313,16 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
           style={styles.returnButton}
         />
       </ScrollView>
+
+      {/* Rating Modal */}
+      <RatingModal
+        visible={showRatingModal}
+        targetType="RESTAURANT"
+        targetId={restaurantId}
+        title="Rate Restaurant & Food"
+        subtitle={restaurantName}
+        onClose={() => setShowRatingModal(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -478,6 +503,20 @@ const styles = StyleSheet.create({
   cancelOrderButtonText: {
     color: '#EF4444',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  rateOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: AppRadius.lg,
+    backgroundColor: '#F59E0B',
+    marginBottom: 12,
+  },
+  rateOrderButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
 });

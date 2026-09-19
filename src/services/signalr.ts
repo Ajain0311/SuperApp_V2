@@ -100,6 +100,14 @@ class SignalRService {
     return () => this.rideHubConnection?.off('RideStatusChanged', callback);
   }
 
+  onDriverAssigned(callback: (driver: any) => void): () => void {
+    if (!this.rideHubConnection) {
+      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+    }
+    this.rideHubConnection.on('DriverAssigned', callback);
+    return () => this.rideHubConnection?.off('DriverAssigned', callback);
+  }
+
   // --- Order Status Hub ---
   async connectOrderHub(): Promise<signalR.HubConnection> {
     if (this.orderHubConnection && this.orderHubConnection.state === signalR.HubConnectionState.Connected) {

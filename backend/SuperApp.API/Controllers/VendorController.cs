@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
-
+using SuperApp.API.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 
 namespace SuperApp.API.Controllers;
@@ -15,10 +16,12 @@ namespace SuperApp.API.Controllers;
 public class VendorController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<OrderStatusHub> _orderHub;
 
-    public VendorController(AppDbContext db)
+    public VendorController(AppDbContext db, IHubContext<OrderStatusHub> orderHub)
     {
         _db = db;
+        _orderHub = orderHub;
     }
 
     private async Task<Restaurant?> GetAuthorizedRestaurantAsync()
@@ -32,34 +35,16 @@ public class VendorController : ControllerBase
             .Include(ru => ru.Restaurant)
             .FirstOrDefaultAsync(ru => ru.UserId == userId && ru.IsActive);
 
-        if (mapping != null)
+        if (mapping != null && mapping.Restaurant != null)
             return mapping.Restaurant;
 
-        // System administrators are authorized to access the managed restaurant
+        // System administrators are authorized to access the primary active restaurant
         if (User.IsInRole(RoleNames.Admin))
         {
             return await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
         }
 
-        // If user has RESTAURANT_OWNER role, provision mapping to first active restaurant
-        if (User.IsInRole(RoleNames.RestaurantOwner))
-        {
-            var rest = await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
-            if (rest != null)
-            {
-                var newMapping = new RestaurantUser
-                {
-                    UserId = userId,
-                    RestaurantId = rest.Id,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.RestaurantUsers.Add(newMapping);
-                await _db.SaveChangesAsync();
-                return rest;
-            }
-        }
-
+        // Restaurant owner MUST be mapped through RestaurantUsers. No fallback.
         return null;
     }
 
@@ -256,29 +241,53 @@ public class VendorController : ControllerBase
     {
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse.Fail("Restaurant not found"));
+            return NotFound(ApiResponse.Fail("Restaurant not found or unauthorized"));
 
         var order = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id && o.RestaurantId == restaurant.Id);
         if (order == null)
             return NotFound(ApiResponse.Fail("Order not found for this restaurant"));
 
-        var validStatuses = new[]
+        var currentStatus = order.Status.Trim().ToUpperInvariant();
+        var targetStatus = request.Status?.Trim().ToUpperInvariant() ?? string.Empty;
+
+        // Valid State Machine Transitions:
+        // PENDING -> ACCEPTED, CANCELLED
+        // ACCEPTED -> PREPARING, CANCELLED
+        // PREPARING -> READY, CANCELLED
+        // READY -> PICKED_UP, DELIVERED, CANCELLED
+        // PICKED_UP -> DELIVERED, CANCELLED
+        bool isValidTransition = (currentStatus, targetStatus) switch
         {
-            OrderStatus.Accepted,
-            OrderStatus.Preparing,
-            OrderStatus.Ready,
-            OrderStatus.PickedUp,
-            OrderStatus.Delivered,
-            OrderStatus.Cancelled
+            (OrderStatus.Pending, OrderStatus.Accepted) => true,
+            (OrderStatus.Pending, OrderStatus.Cancelled) => true,
+            (OrderStatus.Accepted, OrderStatus.Preparing) => true,
+            (OrderStatus.Accepted, OrderStatus.Cancelled) => true,
+            (OrderStatus.Preparing, OrderStatus.Ready) => true,
+            (OrderStatus.Preparing, OrderStatus.Cancelled) => true,
+            (OrderStatus.Ready, OrderStatus.PickedUp) => true,
+            (OrderStatus.Ready, OrderStatus.Delivered) => true,
+            (OrderStatus.Ready, OrderStatus.Cancelled) => true,
+            (OrderStatus.PickedUp, OrderStatus.Delivered) => true,
+            (OrderStatus.PickedUp, OrderStatus.Cancelled) => true,
+            _ => false
         };
 
-        var targetStatus = request.Status.Trim().ToUpper();
-        if (!validStatuses.Contains(targetStatus))
-            return BadRequest(ApiResponse.Fail($"Invalid status: {request.Status}"));
+        if (!isValidTransition)
+            return BadRequest(ApiResponse.Fail($"Invalid status transition from '{currentStatus}' to '{targetStatus}'"));
 
         order.Status = targetStatus;
         order.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        // Broadcast to customer tracking screen via OrderStatusHub
+        await _orderHub.Clients.Group($"order-{order.Id}").SendAsync("OrderStatusUpdated", new
+        {
+            orderId = order.Id,
+            status = targetStatus,
+            message = $"Order is now {targetStatus}",
+            estimatedMinutes = order.EstimatedDeliveryMinutes,
+            updatedAt = DateTime.UtcNow
+        });
 
         return Ok(ApiResponse.Ok($"Order status updated to {targetStatus}"));
     }
@@ -402,6 +411,69 @@ public class VendorController : ControllerBase
             netEarnings = netPayout,
             settlementStatus = "SETTLED"
         }));
+    }
+
+    /// <summary>
+    /// Category management for restaurant owner: ADD, EDIT, DELETE
+    /// </summary>
+    [HttpPost("categories")]
+    public async Task<ActionResult<ApiResponse>> ManageCategory([FromBody] VendorCategoryActionRequest request)
+    {
+        var restaurant = await GetAuthorizedRestaurantAsync();
+        if (restaurant == null)
+            return NotFound(ApiResponse.Fail("Restaurant not found or unauthorized"));
+
+        var action = request.Action?.ToUpperInvariant() ?? string.Empty;
+        switch (action)
+        {
+            case "ADD":
+                if (string.IsNullOrWhiteSpace(request.Name))
+                    return BadRequest(ApiResponse.Fail("Category Name is required"));
+
+                var newCat = new RestaurantCategory
+                {
+                    RestaurantId = restaurant.Id,
+                    Name = request.Name.Trim(),
+                    Description = request.Description?.Trim(),
+                    SortOrder = request.SortOrder ?? 0,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.RestaurantCategories.Add(newCat);
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse.Ok("Category created successfully"));
+
+            case "EDIT":
+                if (!request.Id.HasValue)
+                    return BadRequest(ApiResponse.Fail("Category ID is required for EDIT"));
+
+                var catToEdit = await _db.RestaurantCategories.FirstOrDefaultAsync(c => c.Id == request.Id.Value && c.RestaurantId == restaurant.Id);
+                if (catToEdit == null)
+                    return NotFound(ApiResponse.Fail("Category not found"));
+
+                if (!string.IsNullOrWhiteSpace(request.Name)) catToEdit.Name = request.Name.Trim();
+                if (request.Description != null) catToEdit.Description = request.Description.Trim();
+                if (request.SortOrder.HasValue) catToEdit.SortOrder = request.SortOrder.Value;
+                catToEdit.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse.Ok("Category updated successfully"));
+
+            case "DELETE":
+                if (!request.Id.HasValue)
+                    return BadRequest(ApiResponse.Fail("Category ID is required for DELETE"));
+
+                var catToDelete = await _db.RestaurantCategories.FirstOrDefaultAsync(c => c.Id == request.Id.Value && c.RestaurantId == restaurant.Id);
+                if (catToDelete == null)
+                    return NotFound(ApiResponse.Fail("Category not found"));
+
+                catToDelete.IsActive = false;
+                catToDelete.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse.Ok("Category removed successfully"));
+
+            default:
+                return BadRequest(ApiResponse.Fail($"Unknown category action: '{request.Action}'. Use ADD, EDIT, or DELETE."));
+        }
     }
 }
 

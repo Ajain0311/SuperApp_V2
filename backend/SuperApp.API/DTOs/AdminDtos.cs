@@ -100,3 +100,85 @@ public class AdminListingActionRequest
     public string? Status { get; set; } // ACTIVE, SOLD, REMOVED
     public bool? IsFeatured { get; set; }
 }
+
+public class AdminFoodOrderDto
+{
+    public long Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public long RestaurantId { get; set; }
+    public string RestaurantName { get; set; } = string.Empty;
+    public long UserId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public string CustomerPhone { get; set; } = string.Empty;
+    public decimal ItemTotal { get; set; }
+    public decimal DeliveryFee { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public decimal GrandTotal { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string PaymentStatus { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public int ItemsCount { get; set; }
+}
+
+public class AdminRideDto
+{
+    public long Id { get; set; }
+    public string RideNumber { get; set; } = string.Empty;
+    public string VehicleType { get; set; } = string.Empty;
+    public string PickupAddress { get; set; } = string.Empty;
+    public string DropoffAddress { get; set; } = string.Empty;
+    public decimal DistanceKm { get; set; }
+    public decimal EstimatedFare { get; set; }
+    public decimal? ActualFare { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string PaymentStatus { get; set; } = string.Empty;
+    public string CustomerName { get; set; } = string.Empty;
+    public string CustomerPhone { get; set; } = string.Empty;
+    public string? DriverName { get; set; }
+    public string? DriverPhone { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class AdminSettingDto
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class UpdateSettingRequest
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+
+public class AdminReportDto
+{
+    public decimal TotalFoodSales { get; set; }
+    public decimal TotalRideFares { get; set; }
+    public decimal TotalPlatformEarnings { get; set; }
+    public int TotalCompletedOrders { get; set; }
+    public int TotalCompletedRides { get; set; }
+    public List<TopPerformerDto> TopRestaurants { get; set; } = new();
+    public List<TopPerformerDto> TopDrivers { get; set; } = new();
+}
+
+public class TopPerformerDto
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Revenue { get; set; }
+    public int TotalCount { get; set; }
+    public decimal Rating { get; set; }
+}
+
+public class BroadcastNotificationRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string? TargetRole { get; set; } // null/empty = ALL, or CUSTOMER, DRIVER, RESTAURANT_OWNER, MARKETPLACE_SELLER
+}

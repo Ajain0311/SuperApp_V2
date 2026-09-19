@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
+using SuperApp.API.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace SuperApp.API.Controllers;
 
@@ -12,10 +14,12 @@ namespace SuperApp.API.Controllers;
 public class RidesController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<RideTrackingHub> _rideHub;
 
-    public RidesController(AppDbContext db)
+    public RidesController(AppDbContext db, IHubContext<RideTrackingHub> rideHub)
     {
         _db = db;
+        _rideHub = rideHub;
     }
 
     private long GetCurrentUserId()
@@ -150,7 +154,7 @@ public class RidesController : ControllerBase
             DropoffLongitude = request.DropoffLongitude,
             DistanceKm = 16.4m,
             EstimatedFare = estimatedFare,
-            Status = RideStatus.Accepted, // Directly accepted by assigned mock driver
+            Status = RideStatus.Requested, // Set to REQUESTED for driver dispatch
             OtpCode = rideOtp,
             PaymentMethod = request.PaymentMethod,
             PaymentStatus = "PENDING",
@@ -160,18 +164,30 @@ public class RidesController : ControllerBase
         _db.Rides.Add(ride);
         await _db.SaveChangesAsync();
 
+        // Broadcast to all drivers in drivers-pool
+        await _rideHub.Clients.Group("drivers-pool").SendAsync("RideRequested", new
+        {
+            id = ride.Id,
+            rideNumber = ride.RideNumber,
+            pickupAddress = ride.PickupAddress,
+            dropoffAddress = ride.DropoffAddress,
+            fare = ride.EstimatedFare,
+            status = ride.Status,
+            createdAt = ride.CreatedAt
+        });
+
         var driverSummary = new DriverSummaryDto
         {
             Id = 1,
-            FullName = "Amit Singh",
-            Phone = "+91 98765 01928",
+            FullName = "Driver Pool",
+            Phone = string.Empty,
             Rating = 4.9m,
-            TotalRides = 1240,
-            VehicleModel = "Hero Splendor Plus (Black)",
-            RegistrationNumber = "DL 04 AB 9821",
-            VehicleColor = "Black",
-            CurrentLatitude = request.PickupLatitude + 0.003m,
-            CurrentLongitude = request.PickupLongitude + 0.002m
+            TotalRides = 120,
+            VehicleModel = "Pending Driver Dispatch",
+            RegistrationNumber = "SEARCHING",
+            VehicleColor = "Standard",
+            CurrentLatitude = request.PickupLatitude,
+            CurrentLongitude = request.PickupLongitude
         };
 
         return Ok(ApiResponse<RideDto>.Ok(new RideDto
@@ -253,6 +269,13 @@ public class RidesController : ControllerBase
         ride.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        await _rideHub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
+        {
+            rideId = ride.Id,
+            status = ride.Status,
+            startedAt = ride.StartedAt
+        });
+
         return Ok(ApiResponse.Ok("Ride started successfully"));
     }
 
@@ -273,6 +296,14 @@ public class RidesController : ControllerBase
         ride.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        await _rideHub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
+        {
+            rideId = ride.Id,
+            status = ride.Status,
+            actualFare = ride.ActualFare,
+            completedAt = ride.CompletedAt
+        });
+
         return Ok(ApiResponse.Ok("Ride completed successfully"));
     }
 
@@ -289,11 +320,29 @@ public class RidesController : ControllerBase
         if (ride.Status == RideStatus.Started || ride.Status == RideStatus.Completed)
             return BadRequest(ApiResponse.Fail("Active or completed rides cannot be cancelled"));
 
+        var previousStatus = ride.Status;
         ride.Status = RideStatus.Cancelled;
         ride.CancelledAt = DateTime.UtcNow;
         ride.CancellationReason = request?.Reason ?? "Cancelled by user";
         ride.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        await _rideHub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
+        {
+            rideId = ride.Id,
+            status = ride.Status,
+            reason = ride.CancellationReason,
+            cancelledAt = ride.CancelledAt
+        });
+
+        if (previousStatus == RideStatus.Requested)
+        {
+            await _rideHub.Clients.Group("drivers-pool").SendAsync("RideCancelled", new
+            {
+                rideId = ride.Id,
+                status = ride.Status
+            });
+        }
 
         return Ok(ApiResponse.Ok("Ride cancelled successfully"));
     }

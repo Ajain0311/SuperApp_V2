@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-09-19
+
+### Pre-UAT Complete Codebase Feature-Completion
+- **Reviews & Ratings System**:
+  - Implemented `ReviewDtos.cs` and `ReviewsController.cs` supporting target types `RESTAURANT`, `DRIVER`, and `LISTING`.
+  - Automatic recalculation of rolling averages on target entities (`Restaurant.Rating`, `Restaurant.TotalRatings`, `Driver.Rating`, `Driver.TotalRides`).
+  - Created `reviewService.ts` and `RatingModal.tsx` in frontend.
+  - Linked `RatingModal` into `FoodOrderTrackingScreen.tsx` on delivery and `ActiveRideScreen.tsx` on trip completion.
+- **Food Order State Machine & SignalR Integration**:
+  - Enforced strict state transitions in `VendorController.cs`: `PENDING` ➔ `ACCEPTED` ➔ `PREPARING` ➔ `READY` ➔ `DELIVERED` (or `CANCELLED`), rejecting invalid state skips with HTTP 400.
+  - SignalR `OrderStatusHub` broadcasts `OrderStatusUpdated` over `$"order-{order.Id}"`.
+  - Added category management action endpoint (`POST /api/vendor/categories`) supporting `ADD`, `EDIT`, and `DELETE`.
+  - Added "Reject Order" button with confirmation and `CANCELLED` filter tab in `VendorOrdersScreen.tsx`.
+- **Ride Flow & Real-Time Driver Dispatch**:
+  - Injected `IHubContext<RideTrackingHub>` into `RidesController.cs`.
+  - Broadcast `RideRequested` event to `drivers-pool` group on new ride booking.
+  - Broadcast `DriverAssigned` and `RideStatusChanged` on trip status updates (`AcceptRide`, `MarkArriving`, `StartRide`, `CompleteRide`, `CancelRide`).
+  - Added SignalR listener in `ActiveRideScreen.tsx` for dynamic driver assignment.
+- **Bazaar Store & Ad Moderation**:
+  - Implemented `POST /api/marketplace/listings/{id}/report` endpoint with auto-flagging.
+  - Upgraded `ListingDetailScreen.tsx` with real API lifecycle, loading spinner, error retry, and report ad modal.
+  - Upgraded `SellerDashboardScreen.tsx` with "Mark as Sold" toggle, delete action, and fixed `listingId` navigation.
+- **Native Admin Command Center**:
+  - Created `AdminDashboardScreen.tsx` with tabs for Overview (KPIs), Orders, Rides, Users (suspension toggle), Bazaar (moderation), and Config (settings & push broadcast).
+  - Added admin endpoints: `food-orders`, `rides`, `marketplace/listings`, `settings`, `reports`, and `notifications/broadcast`.
+  - Wired `AdminDashboardScreen` directly into `MainTabNavigator.tsx` for native admin experience.
+- **Quality & Automated Test Verification**:
+  - Backend unit tests: **67/67 passed** (100%).
+  - Frontend Jest tests: **73/73 passed** (100%).
+  - TypeScript typecheck: **0 errors** (`npx tsc --noEmit`).
+  - Expo doctor: **18/18 checks passed** (`npx expo-doctor`).
+  - Documentation: Created `docs/CODING_COMPLETION_AUDIT.md`, `docs/CODING_COMPLETION_REPORT.md`, `docs/FULL_UAT_TEST_PLAN.md`, and `docs/FULL_UAT_RESULTS.md`.
+
+---
+
 ## [2.1.0] - 2026-09-19
 
 ### Unified Multi-Role Architecture, Driver Mode & Role Switching

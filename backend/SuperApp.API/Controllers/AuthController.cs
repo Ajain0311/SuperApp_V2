@@ -147,6 +147,24 @@ public class AuthController : ControllerBase
                     .ThenInclude(ur => ur.Role)
                     .FirstAsync(u => u.Id == user.Id);
             }
+
+            // Ensure RestaurantUsers mapping exists for restaurant owner mode
+            var hasRestMapping = await _db.RestaurantUsers.AnyAsync(ru => ru.UserId == user.Id && ru.IsActive);
+            if (!hasRestMapping)
+            {
+                var firstRest = await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
+                if (firstRest != null)
+                {
+                    _db.RestaurantUsers.Add(new RestaurantUser
+                    {
+                        UserId = user.Id,
+                        RestaurantId = firstRest.Id,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await _db.SaveChangesAsync();
+                }
+            }
         }
 
         var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();

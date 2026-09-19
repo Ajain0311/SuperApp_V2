@@ -65,3 +65,9 @@ public class ListingActionRequest
     public string? Status { get; set; } = "ACTIVE"; // ACTIVE, SOLD, EXPIRED, REMOVED
     public List<string>? ImageUrls { get; set; }
 }
+
+public class ReportListingRequest
+{
+    public string Reason { get; set; } = string.Empty;
+    public string? Details { get; set; }
+}

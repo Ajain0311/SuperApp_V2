@@ -1,10 +1,13 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using SuperApp.API.Controllers;
 using SuperApp.API.Data;
 using SuperApp.API.DTOs;
+using SuperApp.API.Hubs;
 using SuperApp.API.Models;
 using Xunit;
 
@@ -18,6 +21,16 @@ public class MultiRoleTests
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
         return new AppDbContext(options);
+    }
+
+    private Mock<IHubContext<OrderStatusHub>> CreateMockOrderHub()
+    {
+        var mockHub = new Mock<IHubContext<OrderStatusHub>>();
+        var mockClients = new Mock<IHubClients>();
+        var mockClientProxy = new Mock<IClientProxy>();
+        mockHub.Setup(h => h.Clients).Returns(mockClients.Object);
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockClientProxy.Object);
+        return mockHub;
     }
 
     [Fact]
@@ -60,7 +73,8 @@ public class MultiRoleTests
         db.RestaurantUsers.Add(ru);
         await db.SaveChangesAsync();
 
-        var controller = new VendorController(db);
+        var mockHub = CreateMockOrderHub();
+        var controller = new VendorController(db, mockHub.Object);
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, "301"),
@@ -87,7 +101,8 @@ public class MultiRoleTests
         db.Restaurants.Add(rest);
         await db.SaveChangesAsync();
 
-        var controller = new VendorController(db);
+        var mockHub = CreateMockOrderHub();
+        var controller = new VendorController(db, mockHub.Object);
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, "401"),
@@ -100,6 +115,93 @@ public class MultiRoleTests
 
         var res = await controller.GetMyRestaurant();
         Assert.IsType<NotFoundObjectResult>(res.Result);
+    }
+
+    [Fact]
+    public async Task Vendor_OrderStatusTransitions_ValidAndInvalid()
+    {
+        var db = CreateContext();
+        var rest = new Restaurant { Id = 10, Name = "Pizza Place", IsActive = true };
+        var chef = new User { Id = 501, MobileNumber = "9988776655", FullName = "Chef" };
+        var ru = new RestaurantUser { Id = 10, UserId = 501, RestaurantId = 10, IsActive = true };
+        var order = new FoodOrder
+        {
+            Id = 1001,
+            OrderNumber = "ORD-TEST-1001",
+            RestaurantId = 10,
+            UserId = 501,
+            Status = OrderStatus.Pending,
+            GrandTotal = 350
+        };
+
+        db.Restaurants.Add(rest);
+        db.Users.Add(chef);
+        db.RestaurantUsers.Add(ru);
+        db.FoodOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var mockHub = CreateMockOrderHub();
+        var controller = new VendorController(db, mockHub.Object);
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, "501"),
+            new(ClaimTypes.Role, RoleNames.RestaurantOwner)
+        };
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")) }
+        };
+
+        // Valid transition: PENDING -> ACCEPTED
+        var validRes = await controller.UpdateOrderStatus(1001, new UpdateOrderStatusRequest { Status = "ACCEPTED" });
+        Assert.IsType<OkObjectResult>(validRes.Result);
+
+        var updatedOrder = await db.FoodOrders.FindAsync(1001L);
+        Assert.Equal(OrderStatus.Accepted, updatedOrder!.Status);
+
+        // Invalid transition: ACCEPTED -> DELIVERED (Must go PREPARING -> READY -> DELIVERED)
+        var invalidRes = await controller.UpdateOrderStatus(1001, new UpdateOrderStatusRequest { Status = "DELIVERED" });
+        Assert.IsType<BadRequestObjectResult>(invalidRes.Result);
+    }
+
+    [Fact]
+    public async Task ReviewsController_SubmitReview_UpdatesAggregateRating()
+    {
+        var db = CreateContext();
+        var rest = new Restaurant { Id = 20, Name = "Burger Joint", Rating = 0m, TotalRatings = 0, IsActive = true };
+        var user = new User { Id = 601, MobileNumber = "9112233445", FullName = "Food Critic" };
+        db.Restaurants.Add(rest);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var controller = new ReviewsController(db);
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, "601"),
+            new(ClaimTypes.Role, RoleNames.Customer)
+        };
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth")) }
+        };
+
+        var req = new CreateReviewRequest
+        {
+            TargetType = "RESTAURANT",
+            TargetId = 20,
+            Rating = 5,
+            Comment = "Delicious burgers!"
+        };
+
+        var res = await controller.SubmitReview(req);
+        var okResult = Assert.IsType<OkObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse<ReviewDto>>(okResult.Value);
+        Assert.True(apiRes.Success);
+
+        var updatedRest = await db.Restaurants.FindAsync(20L);
+        Assert.NotNull(updatedRest);
+        Assert.Equal(1, updatedRest.TotalRatings);
+        Assert.Equal(5.0m, updatedRest.Rating);
     }
 
     [Fact]
@@ -129,5 +231,19 @@ public class MultiRoleTests
 
         Assert.True(apiRes.Success);
         Assert.True(apiRes.Data!.TotalUsers >= 2);
+
+        // Test Settings Update
+        var settingRes = await controller.UpdateSetting(new UpdateSettingRequest
+        {
+            Key = "platform_commission_percent",
+            Value = "18",
+            Description = "Updated commission"
+        });
+        Assert.IsType<OkObjectResult>(settingRes.Result);
+
+        var setting = await db.AppSettings.FirstOrDefaultAsync(s => s.SettingKey == "platform_commission_percent");
+        Assert.NotNull(setting);
+        Assert.Equal("18", setting.SettingValue);
     }
 }
+

@@ -186,3 +186,12 @@ public class VendorDashboardDto
     public int ActiveMenuItemsCount { get; set; }
     public List<FoodOrderDto> RecentOrders { get; set; } = new();
 }
+
+public class VendorCategoryActionRequest : ActionRequest
+{
+    public long? Id { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public int? SortOrder { get; set; }
+}
+

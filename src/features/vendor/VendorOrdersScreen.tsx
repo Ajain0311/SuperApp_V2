@@ -18,7 +18,7 @@ import { spacing } from '../../theme/spacing';
 
 export const VendorOrdersScreen: React.FC = () => {
   const [orders, setOrders] = useState<VendorOrderSummary[]>([]);
-  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'PREPARING' | 'READY' | 'DELIVERED'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELLED'>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
@@ -93,13 +93,27 @@ export const VendorOrdersScreen: React.FC = () => {
         {/* Action Progression Buttons */}
         <View style={styles.actionRow}>
           {status === 'PENDING' && (
-            <TouchableOpacity
-              style={[styles.statusBtn, { backgroundColor: '#F59E0B' }]}
-              disabled={isUpdating}
-              onPress={() => handleUpdateStatus(item.id, 'ACCEPTED')}
-            >
-              {isUpdating ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.btnText}>Accept Order</Text>}
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, flex: 1 }}>
+              <TouchableOpacity
+                style={[styles.statusBtn, { backgroundColor: '#F59E0B', flex: 1 }]}
+                disabled={isUpdating}
+                onPress={() => handleUpdateStatus(item.id, 'ACCEPTED')}
+              >
+                {isUpdating ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.btnText}>Accept Order</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statusBtn, { backgroundColor: '#EF444420', borderWidth: 1, borderColor: '#EF4444', paddingHorizontal: 16 }]}
+                disabled={isUpdating}
+                onPress={() => {
+                  Alert.alert('Reject Order', `Are you sure you want to reject order #${item.orderNumber}?`, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Reject', style: 'destructive', onPress: () => handleUpdateStatus(item.id, 'CANCELLED') },
+                  ]);
+                }}
+              >
+                <Text style={[styles.btnText, { color: '#EF4444' }]}>Reject</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {status === 'ACCEPTED' && (
@@ -142,6 +156,7 @@ export const VendorOrdersScreen: React.FC = () => {
       case 'READY': return '#8B5CF6';
       case 'PREPARING': return '#3B82F6';
       case 'ACCEPTED': return '#F59E0B';
+      case 'CANCELLED': return '#EF4444';
       default: return '#94A3B8';
     }
   }
@@ -155,7 +170,7 @@ export const VendorOrdersScreen: React.FC = () => {
 
       {/* Status Filter Chips */}
       <View style={styles.filterScroll}>
-        {(['ALL', 'PENDING', 'PREPARING', 'READY', 'DELIVERED'] as const).map((chip) => (
+        {(['ALL', 'PENDING', 'PREPARING', 'READY', 'DELIVERED', 'CANCELLED'] as const).map((chip) => (
           <TouchableOpacity
             key={chip}
             style={[styles.filterChip, filter === chip && styles.filterChipActive]}

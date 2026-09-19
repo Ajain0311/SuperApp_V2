@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -36,80 +37,114 @@ export const ListingDetailScreen: React.FC = () => {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
-  const [offerPrice, setOfferPrice] = useState('61200');
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('SPAM');
+  const [reportDetails, setReportDetails] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [offerPrice, setOfferPrice] = useState('50000');
 
   const idNum = parseInt(listingId, 10) || 101;
   const isFav = favorites.includes(idNum);
 
-  // Mock detail data matching Flutter implementation
-  const initialDetail: ListingDetail = {
-    id: idNum,
-    title: 'iPhone 14 Pro Max 256GB Deep Purple (Like New)',
-    description:
-      'Mint condition iPhone 14 Pro Max in Deep Purple with 256GB storage. Battery health is at 94%. Always used with a tempered glass screen protector and Spigen case. Comes with original Apple box, unused USB-C to Lightning cable, and invoice from Apple Store India. Only serious buyers please.',
-    price: 68000,
-    condition: 'LIKE_NEW',
-    location: 'Koramangala, Bengaluru',
-    images: [
-      'https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=800',
-      'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=800',
-      'https://images.unsplash.com/photo-1512499617640-c74ae3a79d37?w=800',
-    ],
-    isFeatured: true,
-    viewCount: 142,
-    createdAt: new Date().toISOString(),
-    categoryId: 1,
-    categoryName: 'Mobiles',
-    sellerId: 501,
-    sellerName: 'Rahul Verma',
-    sellerPhone: '+91 98450 12345',
-    sellerRating: 4.9,
-    dealsCount: 28,
-    isFavorite: isFav,
-  };
+  const [detail, setDetail] = useState<ListingDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [detail, setDetail] = useState<ListingDetail>(initialDetail);
+  const fetchListing = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await apiClient.get<any>(ApiEndpoints.marketplace.listingDetail(listingId));
+      const data = res.data?.data || res.data;
+      if (data && data.title) {
+        setDetail({
+          id: data.id || idNum,
+          title: data.title,
+          description: data.description || 'No description provided.',
+          price: Number(data.price) || 0,
+          condition: data.condition || 'USED',
+          location: data.location || 'Bengaluru',
+          images:
+            data.images && data.images.length > 0
+              ? data.images.map((im: any) => (typeof im === 'string' ? im : im.imageUrl || ''))
+              : data.primaryImageUrl
+              ? [data.primaryImageUrl]
+              : ['https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=800'],
+          isFeatured: Boolean(data.isFeatured),
+          viewCount: data.viewCount || 1,
+          createdAt: data.createdAt || new Date().toISOString(),
+          categoryId: data.categoryId || 1,
+          categoryName: data.categoryName || 'General',
+          sellerId: data.sellerId || 1,
+          sellerName: data.sellerName || 'Verified Community Member',
+          sellerPhone: data.sellerPhone || '+91 98450 12345',
+          sellerRating: Number(data.sellerRating) || 4.9,
+          dealsCount: data.dealsCount || 12,
+          isFavorite: favorites.includes(data.id || idNum),
+        });
+        setOfferPrice(Math.round((Number(data.price) || 1000) * 0.9).toString());
+      } else {
+        setError('Listing details not found');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load listing');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [listingId, idNum, favorites]);
 
   useEffect(() => {
-    apiClient
-      .get<any>(ApiEndpoints.marketplace.listingDetail(listingId))
-      .then((res) => {
-        const data = res.data?.data || res.data;
-        if (data && data.title) {
-          setDetail({
-            id: data.id || idNum,
-            title: data.title,
-            description: data.description || '',
-            price: Number(data.price) || 0,
-            condition: data.condition || 'USED',
-            location: data.location || 'Bengaluru',
-            images:
-              data.images && data.images.length > 0
-                ? data.images.map((im: any) => im.imageUrl || im)
-                : data.primaryImageUrl
-                ? [data.primaryImageUrl]
-                : ['https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=800'],
-            isFeatured: Boolean(data.isFeatured),
-            viewCount: data.viewCount || 1,
-            createdAt: data.createdAt || new Date().toISOString(),
-            categoryId: data.categoryId || 1,
-            categoryName: data.categoryName || 'General',
-            sellerId: data.sellerId || 1,
-            sellerName: data.sellerName || 'Verified Seller',
-            sellerPhone: data.sellerPhone || '+91 98450 12345',
-            sellerRating: Number(data.sellerRating) || 4.9,
-            dealsCount: data.dealsCount || 12,
-            isFavorite: favorites.includes(data.id || idNum),
-          });
-        }
-      })
-      .catch(() => {});
-  }, [listingId]);
+    fetchListing();
+  }, [fetchListing]);
 
   const handleSendOffer = () => {
     setShowOfferModal(false);
-    Alert.alert('Offer Sent', `Offer of ₹${offerPrice} sent to ${detail.sellerName}!`);
+    Alert.alert('Offer Sent', `Offer of ₹${offerPrice} sent to ${detail?.sellerName || 'Seller'}!`);
   };
+
+  const handleReportListing = async () => {
+    if (!reportReason) return;
+    setIsSubmittingReport(true);
+    try {
+      await apiClient.post(`/api/marketplace/listings/${listingId}/report`, {
+        reason: reportReason,
+        details: reportDetails,
+      });
+      setShowReportModal(false);
+      setReportDetails('');
+      Alert.alert('Report Submitted', 'Thank you. Our moderation team has been notified.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not submit report');
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.safeArea, styles.centerBox]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading listing details...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !detail) {
+    return (
+      <SafeAreaView style={[styles.safeArea, styles.centerBox]}>
+        <MaterialIcons name="error-outline" size={48} color={colors.error} />
+        <Text style={styles.errorTitle}>Listing Unavailable</Text>
+        <Text style={styles.errorSubtitle}>{error || 'Listing could not be loaded'}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={fetchListing}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.goBackBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.goBackText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -147,6 +182,13 @@ export const ListingDetailScreen: React.FC = () => {
             </TouchableOpacity>
 
             <View style={styles.topRightActions}>
+              <TouchableOpacity
+                style={styles.roundIconButton}
+                onPress={() => setShowReportModal(true)}
+              >
+                <MaterialIcons name="flag" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.roundIconButton}
                 onPress={() => Alert.alert('Share', 'Listing link copied to clipboard!')}
@@ -384,6 +426,66 @@ export const ListingDetailScreen: React.FC = () => {
                 <Text style={styles.contactOptionTitle}>Chat in SuperApp</Text>
                 <Text style={styles.contactOptionSub}>Fast responses, secure and in-app</Text>
               </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report Listing Modal */}
+      <Modal visible={showReportModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Report Listing</Text>
+              <TouchableOpacity onPress={() => setShowReportModal(false)}>
+                <MaterialIcons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.reportSubtitle}>Select a reason for reporting this ad:</Text>
+
+            <View style={styles.reasonsContainer}>
+              {['SPAM', 'FRAUD', 'OFFENSIVE', 'MISLEADING', 'OTHER'].map((reason) => (
+                <TouchableOpacity
+                  key={reason}
+                  style={[
+                    styles.reasonOption,
+                    reportReason === reason && styles.reasonOptionSelected,
+                  ]}
+                  onPress={() => setReportReason(reason)}
+                >
+                  <Text
+                    style={[
+                      styles.reasonOptionText,
+                      reportReason === reason && styles.reasonOptionTextSelected,
+                    ]}
+                  >
+                    {reason}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TextInput
+              style={styles.reportInput}
+              placeholder="Additional details (optional)..."
+              placeholderTextColor={colors.textTertiary}
+              value={reportDetails}
+              onChangeText={setReportDetails}
+              multiline
+              numberOfLines={3}
+            />
+
+            <TouchableOpacity
+              style={[styles.submitReportBtn, isSubmittingReport && { opacity: 0.6 }]}
+              disabled={isSubmittingReport}
+              onPress={handleReportListing}
+            >
+              {isSubmittingReport ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitReportText}>Submit Report</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -795,5 +897,99 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  centerBox: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+    marginTop: 12,
+  },
+  errorTitle: {
+    ...typography.h3,
+    color: colors.textPrimary,
+    marginTop: 16,
+  },
+  errorSubtitle: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  retryBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  goBackBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  goBackText: {
+    color: colors.textSecondary,
+  },
+  reportSubtitle: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+    marginBottom: 14,
+  },
+  reasonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  reasonOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reasonOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(255, 68, 68, 0.15)',
+  },
+  reasonOptionText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  reasonOptionTextSelected: {
+    color: colors.primary,
+  },
+  reportInput: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 8,
+    padding: 12,
+    color: '#FFFFFF',
+    ...typography.bodyMedium,
+    textAlignVertical: 'top',
+    height: 80,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  submitReportBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  submitReportText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

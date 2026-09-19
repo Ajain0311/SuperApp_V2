@@ -19,6 +19,7 @@ import { spacing } from '../../theme/spacing';
 import { signalRService, DriverLocationEvent, RideStatusEvent } from '../../services/signalr';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { RatingModal } from '../../components/RatingModal';
 
 export const ActiveRideScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -27,8 +28,10 @@ export const ActiveRideScreen: React.FC = () => {
   const rideNumericId = route.params?.rideNumericId;
   const initialRideData = route.params?.rideData;
 
+  const [driverId, setDriverId] = useState<number>(initialRideData?.driver?.id || 1);
+  const [showRatingModal, setShowRatingModal] = useState<boolean>(false);
   const [otpCode, setOtpCode] = useState<string>(initialRideData?.otpCode || '4829');
-  const [driverName, setDriverName] = useState<string>(initialRideData?.driver?.fullName || 'Amit Singh');
+  const [driverName, setDriverName] = useState<string>(initialRideData?.driver?.fullName || 'Searching Driver...');
   const [driverRating, setDriverRating] = useState<string>(
     initialRideData?.driver?.rating ? String(initialRideData.driver.rating) : '4.9'
   );
@@ -36,17 +39,19 @@ export const ActiveRideScreen: React.FC = () => {
     initialRideData?.driver?.totalRides ? `(${initialRideData.driver.totalRides} trips)` : '(1,240 trips)'
   );
   const [vehicleModel, setVehicleModel] = useState<string>(
-    initialRideData?.driver?.vehicleModel || 'Hero Splendor Plus (Black)'
+    initialRideData?.driver?.vehicleModel || 'Standard Vehicle'
   );
   const [registrationNumber, setRegistrationNumber] = useState<string>(
     initialRideData?.driver?.registrationNumber || 'DL 04 AB 9821'
   );
-  const [transitStatus, setTransitStatus] = useState<string>('Driver Assigned & In Transit');
+  const [transitStatus, setTransitStatus] = useState<string>(
+    initialRideData?.driver ? 'Driver Assigned & In Transit' : 'Searching for Nearest Driver'
+  );
   const [arrivalEta, setArrivalEta] = useState<string>('3 mins away (0.8 km)');
   const [fareText, setFareText] = useState<string>(
     initialRideData?.estimatedFare ? `₹${initialRideData.estimatedFare}` : '₹45'
   );
-  const [rideStatus, setRideStatus] = useState<string>(initialRideData?.status || 'ACCEPTED');
+  const [rideStatus, setRideStatus] = useState<string>(initialRideData?.status || 'REQUESTED');
   const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
@@ -54,6 +59,7 @@ export const ActiveRideScreen: React.FC = () => {
 
     let unsubLocation: (() => void) | undefined;
     let unsubStatus: (() => void) | undefined;
+    let unsubAssigned: (() => void) | undefined;
 
     signalRService
       .connectRideHub()
@@ -69,13 +75,32 @@ export const ActiveRideScreen: React.FC = () => {
         unsubStatus = signalRService.onRideStatusChanged((data: RideStatusEvent) => {
           if (data.rideId === rideNumericId) {
             setRideStatus(data.status);
-            if (data.status === 'STARTED') {
+            if (data.status === 'ARRIVING') {
+              setTransitStatus('Driver Arrived at Pickup');
+              setArrivalEta('Waiting for passenger');
+            } else if (data.status === 'STARTED') {
               setTransitStatus('Ride in Progress');
               setArrivalEta('Heading to Destination');
             } else if (data.status === 'COMPLETED') {
               setTransitStatus('Ride Completed');
               setArrivalEta('Arrived at Destination');
+            } else if (data.status === 'CANCELLED') {
+              setTransitStatus('Ride Cancelled');
+              setArrivalEta('Trip Terminated');
             }
+          }
+        });
+
+        unsubAssigned = signalRService.onDriverAssigned((driver: any) => {
+          if (driver) {
+            if (driver.id) setDriverId(driver.id);
+            if (driver.fullName) setDriverName(driver.fullName);
+            if (driver.rating) setDriverRating(String(driver.rating));
+            if (driver.totalRides) setDriverTrips(`(${driver.totalRides} trips)`);
+            if (driver.vehicleModel) setVehicleModel(driver.vehicleModel);
+            if (driver.registrationNumber) setRegistrationNumber(driver.registrationNumber);
+            setTransitStatus('Driver Assigned & In Transit');
+            setRideStatus('ACCEPTED');
           }
         });
       })
@@ -87,6 +112,7 @@ export const ActiveRideScreen: React.FC = () => {
       }
       if (unsubLocation) unsubLocation();
       if (unsubStatus) unsubStatus();
+      if (unsubAssigned) unsubAssigned();
     };
   }, [rideNumericId]);
 
@@ -320,18 +346,42 @@ export const ActiveRideScreen: React.FC = () => {
           </View>
         </View>
 
+        {/* Rate Driver Button when Completed */}
+        {rideStatus === 'COMPLETED' && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.rateButton}
+            onPress={() => setShowRatingModal(true)}
+          >
+            <MaterialIcons name="star" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.rateButtonText}>Rate Your Driver</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Cancel Ride Button */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={[styles.cancelButton, isCancelling && { opacity: 0.7 }]}
-          disabled={isCancelling}
-          onPress={handleCancelRide}
-        >
-          <Text style={styles.cancelButtonText}>
-            {isCancelling ? 'Cancelling...' : 'Cancel Ride'}
-          </Text>
-        </TouchableOpacity>
+        {rideStatus !== 'COMPLETED' && rideStatus !== 'CANCELLED' && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.cancelButton, isCancelling && { opacity: 0.7 }]}
+            disabled={isCancelling}
+            onPress={handleCancelRide}
+          >
+            <Text style={styles.cancelButtonText}>
+              {isCancelling ? 'Cancelling...' : 'Cancel Ride'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
+
+      {/* Driver Rating Modal */}
+      <RatingModal
+        visible={showRatingModal}
+        targetType="DRIVER"
+        targetId={driverId}
+        title="Rate Your Driver"
+        subtitle={driverName}
+        onClose={() => setShowRatingModal(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -631,6 +681,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textTertiary,
     marginTop: 1,
+  },
+  rateButton: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#F59E0B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.lg,
+  },
+  rateButtonText: {
+    ...typography.bodyLarge,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   cancelButton: {
     height: 48,
