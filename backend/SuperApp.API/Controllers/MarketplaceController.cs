@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
-using SuperApp.API.Services;
 
 namespace SuperApp.API.Controllers;
 
@@ -329,7 +328,7 @@ public class MarketplaceController : ControllerBase
 
                 var cat = await _db.MarketplaceCategories.FindAsync(newListing.CategoryId);
 
-                var dto = new ListingSummaryDto
+                return Ok(ApiResponse<ListingSummaryDto>.Ok(new ListingSummaryDto
                 {
                     Id = newListing.Id,
                     Title = newListing.Title,
@@ -344,26 +343,7 @@ public class MarketplaceController : ControllerBase
                     CategoryId = newListing.CategoryId,
                     CategoryName = cat?.Name ?? "General",
                     IsFavorite = false
-                };
-
-                try
-                {
-                    var witty = WittyNotificationCatalog.GetRandomSellerLine();
-                    _db.Notifications.Add(new Notification
-                    {
-                        UserId = currentUserId,
-                        Title = witty.Title,
-                        Body = $"{witty.Body} (Item: {newListing.Title} for ₹{newListing.Price})",
-                        Type = "MARKETPLACE",
-                        ReferenceId = newListing.Id.ToString(),
-                        IsRead = false,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                    await _db.SaveChangesAsync();
-                }
-                catch { }
-
-                return Ok(ApiResponse<ListingSummaryDto>.Ok(dto, "Listing published successfully"));
+                }, "Listing published successfully"));
 
             case "EDIT":
                 if (!request.Id.HasValue)

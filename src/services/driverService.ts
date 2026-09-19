@@ -32,9 +32,6 @@ export interface DriverRideItem {
   pickupAddress: string;
   dropoffAddress: string;
   fare: number;
-  estimatedFare?: number;
-  distanceKm?: number;
-  vehicleType?: string;
   status: string;
   createdAt: string;
   customerName: string;

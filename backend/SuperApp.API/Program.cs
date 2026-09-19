@@ -8,38 +8,6 @@ using SuperApp.API.Hubs;
 using SuperApp.API.Middleware;
 using SuperApp.API.Services;
 
-// --- Load root or workspace .env file if present ---
-var currentDir = Directory.GetCurrentDirectory();
-var envCandidates = new[]
-{
-    Path.Combine(currentDir, ".env"),
-    Path.Combine(currentDir, "..", "..", ".env"),
-    Path.Combine(AppContext.BaseDirectory, ".env"),
-    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".env")
-};
-foreach (var envPath in envCandidates)
-{
-    if (File.Exists(envPath))
-    {
-        foreach (var line in File.ReadAllLines(envPath))
-        {
-            var trimmed = line.Trim();
-            if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("#")) continue;
-            var parts = trimmed.Split('=', 2);
-            if (parts.Length == 2)
-            {
-                var key = parts[0].Trim();
-                var value = parts[1].Trim();
-                if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
-                {
-                    Environment.SetEnvironmentVariable(key, value);
-                }
-            }
-        }
-        break;
-    }
-}
-
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Database Configuration (Environment-driven & Provider-agnostic) ---
@@ -150,7 +118,7 @@ builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
-builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
+builder.Services.AddScoped<ISmsService, PunjabGovSmsService>();
 builder.Services.AddScoped<MockOtpService>();
 builder.Services.AddScoped<PunjabGovOtpService>();
 

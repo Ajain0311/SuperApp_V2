@@ -10,8 +10,8 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DATABASE_PROVIDER": "Postgres",
         "PAYMENT_PROVIDER": "Easebuzz",
-        "PAYMENT_KEY": "92LYE7065",
-        "PAYMENT_SECRET": "9H758G8WF",
+        "PAYMENT_KEY": "",
+        "PAYMENT_SECRET": "",
         "PAYMENT_ENV": "test",
         "PAYMENT_RETURN_URL": "http://localhost:5000/api/payments/easebuzz-return"
       }
@@ -25,8 +25,8 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DATABASE_PROVIDER": "Postgres",
         "PAYMENT_PROVIDER": "Easebuzz",
-        "PAYMENT_KEY": "92LYE7065",
-        "PAYMENT_SECRET": "9H758G8WF",
+        "PAYMENT_KEY": "",
+        "PAYMENT_SECRET": "",
         "PAYMENT_ENV": "test",
         "PAYMENT_RETURN_URL": "http://localhost:5000/api/payments/easebuzz-return"
       }

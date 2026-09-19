@@ -82,16 +82,4 @@ export class AppEnvironment {
     }
     return this.isDevelopment;
   }
-
-  static get testOtp(): string {
-    return process.env.EXPO_PUBLIC_TEST_OTP || '123456';
-  }
-
-  static get showTestOtp(): boolean {
-    const show = process.env.EXPO_PUBLIC_SHOW_TEST_OTP;
-    if (show !== undefined) {
-      return show === 'true' || show === '1';
-    }
-    return !this.isProduction;
-  }
 }

@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { vendorService, VendorOrderSummary } from '../../services/vendorService';
-import { signalRService } from '../../services/signalr';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -40,61 +39,6 @@ export const VendorOrdersScreen: React.FC = () => {
     loadOrders();
   }, [loadOrders]);
 
-  // Real-time kitchen orders & single-accept synchronization
-  useEffect(() => {
-    let unregNewOrder: (() => void) | null = null;
-    let unregAccepted: (() => void) | null = null;
-
-    const setupKitchenSignalR = async () => {
-      try {
-        const profile = await vendorService.getProfile();
-        if (profile?.id) {
-          await signalRService.joinRestaurantKitchen(profile.id);
-
-          unregNewOrder = signalRService.onNewIncomingOrder((newOrder: any) => {
-            if (!newOrder) return;
-            setOrders((prev) => {
-              if (prev.some((o) => o.id === newOrder.id)) return prev;
-              const mapped: VendorOrderSummary = {
-                id: newOrder.id,
-                orderNumber: newOrder.orderNumber,
-                restaurantId: newOrder.restaurantId || profile.id,
-                status: newOrder.status || 'PENDING',
-                grandTotal: newOrder.grandTotal,
-                createdAt: newOrder.createdAt || new Date().toISOString(),
-                items: newOrder.items || [],
-              };
-              return [mapped, ...prev];
-            });
-
-            Alert.alert(
-              '🔔 New Food Order Received!',
-              `Order #${newOrder.orderNumber}\nTotal: ₹${newOrder.grandTotal}\nItems: ${newOrder.items?.length || 1}`,
-              [{ text: 'View Kitchen', style: 'default' }]
-            );
-          });
-
-          unregAccepted = signalRService.onOrderAcceptedByOther((data: any) => {
-            if (data?.orderId) {
-              setOrders((prev) =>
-                prev.map((o) => (o.id === data.orderId ? { ...o, status: data.status } : o))
-              );
-            }
-          });
-        }
-      } catch (err) {
-        console.warn('[VendorOrders] Kitchen SignalR setup warning:', err);
-      }
-    };
-
-    setupKitchenSignalR();
-
-    return () => {
-      if (unregNewOrder) unregNewOrder();
-      if (unregAccepted) unregAccepted();
-    };
-  }, []);
-
   const handleUpdateStatus = async (orderId: number, nextStatus: string) => {
     setUpdatingOrderId(orderId);
     try {
@@ -103,8 +47,7 @@ export const VendorOrdersScreen: React.FC = () => {
         prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
       );
     } catch (e: any) {
-      loadOrders();
-      Alert.alert('Kitchen Notice', e.message || 'Could not update order status. It may have already been accepted.');
+      Alert.alert('Update Failed', e.message || 'Could not update order status');
     } finally {
       setUpdatingOrderId(null);
     }

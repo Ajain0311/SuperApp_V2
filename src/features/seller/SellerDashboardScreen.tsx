@@ -11,8 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useMarketplaceStore } from '../../store/marketplaceStore';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { colors } from '../../theme/colors';
@@ -20,46 +18,25 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 
 export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { customListings } = useMarketplaceStore();
   const [listings, setListings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadMyListings = useCallback(async () => {
     try {
-      const res = await apiClient.get<any>(ApiEndpoints.marketplace.myListings);
-      const raw = res?.data?.data ?? res?.data?.items ?? res?.data ?? (Array.isArray(res) ? res : []);
-      const serverItems: any[] = Array.isArray(raw) ? raw : [];
-
-      // Merge server items with any customListings from local store not yet in server list
-      const merged = [...serverItems];
-      for (const custom of customListings) {
-        if (!merged.some((m) => m.id === custom.id || m.title === custom.title)) {
-          merged.unshift({
-            ...custom,
-            status: custom.status || 'ACTIVE',
-            isActive: true,
-          });
-        }
-      }
-
-      setListings(merged);
+      const res = await apiClient.get<{ success: boolean; data: any[] }>(ApiEndpoints.marketplace.myListings);
+      setListings(res.data || []);
     } catch (e: any) {
       console.warn('[SellerDashboard] Error loading listings:', e.message);
-      if (customListings.length > 0) {
-        setListings(customListings);
-      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [customListings]);
+  }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadMyListings();
-    }, [loadMyListings])
-  );
+  useEffect(() => {
+    loadMyListings();
+  }, [loadMyListings]);
 
   const handleDeleteListing = (id: number) => {
     Alert.alert('Remove Listing', 'Are you sure you want to deactivate this listing?', [

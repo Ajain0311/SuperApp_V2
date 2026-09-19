@@ -14,18 +14,18 @@ export interface VendorOrderSummary {
   id: number;
   orderNumber: string;
   restaurantId: number;
-  restaurantName?: string;
+  restaurantName: string;
   status: string;
-  subTotal?: number;
-  discountAmount?: number;
-  couponDiscount?: number;
-  deliveryFee?: number;
-  taxAmount?: number;
+  subTotal: number;
+  discountAmount: number;
+  couponDiscount: number;
+  deliveryFee: number;
+  taxAmount: number;
   grandTotal: number;
-  paymentMethod?: string;
-  paymentStatus?: string;
+  paymentMethod: string;
+  paymentStatus: string;
   notes?: string;
-  estimatedDeliveryMinutes?: number;
+  estimatedDeliveryMinutes: number;
   createdAt: string;
   items: Array<{
     id: number;
@@ -40,10 +40,6 @@ class VendorService {
   async getMyRestaurant(): Promise<any> {
     const res = await apiClient.get<{ success: boolean; data: any }>(ApiEndpoints.vendor.myRestaurant);
     return res.data;
-  }
-
-  async getProfile(): Promise<any> {
-    return this.getMyRestaurant();
   }
 
   async getDashboard(): Promise<VendorDashboardStats> {

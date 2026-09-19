@@ -108,35 +108,6 @@ class SignalRService {
     return () => this.rideHubConnection?.off('DriverAssigned', callback);
   }
 
-  async joinDriversPool(): Promise<void> {
-    const conn = await this.connectRideHub();
-    if (conn.state === signalR.HubConnectionState.Connected) {
-      await conn.invoke('JoinDriversPool').catch(() => {});
-    }
-  }
-
-  async leaveDriversPool(): Promise<void> {
-    if (this.rideHubConnection && this.rideHubConnection.state === signalR.HubConnectionState.Connected) {
-      await this.rideHubConnection.invoke('LeaveDriversPool').catch(() => {});
-    }
-  }
-
-  onRideRequested(callback: (ride: any) => void): () => void {
-    if (!this.rideHubConnection) {
-      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
-    }
-    this.rideHubConnection.on('RideRequested', callback);
-    return () => this.rideHubConnection?.off('RideRequested', callback);
-  }
-
-  onRideAcceptedByOther(callback: (data: any) => void): () => void {
-    if (!this.rideHubConnection) {
-      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
-    }
-    this.rideHubConnection.on('RideAcceptedByOther', callback);
-    return () => this.rideHubConnection?.off('RideAcceptedByOther', callback);
-  }
-
   // --- Order Status Hub ---
   async connectOrderHub(): Promise<signalR.HubConnection> {
     if (this.orderHubConnection && this.orderHubConnection.state === signalR.HubConnectionState.Connected) {
@@ -176,35 +147,6 @@ class SignalRService {
     }
     this.orderHubConnection.on('OrderStatusUpdated', callback);
     return () => this.orderHubConnection?.off('OrderStatusUpdated', callback);
-  }
-
-  async joinRestaurantKitchen(restaurantId: number): Promise<void> {
-    const conn = await this.connectOrderHub();
-    if (conn.state === signalR.HubConnectionState.Connected) {
-      await conn.invoke('JoinRestaurantKitchen', restaurantId).catch(() => {});
-    }
-  }
-
-  async leaveRestaurantKitchen(restaurantId: number): Promise<void> {
-    if (this.orderHubConnection && this.orderHubConnection.state === signalR.HubConnectionState.Connected) {
-      await this.orderHubConnection.invoke('LeaveRestaurantKitchen', restaurantId).catch(() => {});
-    }
-  }
-
-  onNewIncomingOrder(callback: (order: any) => void): () => void {
-    if (!this.orderHubConnection) {
-      this.orderHubConnection = this.createConnection(AppEnvironment.orderHubUrl);
-    }
-    this.orderHubConnection.on('NewIncomingOrder', callback);
-    return () => this.orderHubConnection?.off('NewIncomingOrder', callback);
-  }
-
-  onOrderAcceptedByOther(callback: (data: any) => void): () => void {
-    if (!this.orderHubConnection) {
-      this.orderHubConnection = this.createConnection(AppEnvironment.orderHubUrl);
-    }
-    this.orderHubConnection.on('OrderAcceptedByOther', callback);
-    return () => this.orderHubConnection?.off('OrderAcceptedByOther', callback);
   }
 
   // --- Chat Hub ---

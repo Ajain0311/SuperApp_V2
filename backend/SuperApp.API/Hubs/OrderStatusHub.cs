@@ -25,14 +25,4 @@ public class OrderStatusHub : Hub
             updatedAt = DateTime.UtcNow
         });
     }
-
-    public async Task JoinRestaurantKitchen(long restaurantId)
-    {
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"restaurant-{restaurantId}");
-    }
-
-    public async Task LeaveRestaurantKitchen(long restaurantId)
-    {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"restaurant-{restaurantId}");
-    }
 }
