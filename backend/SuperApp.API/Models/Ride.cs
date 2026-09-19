@@ -85,6 +85,7 @@ public class Ride
 public static class RideStatus
 {
     public const string Requested = "REQUESTED";
+    public const string Searching = "SEARCHING";
     public const string Assigned = "ASSIGNED";
     public const string Accepted = "ACCEPTED";
     public const string Arriving = "ARRIVING";

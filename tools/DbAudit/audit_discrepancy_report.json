@@ -1,0 +1,3227 @@
+{
+  "Timestamp": "2026-09-19T12:37:17.3006656Z",
+  "TablesCount": 28,
+  "Tables": [
+    {
+      "Name": "otp_requests",
+      "RowCount": 40,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "mobile_number",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 15
+        },
+        {
+          "Name": "otp_code",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 10
+        },
+        {
+          "Name": "purpose",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027LOGIN\u0027::character varying",
+          "MaxLength": 50
+        },
+        {
+          "Name": "is_used",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "attempt_count",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "expires_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "roles",
+      "RowCount": 5,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "description",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "users",
+      "RowCount": 5,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "mobile_number",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 15
+        },
+        {
+          "Name": "full_name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "email",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "profile_image_url",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "password_hash",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "last_login_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "user_roles",
+      "RowCount": 8,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "role_id",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "addresses",
+      "RowCount": 4,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "label",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "address_line1",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "address_line2",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "city",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "state",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "pin_code",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 10
+        },
+        {
+          "Name": "latitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "longitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "is_default",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "restaurants",
+      "RowCount": 7,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "description",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "image_url",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "phone",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 15
+        },
+        {
+          "Name": "email",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "address_line",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "city",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "latitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "longitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "rating",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "total_ratings",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_veg",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "opening_time",
+          "DataType": "time without time zone",
+          "UdtName": "time",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "closing_time",
+          "DataType": "time without time zone",
+          "UdtName": "time",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "min_order_amount",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "delivery_fee",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "avg_delivery_time_minutes",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "30",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_featured",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "restaurant_users",
+      "RowCount": 1,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "restaurant_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "restaurant_categories",
+      "RowCount": 20,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "restaurant_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "description",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "sort_order",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "food_items",
+      "RowCount": 40,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "restaurant_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "restaurant_category_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "description",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "image_url",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "base_price",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "discount_percent",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_veg",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_available",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_bestseller",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_customizable",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "sort_order",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "food_item_variants",
+      "RowCount": 2,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "food_item_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "additional_price",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_default",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "sort_order",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "food_item_addons",
+      "RowCount": 2,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "food_item_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "group_name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "price",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "is_default",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "sort_order",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "coupons",
+      "RowCount": 2,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "code",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "description",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "discount_type",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027PERCENTAGE\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "discount_value",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "min_order_amount",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "max_discount",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "start_date",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "expiry_date",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "total_usage_limit",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "per_user_limit",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "1",
+          "MaxLength": null
+        },
+        {
+          "Name": "current_usage_count",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "applicable_module",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027FOOD\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "coupon_usages",
+      "RowCount": 0,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "coupon_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "order_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "used_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "food_orders",
+      "RowCount": 3,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "order_number",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "restaurant_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "address_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "status",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027PENDING\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "sub_total",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "discount_amount",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "coupon_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "coupon_discount",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "delivery_fee",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "tax_amount",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "grand_total",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "payment_method",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "payment_status",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027PENDING\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "notes",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "estimated_delivery_minutes",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "food_order_items",
+      "RowCount": 3,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "food_order_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "food_item_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "item_name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "quantity",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "1",
+          "MaxLength": null
+        },
+        {
+          "Name": "unit_price",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "variant_name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "variant_price",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "addons_json",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "total_price",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "drivers",
+      "RowCount": 2,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "license_number",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "is_verified",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_online",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "current_latitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "current_longitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "rating",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": "0.00",
+          "MaxLength": null
+        },
+        {
+          "Name": "total_rides",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "vehicles",
+      "RowCount": 2,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "driver_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "type",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "make",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "model",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "year",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "registration_number",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "color",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "rides",
+      "RowCount": 3,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "ride_number",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "driver_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "vehicle_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "vehicle_type",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "pickup_address",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "pickup_latitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "pickup_longitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "dropoff_address",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "dropoff_latitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "dropoff_longitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "distance_km",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "estimated_fare",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "actual_fare",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "status",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027REQUESTED\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "otp_code",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 10
+        },
+        {
+          "Name": "payment_method",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "payment_status",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "started_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "completed_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "cancelled_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "cancellation_reason",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "marketplace_listings",
+      "RowCount": 18,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "category_id",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "title",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "description",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "price",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "condition",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027USED\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "location",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "latitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "longitude",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "status",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027ACTIVE\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "is_featured",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "view_count",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "marketplace_categories",
+      "RowCount": 8,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "icon_url",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "sort_order",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "listing_images",
+      "RowCount": 14,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "listing_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "image_url",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "sort_order",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "favorites",
+      "RowCount": 4,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "listing_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "notifications",
+      "RowCount": 0,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "title",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "body",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "type",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "reference_id",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "is_read",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "false",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "user_device_tokens",
+      "RowCount": 14,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "expo_push_token",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "platform",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "device_name",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "last_seen_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "banners",
+      "RowCount": 2,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "title",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 200
+        },
+        {
+          "Name": "image_url",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 500
+        },
+        {
+          "Name": "target_type",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "target_id",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 50
+        },
+        {
+          "Name": "module",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027HOME\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "sort_order",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": "0",
+          "MaxLength": null
+        },
+        {
+          "Name": "is_active",
+          "DataType": "boolean",
+          "UdtName": "bool",
+          "IsNullable": false,
+          "DefaultValue": "true",
+          "MaxLength": null
+        },
+        {
+          "Name": "start_date",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "end_date",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "reviews",
+      "RowCount": 4,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "target_type",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "target_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "rating",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "comment",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "payments",
+      "RowCount": 0,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "user_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "module",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "order_id",
+          "DataType": "bigint",
+          "UdtName": "int8",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "amount",
+          "DataType": "numeric",
+          "UdtName": "numeric",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "payment_method",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 20
+        },
+        {
+          "Name": "transaction_id",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "status",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": "\u0027PENDING\u0027::character varying",
+          "MaxLength": 20
+        },
+        {
+          "Name": "created_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": false,
+          "DefaultValue": "clock_timestamp()",
+          "MaxLength": null
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    },
+    {
+      "Name": "app_settings",
+      "RowCount": 5,
+      "Columns": [
+        {
+          "Name": "id",
+          "DataType": "integer",
+          "UdtName": "int4",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "setting_key",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": false,
+          "DefaultValue": null,
+          "MaxLength": 100
+        },
+        {
+          "Name": "setting_value",
+          "DataType": "text",
+          "UdtName": "text",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        },
+        {
+          "Name": "description",
+          "DataType": "character varying",
+          "UdtName": "varchar",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": 255
+        },
+        {
+          "Name": "updated_at",
+          "DataType": "timestamp with time zone",
+          "UdtName": "timestamptz",
+          "IsNullable": true,
+          "DefaultValue": null,
+          "MaxLength": null
+        }
+      ]
+    }
+  ],
+  "CheckConstraints": [
+    {
+      "TableName": "coupons",
+      "ConstraintName": "chk_coupons_discount_type",
+      "Definition": "CHECK (((discount_type)::text = ANY ((ARRAY[\u0027PERCENTAGE\u0027::character varying, \u0027FLAT\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "coupons",
+      "ConstraintName": "chk_coupons_module",
+      "Definition": "CHECK (((applicable_module)::text = ANY ((ARRAY[\u0027FOOD\u0027::character varying, \u0027RIDE\u0027::character varying, \u0027ALL\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "food_orders",
+      "ConstraintName": "chk_food_orders_status",
+      "Definition": "CHECK (((status)::text = ANY ((ARRAY[\u0027PENDING\u0027::character varying, \u0027ACCEPTED\u0027::character varying, \u0027PREPARING\u0027::character varying, \u0027READY\u0027::character varying, \u0027PICKED_UP\u0027::character varying, \u0027DELIVERED\u0027::character varying, \u0027CANCELLED\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "reviews",
+      "ConstraintName": "chk_reviews_rating",
+      "Definition": "CHECK (((rating \u003E= 1) AND (rating \u003C= 5)))"
+    },
+    {
+      "TableName": "vehicles",
+      "ConstraintName": "chk_vehicles_type",
+      "Definition": "CHECK (((type)::text = ANY ((ARRAY[\u0027BIKE\u0027::character varying, \u0027AUTO\u0027::character varying, \u0027CAB\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "rides",
+      "ConstraintName": "chk_rides_status",
+      "Definition": "CHECK (((status)::text = ANY ((ARRAY[\u0027REQUESTED\u0027::character varying, \u0027ASSIGNED\u0027::character varying, \u0027ACCEPTED\u0027::character varying, \u0027ARRIVING\u0027::character varying, \u0027STARTED\u0027::character varying, \u0027COMPLETED\u0027::character varying, \u0027CANCELLED\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "rides",
+      "ConstraintName": "chk_rides_vehicle_type",
+      "Definition": "CHECK (((vehicle_type)::text = ANY ((ARRAY[\u0027BIKE\u0027::character varying, \u0027AUTO\u0027::character varying, \u0027CAB\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "ConstraintName": "chk_marketplace_listings_condition",
+      "Definition": "CHECK (((condition)::text = ANY ((ARRAY[\u0027NEW\u0027::character varying, \u0027LIKE_NEW\u0027::character varying, \u0027USED\u0027::character varying, \u0027FAIR\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "ConstraintName": "chk_marketplace_listings_status",
+      "Definition": "CHECK (((status)::text = ANY ((ARRAY[\u0027ACTIVE\u0027::character varying, \u0027SOLD\u0027::character varying, \u0027EXPIRED\u0027::character varying, \u0027REMOVED\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "user_device_tokens",
+      "ConstraintName": "chk_user_device_tokens_platform",
+      "Definition": "CHECK (((platform)::text = ANY ((ARRAY[\u0027ios\u0027::character varying, \u0027android\u0027::character varying, \u0027web\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "banners",
+      "ConstraintName": "chk_banners_module",
+      "Definition": "CHECK (((module)::text = ANY ((ARRAY[\u0027HOME\u0027::character varying, \u0027FOOD\u0027::character varying, \u0027RIDE\u0027::character varying, \u0027MARKETPLACE\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "reviews",
+      "ConstraintName": "chk_reviews_target_type",
+      "Definition": "CHECK (((target_type)::text = ANY ((ARRAY[\u0027RESTAURANT\u0027::character varying, \u0027DRIVER\u0027::character varying, \u0027LISTING\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "payments",
+      "ConstraintName": "chk_payments_module",
+      "Definition": "CHECK (((module)::text = ANY ((ARRAY[\u0027FOOD\u0027::character varying, \u0027RIDE\u0027::character varying])::text[])))"
+    },
+    {
+      "TableName": "payments",
+      "ConstraintName": "chk_payments_status",
+      "Definition": "CHECK (((status)::text = ANY ((ARRAY[\u0027PENDING\u0027::character varying, \u0027COMPLETED\u0027::character varying, \u0027FAILED\u0027::character varying, \u0027REFUNDED\u0027::character varying])::text[])))"
+    }
+  ],
+  "ForeignKeys": [
+    {
+      "TableName": "food_item_variants",
+      "ConstraintName": "fk_food_item_variants_items",
+      "ColumnName": "food_item_id",
+      "ForeignTableName": "food_items",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_item_addons",
+      "ConstraintName": "fk_food_item_addons_items",
+      "ColumnName": "food_item_id",
+      "ForeignTableName": "food_items",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "user_roles",
+      "ConstraintName": "fk_user_roles_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "user_roles",
+      "ConstraintName": "fk_user_roles_roles",
+      "ColumnName": "role_id",
+      "ForeignTableName": "roles",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "addresses",
+      "ConstraintName": "fk_addresses_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "restaurant_users",
+      "ConstraintName": "fk_restaurant_users_restaurants",
+      "ColumnName": "restaurant_id",
+      "ForeignTableName": "restaurants",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "restaurant_users",
+      "ConstraintName": "fk_restaurant_users_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "restaurant_categories",
+      "ConstraintName": "fk_restaurant_categories_restaurants",
+      "ColumnName": "restaurant_id",
+      "ForeignTableName": "restaurants",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_items",
+      "ConstraintName": "fk_food_items_restaurants",
+      "ColumnName": "restaurant_id",
+      "ForeignTableName": "restaurants",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_items",
+      "ConstraintName": "fk_food_items_categories",
+      "ColumnName": "restaurant_category_id",
+      "ForeignTableName": "restaurant_categories",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "coupon_usages",
+      "ConstraintName": "fk_coupon_usages_coupons",
+      "ColumnName": "coupon_id",
+      "ForeignTableName": "coupons",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "coupon_usages",
+      "ConstraintName": "fk_coupon_usages_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_orders",
+      "ConstraintName": "fk_food_orders_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_orders",
+      "ConstraintName": "fk_food_orders_restaurants",
+      "ColumnName": "restaurant_id",
+      "ForeignTableName": "restaurants",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_orders",
+      "ConstraintName": "fk_food_orders_addresses",
+      "ColumnName": "address_id",
+      "ForeignTableName": "addresses",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_orders",
+      "ConstraintName": "fk_food_orders_coupons",
+      "ColumnName": "coupon_id",
+      "ForeignTableName": "coupons",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_order_items",
+      "ConstraintName": "fk_food_order_items_orders",
+      "ColumnName": "food_order_id",
+      "ForeignTableName": "food_orders",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "food_order_items",
+      "ConstraintName": "fk_food_order_items_items",
+      "ColumnName": "food_item_id",
+      "ForeignTableName": "food_items",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "drivers",
+      "ConstraintName": "fk_drivers_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "vehicles",
+      "ConstraintName": "fk_vehicles_drivers",
+      "ColumnName": "driver_id",
+      "ForeignTableName": "drivers",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "rides",
+      "ConstraintName": "fk_rides_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "rides",
+      "ConstraintName": "fk_rides_drivers",
+      "ColumnName": "driver_id",
+      "ForeignTableName": "drivers",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "rides",
+      "ConstraintName": "fk_rides_vehicles",
+      "ColumnName": "vehicle_id",
+      "ForeignTableName": "vehicles",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "ConstraintName": "fk_marketplace_listings_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "ConstraintName": "fk_marketplace_listings_categories",
+      "ColumnName": "category_id",
+      "ForeignTableName": "marketplace_categories",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "listing_images",
+      "ConstraintName": "fk_listing_images_listings",
+      "ColumnName": "listing_id",
+      "ForeignTableName": "marketplace_listings",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "favorites",
+      "ConstraintName": "fk_favorites_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "favorites",
+      "ConstraintName": "fk_favorites_listings",
+      "ColumnName": "listing_id",
+      "ForeignTableName": "marketplace_listings",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "notifications",
+      "ConstraintName": "fk_notifications_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "user_device_tokens",
+      "ConstraintName": "fk_user_device_tokens_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "reviews",
+      "ConstraintName": "fk_reviews_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    },
+    {
+      "TableName": "payments",
+      "ConstraintName": "fk_payments_users",
+      "ColumnName": "user_id",
+      "ForeignTableName": "users",
+      "ForeignColumnName": "id"
+    }
+  ],
+  "Indexes": [
+    {
+      "TableName": "otp_requests",
+      "IndexName": "otp_requests_pkey",
+      "Definition": "CREATE UNIQUE INDEX otp_requests_pkey ON public.otp_requests USING btree (id)"
+    },
+    {
+      "TableName": "otp_requests",
+      "IndexName": "idx_otp_requests_lookup",
+      "Definition": "CREATE INDEX idx_otp_requests_lookup ON public.otp_requests USING btree (mobile_number, expires_at)"
+    },
+    {
+      "TableName": "otp_requests",
+      "IndexName": "idx_otp_requests_expires_at",
+      "Definition": "CREATE INDEX idx_otp_requests_expires_at ON public.otp_requests USING btree (expires_at)"
+    },
+    {
+      "TableName": "users",
+      "IndexName": "users_pkey",
+      "Definition": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+    },
+    {
+      "TableName": "users",
+      "IndexName": "uq_users_mobile_number",
+      "Definition": "CREATE UNIQUE INDEX uq_users_mobile_number ON public.users USING btree (mobile_number)"
+    },
+    {
+      "TableName": "users",
+      "IndexName": "idx_users_email_unique",
+      "Definition": "CREATE UNIQUE INDEX idx_users_email_unique ON public.users USING btree (email) WHERE (email IS NOT NULL)"
+    },
+    {
+      "TableName": "users",
+      "IndexName": "idx_users_is_active",
+      "Definition": "CREATE INDEX idx_users_is_active ON public.users USING btree (is_active)"
+    },
+    {
+      "TableName": "user_roles",
+      "IndexName": "user_roles_pkey",
+      "Definition": "CREATE UNIQUE INDEX user_roles_pkey ON public.user_roles USING btree (id)"
+    },
+    {
+      "TableName": "user_roles",
+      "IndexName": "uq_user_roles_user_role",
+      "Definition": "CREATE UNIQUE INDEX uq_user_roles_user_role ON public.user_roles USING btree (user_id, role_id)"
+    },
+    {
+      "TableName": "user_roles",
+      "IndexName": "idx_user_roles_role_id",
+      "Definition": "CREATE INDEX idx_user_roles_role_id ON public.user_roles USING btree (role_id)"
+    },
+    {
+      "TableName": "roles",
+      "IndexName": "roles_pkey",
+      "Definition": "CREATE UNIQUE INDEX roles_pkey ON public.roles USING btree (id)"
+    },
+    {
+      "TableName": "roles",
+      "IndexName": "uq_roles_name",
+      "Definition": "CREATE UNIQUE INDEX uq_roles_name ON public.roles USING btree (name)"
+    },
+    {
+      "TableName": "addresses",
+      "IndexName": "addresses_pkey",
+      "Definition": "CREATE UNIQUE INDEX addresses_pkey ON public.addresses USING btree (id)"
+    },
+    {
+      "TableName": "addresses",
+      "IndexName": "idx_addresses_user_id",
+      "Definition": "CREATE INDEX idx_addresses_user_id ON public.addresses USING btree (user_id)"
+    },
+    {
+      "TableName": "addresses",
+      "IndexName": "idx_addresses_city",
+      "Definition": "CREATE INDEX idx_addresses_city ON public.addresses USING btree (city)"
+    },
+    {
+      "TableName": "restaurants",
+      "IndexName": "restaurants_pkey",
+      "Definition": "CREATE UNIQUE INDEX restaurants_pkey ON public.restaurants USING btree (id)"
+    },
+    {
+      "TableName": "restaurants",
+      "IndexName": "idx_restaurants_city_active",
+      "Definition": "CREATE INDEX idx_restaurants_city_active ON public.restaurants USING btree (city, is_active)"
+    },
+    {
+      "TableName": "restaurants",
+      "IndexName": "idx_restaurants_featured",
+      "Definition": "CREATE INDEX idx_restaurants_featured ON public.restaurants USING btree (is_featured) WHERE (is_featured = true)"
+    },
+    {
+      "TableName": "restaurants",
+      "IndexName": "idx_restaurants_rating",
+      "Definition": "CREATE INDEX idx_restaurants_rating ON public.restaurants USING btree (rating DESC)"
+    },
+    {
+      "TableName": "restaurant_users",
+      "IndexName": "restaurant_users_pkey",
+      "Definition": "CREATE UNIQUE INDEX restaurant_users_pkey ON public.restaurant_users USING btree (id)"
+    },
+    {
+      "TableName": "restaurant_users",
+      "IndexName": "uq_restaurant_users_pair",
+      "Definition": "CREATE UNIQUE INDEX uq_restaurant_users_pair ON public.restaurant_users USING btree (restaurant_id, user_id)"
+    },
+    {
+      "TableName": "restaurant_users",
+      "IndexName": "idx_restaurant_users_user_id",
+      "Definition": "CREATE INDEX idx_restaurant_users_user_id ON public.restaurant_users USING btree (user_id)"
+    },
+    {
+      "TableName": "restaurant_categories",
+      "IndexName": "restaurant_categories_pkey",
+      "Definition": "CREATE UNIQUE INDEX restaurant_categories_pkey ON public.restaurant_categories USING btree (id)"
+    },
+    {
+      "TableName": "restaurant_categories",
+      "IndexName": "idx_restaurant_categories_restaurant",
+      "Definition": "CREATE INDEX idx_restaurant_categories_restaurant ON public.restaurant_categories USING btree (restaurant_id, sort_order)"
+    },
+    {
+      "TableName": "food_items",
+      "IndexName": "food_items_pkey",
+      "Definition": "CREATE UNIQUE INDEX food_items_pkey ON public.food_items USING btree (id)"
+    },
+    {
+      "TableName": "food_items",
+      "IndexName": "idx_food_items_restaurant_available",
+      "Definition": "CREATE INDEX idx_food_items_restaurant_available ON public.food_items USING btree (restaurant_id, is_available)"
+    },
+    {
+      "TableName": "food_items",
+      "IndexName": "idx_food_items_category",
+      "Definition": "CREATE INDEX idx_food_items_category ON public.food_items USING btree (restaurant_category_id)"
+    },
+    {
+      "TableName": "food_item_variants",
+      "IndexName": "food_item_variants_pkey",
+      "Definition": "CREATE UNIQUE INDEX food_item_variants_pkey ON public.food_item_variants USING btree (id)"
+    },
+    {
+      "TableName": "food_item_variants",
+      "IndexName": "idx_food_item_variants_item",
+      "Definition": "CREATE INDEX idx_food_item_variants_item ON public.food_item_variants USING btree (food_item_id)"
+    },
+    {
+      "TableName": "food_item_addons",
+      "IndexName": "food_item_addons_pkey",
+      "Definition": "CREATE UNIQUE INDEX food_item_addons_pkey ON public.food_item_addons USING btree (id)"
+    },
+    {
+      "TableName": "food_item_addons",
+      "IndexName": "idx_food_item_addons_item",
+      "Definition": "CREATE INDEX idx_food_item_addons_item ON public.food_item_addons USING btree (food_item_id)"
+    },
+    {
+      "TableName": "coupons",
+      "IndexName": "coupons_pkey",
+      "Definition": "CREATE UNIQUE INDEX coupons_pkey ON public.coupons USING btree (id)"
+    },
+    {
+      "TableName": "coupons",
+      "IndexName": "uq_coupons_code",
+      "Definition": "CREATE UNIQUE INDEX uq_coupons_code ON public.coupons USING btree (code)"
+    },
+    {
+      "TableName": "coupons",
+      "IndexName": "idx_coupons_active_dates",
+      "Definition": "CREATE INDEX idx_coupons_active_dates ON public.coupons USING btree (code, is_active, start_date, expiry_date)"
+    },
+    {
+      "TableName": "coupon_usages",
+      "IndexName": "coupon_usages_pkey",
+      "Definition": "CREATE UNIQUE INDEX coupon_usages_pkey ON public.coupon_usages USING btree (id)"
+    },
+    {
+      "TableName": "coupon_usages",
+      "IndexName": "idx_coupon_usages_lookup",
+      "Definition": "CREATE INDEX idx_coupon_usages_lookup ON public.coupon_usages USING btree (coupon_id, user_id)"
+    },
+    {
+      "TableName": "food_orders",
+      "IndexName": "food_orders_pkey",
+      "Definition": "CREATE UNIQUE INDEX food_orders_pkey ON public.food_orders USING btree (id)"
+    },
+    {
+      "TableName": "food_orders",
+      "IndexName": "uq_food_orders_order_number",
+      "Definition": "CREATE UNIQUE INDEX uq_food_orders_order_number ON public.food_orders USING btree (order_number)"
+    },
+    {
+      "TableName": "food_orders",
+      "IndexName": "idx_food_orders_user_created",
+      "Definition": "CREATE INDEX idx_food_orders_user_created ON public.food_orders USING btree (user_id, created_at DESC)"
+    },
+    {
+      "TableName": "food_orders",
+      "IndexName": "idx_food_orders_restaurant_status",
+      "Definition": "CREATE INDEX idx_food_orders_restaurant_status ON public.food_orders USING btree (restaurant_id, status)"
+    },
+    {
+      "TableName": "food_orders",
+      "IndexName": "idx_food_orders_status",
+      "Definition": "CREATE INDEX idx_food_orders_status ON public.food_orders USING btree (status)"
+    },
+    {
+      "TableName": "food_order_items",
+      "IndexName": "food_order_items_pkey",
+      "Definition": "CREATE UNIQUE INDEX food_order_items_pkey ON public.food_order_items USING btree (id)"
+    },
+    {
+      "TableName": "food_order_items",
+      "IndexName": "idx_food_order_items_order_id",
+      "Definition": "CREATE INDEX idx_food_order_items_order_id ON public.food_order_items USING btree (food_order_id)"
+    },
+    {
+      "TableName": "drivers",
+      "IndexName": "drivers_pkey",
+      "Definition": "CREATE UNIQUE INDEX drivers_pkey ON public.drivers USING btree (id)"
+    },
+    {
+      "TableName": "drivers",
+      "IndexName": "uq_drivers_user_id",
+      "Definition": "CREATE UNIQUE INDEX uq_drivers_user_id ON public.drivers USING btree (user_id)"
+    },
+    {
+      "TableName": "drivers",
+      "IndexName": "idx_drivers_online_active",
+      "Definition": "CREATE INDEX idx_drivers_online_active ON public.drivers USING btree (is_online, is_active) WHERE (is_online = true)"
+    },
+    {
+      "TableName": "vehicles",
+      "IndexName": "vehicles_pkey",
+      "Definition": "CREATE UNIQUE INDEX vehicles_pkey ON public.vehicles USING btree (id)"
+    },
+    {
+      "TableName": "vehicles",
+      "IndexName": "uq_vehicles_registration",
+      "Definition": "CREATE UNIQUE INDEX uq_vehicles_registration ON public.vehicles USING btree (registration_number)"
+    },
+    {
+      "TableName": "vehicles",
+      "IndexName": "idx_vehicles_driver_id",
+      "Definition": "CREATE INDEX idx_vehicles_driver_id ON public.vehicles USING btree (driver_id)"
+    },
+    {
+      "TableName": "rides",
+      "IndexName": "rides_pkey",
+      "Definition": "CREATE UNIQUE INDEX rides_pkey ON public.rides USING btree (id)"
+    },
+    {
+      "TableName": "rides",
+      "IndexName": "uq_rides_ride_number",
+      "Definition": "CREATE UNIQUE INDEX uq_rides_ride_number ON public.rides USING btree (ride_number)"
+    },
+    {
+      "TableName": "rides",
+      "IndexName": "idx_rides_user_created",
+      "Definition": "CREATE INDEX idx_rides_user_created ON public.rides USING btree (user_id, created_at DESC)"
+    },
+    {
+      "TableName": "rides",
+      "IndexName": "idx_rides_driver_status",
+      "Definition": "CREATE INDEX idx_rides_driver_status ON public.rides USING btree (driver_id, status)"
+    },
+    {
+      "TableName": "rides",
+      "IndexName": "idx_rides_status",
+      "Definition": "CREATE INDEX idx_rides_status ON public.rides USING btree (status)"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "IndexName": "marketplace_listings_pkey",
+      "Definition": "CREATE UNIQUE INDEX marketplace_listings_pkey ON public.marketplace_listings USING btree (id)"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "IndexName": "idx_marketplace_listings_category_status",
+      "Definition": "CREATE INDEX idx_marketplace_listings_category_status ON public.marketplace_listings USING btree (category_id, status)"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "IndexName": "idx_marketplace_listings_user_id",
+      "Definition": "CREATE INDEX idx_marketplace_listings_user_id ON public.marketplace_listings USING btree (user_id)"
+    },
+    {
+      "TableName": "marketplace_listings",
+      "IndexName": "idx_marketplace_listings_created",
+      "Definition": "CREATE INDEX idx_marketplace_listings_created ON public.marketplace_listings USING btree (created_at DESC)"
+    },
+    {
+      "TableName": "marketplace_categories",
+      "IndexName": "marketplace_categories_pkey",
+      "Definition": "CREATE UNIQUE INDEX marketplace_categories_pkey ON public.marketplace_categories USING btree (id)"
+    },
+    {
+      "TableName": "marketplace_categories",
+      "IndexName": "uq_marketplace_categories_name",
+      "Definition": "CREATE UNIQUE INDEX uq_marketplace_categories_name ON public.marketplace_categories USING btree (name)"
+    },
+    {
+      "TableName": "marketplace_categories",
+      "IndexName": "idx_marketplace_categories_sort",
+      "Definition": "CREATE INDEX idx_marketplace_categories_sort ON public.marketplace_categories USING btree (sort_order, is_active)"
+    },
+    {
+      "TableName": "listing_images",
+      "IndexName": "listing_images_pkey",
+      "Definition": "CREATE UNIQUE INDEX listing_images_pkey ON public.listing_images USING btree (id)"
+    },
+    {
+      "TableName": "listing_images",
+      "IndexName": "idx_listing_images_listing_id",
+      "Definition": "CREATE INDEX idx_listing_images_listing_id ON public.listing_images USING btree (listing_id, sort_order)"
+    },
+    {
+      "TableName": "favorites",
+      "IndexName": "favorites_pkey",
+      "Definition": "CREATE UNIQUE INDEX favorites_pkey ON public.favorites USING btree (id)"
+    },
+    {
+      "TableName": "favorites",
+      "IndexName": "uq_favorites_user_listing",
+      "Definition": "CREATE UNIQUE INDEX uq_favorites_user_listing ON public.favorites USING btree (user_id, listing_id)"
+    },
+    {
+      "TableName": "favorites",
+      "IndexName": "idx_favorites_user_id",
+      "Definition": "CREATE INDEX idx_favorites_user_id ON public.favorites USING btree (user_id)"
+    },
+    {
+      "TableName": "notifications",
+      "IndexName": "notifications_pkey",
+      "Definition": "CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id)"
+    },
+    {
+      "TableName": "notifications",
+      "IndexName": "idx_notifications_user_unread",
+      "Definition": "CREATE INDEX idx_notifications_user_unread ON public.notifications USING btree (user_id, is_read)"
+    },
+    {
+      "TableName": "notifications",
+      "IndexName": "idx_notifications_user_created",
+      "Definition": "CREATE INDEX idx_notifications_user_created ON public.notifications USING btree (user_id, created_at DESC)"
+    },
+    {
+      "TableName": "user_device_tokens",
+      "IndexName": "user_device_tokens_pkey",
+      "Definition": "CREATE UNIQUE INDEX user_device_tokens_pkey ON public.user_device_tokens USING btree (id)"
+    },
+    {
+      "TableName": "user_device_tokens",
+      "IndexName": "uq_user_device_tokens_token",
+      "Definition": "CREATE UNIQUE INDEX uq_user_device_tokens_token ON public.user_device_tokens USING btree (expo_push_token)"
+    },
+    {
+      "TableName": "user_device_tokens",
+      "IndexName": "idx_user_device_tokens_user",
+      "Definition": "CREATE INDEX idx_user_device_tokens_user ON public.user_device_tokens USING btree (user_id, is_active)"
+    },
+    {
+      "TableName": "banners",
+      "IndexName": "banners_pkey",
+      "Definition": "CREATE UNIQUE INDEX banners_pkey ON public.banners USING btree (id)"
+    },
+    {
+      "TableName": "banners",
+      "IndexName": "idx_banners_module_active",
+      "Definition": "CREATE INDEX idx_banners_module_active ON public.banners USING btree (module, is_active, sort_order)"
+    },
+    {
+      "TableName": "reviews",
+      "IndexName": "reviews_pkey",
+      "Definition": "CREATE UNIQUE INDEX reviews_pkey ON public.reviews USING btree (id)"
+    },
+    {
+      "TableName": "reviews",
+      "IndexName": "idx_reviews_target",
+      "Definition": "CREATE INDEX idx_reviews_target ON public.reviews USING btree (target_type, target_id)"
+    },
+    {
+      "TableName": "reviews",
+      "IndexName": "idx_reviews_user_id",
+      "Definition": "CREATE INDEX idx_reviews_user_id ON public.reviews USING btree (user_id)"
+    },
+    {
+      "TableName": "payments",
+      "IndexName": "payments_pkey",
+      "Definition": "CREATE UNIQUE INDEX payments_pkey ON public.payments USING btree (id)"
+    },
+    {
+      "TableName": "payments",
+      "IndexName": "idx_payments_user_id",
+      "Definition": "CREATE INDEX idx_payments_user_id ON public.payments USING btree (user_id)"
+    },
+    {
+      "TableName": "payments",
+      "IndexName": "idx_payments_transaction",
+      "Definition": "CREATE INDEX idx_payments_transaction ON public.payments USING btree (transaction_id)"
+    },
+    {
+      "TableName": "app_settings",
+      "IndexName": "app_settings_pkey",
+      "Definition": "CREATE UNIQUE INDEX app_settings_pkey ON public.app_settings USING btree (id)"
+    },
+    {
+      "TableName": "app_settings",
+      "IndexName": "uq_app_settings_key",
+      "Definition": "CREATE UNIQUE INDEX uq_app_settings_key ON public.app_settings USING btree (setting_key)"
+    }
+  ],
+  "Discrepancies": {
+    "MissingTables": [],
+    "MissingColumns": [],
+    "NullabilityMismatches": [],
+    "MissingForeignKeys": [],
+    "ExtraTables": []
+  }
+}

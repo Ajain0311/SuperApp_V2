@@ -63,4 +63,5 @@ public static class ListingStatus
     public const string Sold = "SOLD";
     public const string Expired = "EXPIRED";
     public const string Removed = "REMOVED";
+    public const string Flagged = "FLAGGED";
 }
