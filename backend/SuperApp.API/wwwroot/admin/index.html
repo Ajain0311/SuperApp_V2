@@ -855,7 +855,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">Restaurants & Vendor Partners</h2>
-                        <button class="btn btn-primary btn-sm" onclick="alert('Add Restaurant modal ready')">+ Add Restaurant</button>
+                        <button class="btn btn-primary btn-sm" onclick="openAddRestaurantModal()">+ Add Restaurant</button>
                     </div>
                     <div class="table-container">
                         <table>
@@ -1152,6 +1152,56 @@
         </div>
     </div>
 
+    <!-- Add Restaurant Modal -->
+    <div class="modal-backdrop" id="restaurantModal">
+        <div class="modal" style="max-width: 520px;">
+            <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 14px;">🏪 Add New Restaurant Partner</h3>
+            <div class="form-group">
+                <label>Restaurant Name *</label>
+                <input type="text" class="form-input" id="restName" placeholder="e.g. Punjab Grill & Biryani House">
+            </div>
+            <div class="form-group">
+                <label>Cuisine / Description</label>
+                <input type="text" class="form-input" id="restDesc" placeholder="e.g. Authentic North Indian, Tandoori, Biryani">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>Contact Phone *</label>
+                    <input type="text" class="form-input" id="restPhone" placeholder="e.g. 9876543210">
+                </div>
+                <div class="form-group">
+                    <label>City *</label>
+                    <input type="text" class="form-input" id="restCity" placeholder="e.g. Chandigarh">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Address / Operational Hub</label>
+                <input type="text" class="form-input" id="restAddress" placeholder="e.g. Sector 17 Plaza, Main Market">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>Food Type</label>
+                    <select class="form-input" id="restIsVeg">
+                        <option value="false">Non-Veg / Both</option>
+                        <option value="true">Pure Veg</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Min Order (₹)</label>
+                    <input type="number" class="form-input" id="restMinOrder" value="100">
+                </div>
+                <div class="form-group">
+                    <label>Delivery Fee (₹)</label>
+                    <input type="number" class="form-input" id="restDeliveryFee" value="30">
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
+                <button class="btn btn-secondary" onclick="closeAddRestaurantModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitNewRestaurant()">Save & Publish Restaurant</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         function triggerAdminLogout() {
             if (confirm('Are you sure you want to log out of Admin Command Portal?')) {
@@ -1195,6 +1245,9 @@
                 'settings': 'Global System Settings'
             };
             document.getElementById('tabTitle').innerText = titles[tabId] || 'Admin Console';
+            if (tabId === 'restaurants') {
+                fetchRestaurants();
+            }
             toggleSidebar(false);
         }
 
@@ -1258,6 +1311,129 @@
 
         function toggleUserStatus(userId) {
             alert(`User #${userId} status updated`);
+        }
+
+        function openAddRestaurantModal() {
+            document.getElementById('restaurantModal').classList.add('open');
+            document.getElementById('restName').focus();
+        }
+
+        function closeAddRestaurantModal() {
+            document.getElementById('restaurantModal').classList.remove('open');
+        }
+
+        async function submitNewRestaurant() {
+            const name = document.getElementById('restName').value.trim();
+            const desc = document.getElementById('restDesc').value.trim();
+            const phone = document.getElementById('restPhone').value.trim();
+            const city = document.getElementById('restCity').value.trim() || 'Chandigarh';
+            const addr = document.getElementById('restAddress').value.trim() || 'Main Market';
+            const isVeg = document.getElementById('restIsVeg').value === 'true';
+            const minOrder = parseFloat(document.getElementById('restMinOrder').value) || 100;
+            const fee = parseFloat(document.getElementById('restDeliveryFee').value) || 30;
+
+            if (!name) {
+                alert('Please enter a restaurant name');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/restaurants', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'ADD',
+                        name: name,
+                        description: desc || name,
+                        phone: phone,
+                        city: city,
+                        addressLine: addr,
+                        isVeg: isVeg,
+                        minOrderAmount: minOrder,
+                        deliveryFee: fee,
+                        isFeatured: false
+                    })
+                });
+
+                const json = await res.json();
+                if (json.success) {
+                    const newRest = json.data;
+                    const tbody = document.getElementById('restaurantsTableBody');
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${newRest.id}</td>
+                        <td><strong>${newRest.name}</strong></td>
+                        <td>${newRest.city} • ${newRest.addressLine || ''}</td>
+                        <td><span class="badge" style="background: ${newRest.isVeg ? 'rgba(16, 185, 129, 0.15); color: var(--green)' : 'rgba(255, 82, 82, 0.15); color: var(--red)'}">${newRest.isVeg ? 'Pure Veg' : 'Non-Veg'}</span></td>
+                        <td>5.0 ★ (New)</td>
+                        <td><span class="badge badge-active">NEW</span></td>
+                        <td><span class="badge badge-active">ACTIVE</span></td>
+                        <td><button class="btn btn-secondary btn-sm" onclick="alert('Restaurant ID ${newRest.id} is active')">Active</button></td>
+                    `;
+                    tbody.insertBefore(row, tbody.firstChild);
+
+                    closeAddRestaurantModal();
+                    document.getElementById('restName').value = '';
+                    document.getElementById('restDesc').value = '';
+                    document.getElementById('restPhone').value = '';
+                    document.getElementById('restAddress').value = '';
+
+                    alert(`🎉 Restaurant "${name}" added successfully!`);
+                } else {
+                    alert(json.message || 'Could not add restaurant');
+                }
+            } catch (err) {
+                alert('Error adding restaurant: ' + err.message);
+            }
+        }
+
+        async function fetchRestaurants() {
+            try {
+                const res = await fetch('/api/admin/restaurants');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                        const tbody = document.getElementById('restaurantsTableBody');
+                        tbody.innerHTML = json.data.map(r => `
+                            <tr>
+                                <td>${r.id}</td>
+                                <td><strong>${r.name}</strong></td>
+                                <td>${r.city || 'City'} • ${r.addressLine || ''}</td>
+                                <td><span class="badge" style="background: ${r.isVeg ? 'rgba(16, 185, 129, 0.15); color: var(--green)' : 'rgba(255, 82, 82, 0.15); color: var(--red)'}">${r.isVeg ? 'Pure Veg' : 'Non-Veg'}</span></td>
+                                <td>${r.rating || 4.5} ★ (${r.totalRatings || 100})</td>
+                                <td><span class="badge ${r.isFeatured ? 'badge-active' : ''}">${r.isFeatured ? '⭐ YES' : 'NO'}</span></td>
+                                <td><span class="badge ${r.isActive ? 'badge-active' : ''}">${r.isActive ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                                <td><button class="btn btn-secondary btn-sm" onclick="toggleRestaurantStatus(${r.id}, ${r.isActive})">${r.isActive ? 'Deactivate' : 'Activate'}</button></td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.log('Error fetching restaurants', err);
+            }
+        }
+
+        async function toggleRestaurantStatus(id, currentStatus) {
+            try {
+                const res = await fetch('/api/admin/restaurants', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'STATUS',
+                        id: id,
+                        isActive: !currentStatus
+                    })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    alert(json.message || 'Status updated');
+                    fetchRestaurants();
+                } else {
+                    alert(json.message || 'Update failed');
+                }
+            } catch (err) {
+                alert('Error updating status: ' + err.message);
+            }
         }
 
         function filterUsers() {

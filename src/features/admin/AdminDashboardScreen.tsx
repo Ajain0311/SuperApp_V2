@@ -12,6 +12,7 @@ import {
   RefreshControl,
   SafeAreaView,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { apiClient } from '../../services/apiClient';
@@ -20,7 +21,7 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { useAuthStore } from '../../store/authStore';
 
-type AdminTab = 'OVERVIEW' | 'ORDERS' | 'RIDES' | 'USERS' | 'BAZAAR' | 'CONFIG';
+type AdminTab = 'OVERVIEW' | 'USERS' | 'RESTAURANTS' | 'ORDERS' | 'RIDES' | 'BAZAAR' | 'CONFIG';
 
 export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('OVERVIEW');
@@ -35,6 +36,19 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const [users, setUsers] = useState<any[]>([]);
   const [listings, setListings] = useState<any[]>([]);
   const [settings, setSettings] = useState<any[]>([]);
+  const [restaurants, setRestaurants] = useState<any[]>([]);
+
+  // Add Restaurant modal states
+  const [showAddRestModal, setShowAddRestModal] = useState(false);
+  const [restName, setRestName] = useState('');
+  const [restDesc, setRestDesc] = useState('');
+  const [restPhone, setRestPhone] = useState('');
+  const [restCity, setRestCity] = useState('Chandigarh');
+  const [restAddress, setRestAddress] = useState('');
+  const [restIsVeg, setRestIsVeg] = useState(false);
+  const [restMinOrder, setRestMinOrder] = useState('100');
+  const [restDeliveryFee, setRestDeliveryFee] = useState('30');
+  const [isSavingRest, setIsSavingRest] = useState(false);
 
   // Search & input states
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,6 +72,9 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         const res = await apiClient.get<any>('/api/admin/users');
         const data = res.data?.data || res.data;
         setUsers(data?.items || data || []);
+      } else if (activeTab === 'RESTAURANTS') {
+        const res = await apiClient.get<any>('/api/admin/restaurants');
+        setRestaurants(res.data?.data || res.data || []);
       } else if (activeTab === 'BAZAAR') {
         const res = await apiClient.get<any>('/api/admin/marketplace/listings');
         setListings(res.data?.data || res.data || []);
@@ -91,6 +108,84 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
       Alert.alert('Success', `User #${userId} status updated`);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to update user status');
+    }
+  };
+
+  const handleToggleUserRole = async (userId: number, roleName: string, currentRoles: string[] = []) => {
+    const hasRole = currentRoles.includes(roleName);
+    try {
+      await apiClient.post('/api/admin/users', {
+        action: 'ROLE',
+        userId,
+        roleName,
+      });
+      const updatedRoles = hasRole
+        ? currentRoles.filter((r) => r !== roleName)
+        : [...currentRoles, roleName];
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, roles: updatedRoles } : u))
+      );
+      Alert.alert(
+        'Role Updated',
+        hasRole
+          ? `Removed ${roleName} role from user #${userId}`
+          : `Assigned ${roleName} to user #${userId}. They can now access this mode in their app.`
+      );
+    } catch (e: any) {
+      Alert.alert('Role Update Failed', e.message || 'Could not update user role');
+    }
+  };
+
+  const handleAddRestaurant = async () => {
+    if (!restName.trim()) {
+      Alert.alert('Required', 'Please enter restaurant name');
+      return;
+    }
+    setIsSavingRest(true);
+    try {
+      const res = await apiClient.post<any>('/api/admin/restaurants', {
+        action: 'ADD',
+        name: restName.trim(),
+        description: restDesc.trim() || restName.trim(),
+        phone: restPhone.trim() || '9876543210',
+        city: restCity.trim() || 'Chandigarh',
+        addressLine: restAddress.trim() || 'Main Market',
+        isVeg: restIsVeg,
+        minOrderAmount: parseFloat(restMinOrder) || 100,
+        deliveryFee: parseFloat(restDeliveryFee) || 30,
+        isFeatured: false,
+      });
+      const created = res.data?.data || res.data;
+      if (created?.id) {
+        setRestaurants((prev) => [created, ...prev]);
+      }
+      setShowAddRestModal(false);
+      setRestName('');
+      setRestDesc('');
+      setRestPhone('');
+      setRestAddress('');
+      Alert.alert('Success 🎉', `Restaurant "${restName.trim()}" added and published successfully!`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not add restaurant');
+    } finally {
+      setIsSavingRest(false);
+    }
+  };
+
+  const handleToggleRestaurantStatus = async (id: number, currentActive: boolean) => {
+    try {
+      await apiClient.post('/api/admin/restaurants', {
+        action: 'STATUS',
+        id,
+        isActive: !currentActive,
+      });
+      setRestaurants((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, isActive: !currentActive } : r))
+      );
+      Alert.alert('Updated', `Restaurant is now ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not update status');
     }
   };
 
@@ -312,7 +407,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
           renderItem={({ item }) => (
             <View style={styles.cardItem}>
               <View style={styles.cardRow}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{item.fullName || 'User'} (#{item.id})</Text>
                   <Text style={styles.cardSub}>{item.mobileNumber} • {item.email || 'No email'}</Text>
                   <View style={styles.rolesRow}>
@@ -332,9 +427,218 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Admin Role Assignment Controls */}
+              <View style={styles.roleAdminSection}>
+                <Text style={styles.roleAdminLabel}>ASSIGN ROLES (ADMIN CONTROL):</Text>
+                <View style={styles.roleButtonsRow}>
+                  {/* DRIVER */}
+                  <TouchableOpacity
+                    style={[
+                      styles.roleToggleBtn,
+                      item.roles?.includes('DRIVER') ? styles.roleToggleBtnActive : styles.roleToggleBtnInactive,
+                    ]}
+                    onPress={() => handleToggleUserRole(item.id, 'DRIVER', item.roles || [])}
+                  >
+                    <Ionicons
+                      name={item.roles?.includes('DRIVER') ? 'checkmark-circle' : 'add-circle-outline'}
+                      size={14}
+                      color={item.roles?.includes('DRIVER') ? '#FFFFFF' : '#3B82F6'}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.roleToggleText,
+                        item.roles?.includes('DRIVER') ? styles.roleToggleTextActive : { color: '#3B82F6' },
+                      ]}
+                    >
+                      Rider / Driver
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* RESTAURANT_OWNER */}
+                  <TouchableOpacity
+                    style={[
+                      styles.roleToggleBtn,
+                      item.roles?.includes('RESTAURANT_OWNER') ? styles.roleToggleBtnActiveOwner : styles.roleToggleBtnInactive,
+                    ]}
+                    onPress={() => handleToggleUserRole(item.id, 'RESTAURANT_OWNER', item.roles || [])}
+                  >
+                    <Ionicons
+                      name={item.roles?.includes('RESTAURANT_OWNER') ? 'checkmark-circle' : 'add-circle-outline'}
+                      size={14}
+                      color={item.roles?.includes('RESTAURANT_OWNER') ? '#FFFFFF' : '#F59E0B'}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.roleToggleText,
+                        item.roles?.includes('RESTAURANT_OWNER') ? styles.roleToggleTextActive : { color: '#F59E0B' },
+                      ]}
+                    >
+                      Restaurant Owner
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* MARKETPLACE_SELLER */}
+                  <TouchableOpacity
+                    style={[
+                      styles.roleToggleBtn,
+                      item.roles?.includes('MARKETPLACE_SELLER') ? styles.roleToggleBtnActiveSeller : styles.roleToggleBtnInactive,
+                    ]}
+                    onPress={() => handleToggleUserRole(item.id, 'MARKETPLACE_SELLER', item.roles || [])}
+                  >
+                    <Ionicons
+                      name={item.roles?.includes('MARKETPLACE_SELLER') ? 'checkmark-circle' : 'add-circle-outline'}
+                      size={14}
+                      color={item.roles?.includes('MARKETPLACE_SELLER') ? '#FFFFFF' : '#8B5CF6'}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.roleToggleText,
+                        item.roles?.includes('MARKETPLACE_SELLER') ? styles.roleToggleTextActive : { color: '#8B5CF6' },
+                      ]}
+                    >
+                      Seller
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           )}
           ListEmptyComponent={<Text style={styles.emptyText}>No users matched your query.</Text>}
+        />
+      </View>
+    );
+  };
+
+  const renderRestaurantsTab = () => {
+    const q = searchQuery.toLowerCase().trim();
+    const filtered = restaurants.filter(
+      (r) =>
+        !q ||
+        r.name?.toLowerCase().includes(q) ||
+        r.city?.toLowerCase().includes(q) ||
+        r.addressLine?.toLowerCase().includes(q)
+    );
+
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={styles.filterBar}>
+          <View style={[styles.searchBar, { flex: 1, marginHorizontal: 0, marginTop: 0, marginRight: 8 }]}>
+            <Ionicons name="search" size={16} color={colors.textTertiary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search restaurants or city..."
+              placeholderTextColor={colors.textTertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.addPartnerHeaderBtn}
+            onPress={() => setShowAddRestModal(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={16} color="#FFFFFF" />
+            <Text style={styles.addPartnerHeaderBtnText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => {
+                setIsRefreshing(true);
+                loadData();
+              }}
+              tintColor="#EC4899"
+            />
+          }
+          renderItem={({ item }) => (
+            <View style={styles.cardItem}>
+              <View style={styles.cardRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                    <View
+                      style={[
+                        styles.vegBadge,
+                        { backgroundColor: item.isVeg ? '#10B98120' : '#EF444420' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.vegBadgeText,
+                          { color: item.isVeg ? '#10B981' : '#EF4444' },
+                        ]}
+                      >
+                        {item.isVeg ? 'Veg' : 'Non-Veg'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.cardSub}>
+                    {item.city} • {item.addressLine || 'Operational Hub'}
+                  </Text>
+                  {item.phone ? (
+                    <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                      📞 {item.phone}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.priceHighlight}>
+                    Min Order: ₹{item.minOrderAmount || 100} • Delivery: ₹{item.deliveryFee || 30}
+                  </Text>
+                </View>
+                <View style={styles.cardRight}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: (item.isActive ? '#10B981' : '#EF4444') + '20' },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: item.isActive ? '#10B981' : '#EF4444' },
+                      ]}
+                    >
+                      {item.isActive ? 'ACTIVE' : 'INACTIVE'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.actionPill,
+                    item.isActive && { borderColor: '#EF4444' },
+                  ]}
+                  onPress={() => handleToggleRestaurantStatus(item.id, item.isActive)}
+                >
+                  <Text
+                    style={[
+                      styles.actionPillText,
+                      item.isActive && { color: '#EF4444' },
+                    ]}
+                  >
+                    {item.isActive ? 'Deactivate' : 'Activate Partner'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={{ padding: 30, alignItems: 'center' }}>
+              <Ionicons name="restaurant-outline" size={44} color="#94A3B8" />
+              <Text style={styles.emptyText}>No restaurants found.</Text>
+            </View>
+          }
         />
       </View>
     );
@@ -500,7 +804,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
       {/* Tabs Row */}
       <View style={styles.tabScroll}>
-        {(['OVERVIEW', 'ORDERS', 'RIDES', 'USERS', 'BAZAAR', 'CONFIG'] as const).map((tab) => (
+        {(['OVERVIEW', 'USERS', 'RESTAURANTS', 'ORDERS', 'RIDES', 'BAZAAR', 'CONFIG'] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tabChip, activeTab === tab && styles.tabChipActive]}
@@ -520,13 +824,147 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
       ) : (
         <View style={{ flex: 1 }}>
           {activeTab === 'OVERVIEW' && renderOverviewTab()}
+          {activeTab === 'USERS' && renderUsersTab()}
+          {activeTab === 'RESTAURANTS' && renderRestaurantsTab()}
           {activeTab === 'ORDERS' && renderOrdersTab()}
           {activeTab === 'RIDES' && renderRidesTab()}
-          {activeTab === 'USERS' && renderUsersTab()}
           {activeTab === 'BAZAAR' && renderBazaarTab()}
           {activeTab === 'CONFIG' && renderConfigTab()}
         </View>
       )}
+
+      {/* Add Restaurant Modal */}
+      <Modal
+        visible={showAddRestModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddRestModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Add Restaurant Partner</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              <Text style={styles.fieldLabel}>Restaurant Name *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Royal Punjab Dhaba"
+                placeholderTextColor={colors.textTertiary}
+                value={restName}
+                onChangeText={setRestName}
+              />
+
+              <Text style={styles.fieldLabel}>Description</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Best North Indian & Tandoori in town"
+                placeholderTextColor={colors.textTertiary}
+                value={restDesc}
+                onChangeText={setRestDesc}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Phone</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="9876543210"
+                    placeholderTextColor={colors.textTertiary}
+                    value={restPhone}
+                    onChangeText={setRestPhone}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>City</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Chandigarh"
+                    placeholderTextColor={colors.textTertiary}
+                    value={restCity}
+                    onChangeText={setRestCity}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.fieldLabel}>Address / Area</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Sector 17 Market"
+                placeholderTextColor={colors.textTertiary}
+                value={restAddress}
+                onChangeText={setRestAddress}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Min Order (₹)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="100"
+                    placeholderTextColor={colors.textTertiary}
+                    value={restMinOrder}
+                    onChangeText={setRestMinOrder}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Delivery Fee (₹)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="30"
+                    placeholderTextColor={colors.textTertiary}
+                    value={restDeliveryFee}
+                    onChangeText={setRestDeliveryFee}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.fieldLabel}>Food Type</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 12 }}>
+                <TouchableOpacity
+                  style={[styles.vegToggleBtn, restIsVeg && styles.vegToggleBtnActive]}
+                  onPress={() => setRestIsVeg(true)}
+                >
+                  <Text style={[styles.vegToggleText, restIsVeg && { color: '#10B981', fontWeight: '800' }]}>
+                    🌱 Pure Veg
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.vegToggleBtn, !restIsVeg && styles.vegToggleBtnActive]}
+                  onPress={() => setRestIsVeg(false)}
+                >
+                  <Text style={[styles.vegToggleText, !restIsVeg && { color: '#EF4444', fontWeight: '800' }]}>
+                    🍗 Veg & Non-Veg
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowAddRestModal(false)}
+                disabled={isSavingRest}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, isSavingRest && { opacity: 0.6 }]}
+                onPress={handleAddRestaurant}
+                disabled={isSavingRest}
+              >
+                {isSavingRest ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Add Restaurant</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -801,6 +1239,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textSecondary,
   },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -909,6 +1353,168 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 30,
+    fontSize: 13,
+  },
+  roleAdminSection: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  roleAdminLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  roleButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  roleToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  roleToggleBtnInactive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#475569',
+  },
+  roleToggleBtnActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#3B82F6',
+  },
+  roleToggleBtnActiveOwner: {
+    backgroundColor: '#D97706',
+    borderColor: '#F59E0B',
+  },
+  roleToggleBtnActiveSeller: {
+    backgroundColor: '#7C3AED',
+    borderColor: '#8B5CF6',
+  },
+  roleToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  roleToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  addPartnerHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EC4899',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  addPartnerHeaderBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  vegBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  vegBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  modalInput: {
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#FFFFFF',
+    fontSize: 13,
+  },
+  vegToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
+  vegToggleBtnActive: {
+    borderColor: '#EC4899',
+    backgroundColor: '#EC489915',
+  },
+  vegToggleText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  modalCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#475569',
+  },
+  modalCancelText: {
+    color: '#94A3B8',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  modalSaveBtn: {
+    backgroundColor: '#EC4899',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
     fontSize: 13,
   },
 });

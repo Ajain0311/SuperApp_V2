@@ -6,6 +6,10 @@ using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 
+using Microsoft.AspNetCore.SignalR;
+using SuperApp.API.Hubs;
+using SuperApp.API.Services;
+
 namespace SuperApp.API.Controllers;
 
 [ApiController]
@@ -13,10 +17,12 @@ namespace SuperApp.API.Controllers;
 public class FoodOrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<OrderStatusHub> _orderHub;
 
-    public FoodOrdersController(AppDbContext db)
+    public FoodOrdersController(AppDbContext db, IHubContext<OrderStatusHub> orderHub)
     {
         _db = db;
+        _orderHub = orderHub;
     }
 
     private long GetCurrentUserId()
@@ -157,7 +163,30 @@ public class FoodOrdersController : ControllerBase
         _db.FoodOrders.Add(order);
         await _db.SaveChangesAsync();
 
-        return Ok(ApiResponse<FoodOrderDto>.Ok(MapToOrderDto(order, restaurant.Name, restaurant.ImageUrl)));
+        // Zomato-style witty notification for customer
+        try
+        {
+            var witty = WittyNotificationCatalog.GetRandomLateNightLine();
+            _db.Notifications.Add(new Notification
+            {
+                UserId = userId,
+                Title = witty.Title,
+                Body = $"{witty.Body} (Order #{order.OrderNumber} placed at {restaurant.Name})",
+                Type = "FOOD_ORDER",
+                ReferenceId = order.OrderNumber,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+        catch { }
+
+        var orderDto = MapToOrderDto(order, restaurant.Name, restaurant.ImageUrl);
+
+        // Real-time notification to all active restaurant kitchen staff
+        await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
+
+        return Ok(ApiResponse<FoodOrderDto>.Ok(orderDto));
     }
 
     /// <summary>

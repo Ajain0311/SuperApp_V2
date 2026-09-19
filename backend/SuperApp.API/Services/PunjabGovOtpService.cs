@@ -13,19 +13,29 @@ public class PunjabGovOtpService : IOtpService
 {
     private readonly AppDbContext _db;
     private readonly ISmsService _smsService;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<PunjabGovOtpService> _logger;
     private const int OtpExpiryMinutes = 3;
     private const int MaxAttempts = 5;
-    private const string TemplateId = "1407177633307627182";
+    private readonly string _templateId;
+    private readonly string _testOtp;
 
     public PunjabGovOtpService(
         AppDbContext db,
         ISmsService smsService,
+        IConfiguration configuration,
         ILogger<PunjabGovOtpService> logger)
     {
         _db = db;
         _smsService = smsService;
+        _configuration = configuration;
         _logger = logger;
+        _templateId = Environment.GetEnvironmentVariable("SMS_TEMPLATE_ID")
+            ?? configuration["Sms:TemplateId"]
+            ?? "1407177633307627182";
+        _testOtp = Environment.GetEnvironmentVariable("TEST_OTP")
+            ?? configuration["Auth:TestOtp"]
+            ?? "123456";
     }
 
     public async Task<string> GenerateAndSendOtpAsync(string mobileNumber, string purpose = "LOGIN")
@@ -64,7 +74,7 @@ public class PunjabGovOtpService : IOtpService
         var message = $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. Govt. of Punjab";
 
         // 5. Dispatch SMS via Punjab Gov Gateway
-        var sent = await _smsService.SendSmsAsync(cleanMobile, message, TemplateId);
+        var sent = await _smsService.SendSmsAsync(cleanMobile, message, _templateId);
         if (sent)
         {
             _logger.LogInformation("[PunjabGovOtpService] Live OTP SMS sent successfully to {Mobile}", cleanMobile);
@@ -101,11 +111,12 @@ public class PunjabGovOtpService : IOtpService
             return false;
         }
 
-        if (otpRequest.OtpCode != otpCode.Trim())
+        var cleanInputOtp = otpCode.Trim();
+        if (otpRequest.OtpCode != cleanInputOtp)
         {
-            // In non-production environments, permit test OTP 123456 for automated UAT / testing
+            // In non-production environments, permit configured test OTP (e.g. 123456)
             var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
-            if (!isProd && otpCode.Trim() == "123456")
+            if (!isProd && (cleanInputOtp == _testOtp || cleanInputOtp == "123456"))
             {
                 otpRequest.IsUsed = true;
                 await _db.SaveChangesAsync();

@@ -246,8 +246,15 @@ public class DriverController : ControllerBase
         if (ride == null)
             return NotFound(ApiResponse<RideDto>.Fail("Ride not found"));
 
-        if (ride.Status != RideStatus.Requested && ride.Status != "SEARCHING" && ride.DriverId != null && ride.DriverId != driver.Id)
-            return BadRequest(ApiResponse<RideDto>.Fail("Ride is no longer available"));
+        if (ride.DriverId != null && ride.DriverId != driver.Id)
+        {
+            return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
+        }
+
+        if (ride.Status != RideStatus.Requested && ride.Status != "SEARCHING" && ride.DriverId != driver.Id)
+        {
+            return Conflict(ApiResponse<RideDto>.Fail("This ride is no longer available for booking."));
+        }
 
         var vehicle = driver.Vehicles.FirstOrDefault(v => v.IsActive);
 
@@ -278,6 +285,14 @@ public class DriverController : ControllerBase
             rideId = ride.Id,
             status = ride.Status,
             updatedAt = DateTime.UtcNow
+        });
+
+        // Broadcast to all drivers in drivers-pool so other screens remove this ride in real time
+        await _hub.Clients.Group("drivers-pool").SendAsync("RideAcceptedByOther", new
+        {
+            rideId = ride.Id,
+            driverId = driver.Id,
+            status = ride.Status
         });
 
         return Ok(ApiResponse<RideDto>.Ok(new RideDto

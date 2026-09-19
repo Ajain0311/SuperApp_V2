@@ -63,12 +63,14 @@ export const DriverHomeScreen: React.FC = () => {
   // Real-time SignalR driver pool and active ride tracking
   useEffect(() => {
     let unregisterStatus: (() => void) | null = null;
+    let unregisterRequested: (() => void) | null = null;
+    let unregisterAcceptedByOther: (() => void) | null = null;
 
     const setupSignalR = async () => {
       try {
         const hub = await signalRService.connectRideHub();
         if (hub) {
-          // Join driver pool
+          // Join driver dispatch pool
           await hub.invoke('JoinDriversPool').catch(() => {});
 
           if (activeRide?.id) {
@@ -83,6 +85,47 @@ export const DriverHomeScreen: React.FC = () => {
               }
             }
           });
+
+          // Real-time live incoming ride requests broadcast
+          unregisterRequested = signalRService.onRideRequested((incoming: any) => {
+            if (!incoming) return;
+            setAvailableRides((prev) => {
+              if (prev.some((r) => r.id === incoming.id)) return prev;
+              const mapped: DriverRideItem = {
+                id: incoming.id,
+                rideNumber: incoming.rideNumber,
+                pickupAddress: incoming.pickupAddress,
+                dropoffAddress: incoming.dropoffAddress,
+                fare: incoming.fare || incoming.estimatedFare || 0,
+                estimatedFare: incoming.fare || incoming.estimatedFare,
+                distanceKm: incoming.distanceKm || 5.0,
+                vehicleType: incoming.vehicleType || 'BIKE',
+                status: incoming.status || 'REQUESTED',
+                customerName: incoming.customerName || 'Customer',
+                customerPhone: incoming.customerPhone || '',
+                createdAt: incoming.createdAt || new Date().toISOString(),
+              };
+              return [mapped, ...prev];
+            });
+
+            if (isOnline && !activeRide) {
+              Alert.alert(
+                '🔔 New Ride Request Available!',
+                `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
+                [
+                  { text: 'Ignore', style: 'cancel' },
+                  { text: 'Accept Trip', onPress: () => handleAcceptRide(incoming.id) },
+                ]
+              );
+            }
+          });
+
+          // Live sync when another driver accepts first
+          unregisterAcceptedByOther = signalRService.onRideAcceptedByOther((data: any) => {
+            if (data?.rideId) {
+              setAvailableRides((prev) => prev.filter((r) => r.id !== data.rideId));
+            }
+          });
         }
       } catch (err) {
         console.warn('[DriverHome] SignalR setup warning:', err);
@@ -93,8 +136,10 @@ export const DriverHomeScreen: React.FC = () => {
 
     return () => {
       if (unregisterStatus) unregisterStatus();
+      if (unregisterRequested) unregisterRequested();
+      if (unregisterAcceptedByOther) unregisterAcceptedByOther();
     };
-  }, [activeRide?.id, loadDriverData]);
+  }, [activeRide?.id, isOnline, loadDriverData]);
 
   // Foreground GPS tracking only when Online and has an active trip
   useEffect(() => {
@@ -163,9 +208,13 @@ export const DriverHomeScreen: React.FC = () => {
       const updatedRide = await driverService.acceptRide(rideId);
       setActiveRide(updatedRide);
       setAvailableRides((prev) => prev.filter((r) => r.id !== rideId));
-      Alert.alert('Trip Accepted!', `Ride #${updatedRide.rideNumber} is now assigned to you.`);
+      Alert.alert('Trip Accepted! 🚖', `Ride #${updatedRide.rideNumber} is now assigned to you.`);
     } catch (e: any) {
-      Alert.alert('Accept Failed', e.message || 'This ride is no longer available');
+      setAvailableRides((prev) => prev.filter((r) => r.id !== rideId));
+      Alert.alert(
+        'Ride Unavailable',
+        e.message || 'This ride has already been accepted by another driver.'
+      );
       loadDriverData();
     }
   };
