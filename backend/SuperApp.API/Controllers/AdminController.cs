@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
@@ -6,6 +7,7 @@ using SuperApp.API.Models;
 
 namespace SuperApp.API.Controllers;
 
+[Authorize(Roles = RoleNames.Admin)]
 [ApiController]
 [Route("api/[controller]")]
 public class AdminController : ControllerBase

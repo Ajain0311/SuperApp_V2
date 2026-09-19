@@ -561,8 +561,9 @@ public class MarketplaceController : ControllerBase
             request.Reason.Equals("OFFENSIVE", StringComparison.OrdinalIgnoreCase) ||
             request.Reason.Equals("FRAUD", StringComparison.OrdinalIgnoreCase))
         {
-            // Auto-flag for admin review
-            listing.Status = "FLAGGED";
+            // Auto-flag for admin review and deactivate
+            listing.IsActive = false;
+            listing.Status = "REMOVED";
             listing.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
         }
