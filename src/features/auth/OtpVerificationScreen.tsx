@@ -17,6 +17,7 @@ import { AppRadius } from '../../theme/spacing';
 import { AppConstants } from '../../constants/app';
 import { AppButton } from '../../components/common/AppButton';
 import { useAuthStore } from '../../store/authStore';
+import { AppEnvironment } from '../../config/environment';
 
 interface OtpVerificationScreenProps {
   route: {
@@ -41,12 +42,23 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     devOtp: initialDevOtp,
   } = route.params;
 
-  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
-  const [fullName, setFullName] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
   const [displayedOtp, setDisplayedOtp] = useState<string | undefined>(initialDevOtp);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [timerSeconds, setTimerSeconds] = useState<number>(AppConstants.otpTimeoutSeconds);
+
+  const testOtpToDisplay = AppEnvironment.showTestOtp
+    ? (displayedOtp || AppEnvironment.testOtp || '123456')
+    : displayedOtp;
+
+  const [otpDigits, setOtpDigits] = useState<string[]>(() => {
+    if (AppEnvironment.showTestOtp && testOtpToDisplay && testOtpToDisplay.length === 6) {
+      return testOtpToDisplay.split('');
+    }
+    return ['', '', '', '', '', ''];
+  });
+  const [fullName, setFullName] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
 
   const verifyOtp = useAuthStore((state) => state.verifyOtp);
   const adminLogin = useAuthStore((state) => state.adminLogin);
@@ -62,7 +74,17 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     return () => clearInterval(interval);
   }, [timerSeconds, isAdmin]);
 
+  const handleAutoFill = (code: string) => {
+    const clean = code.trim().replace(/\D/g, '');
+    const digits = clean.slice(0, 6).split('');
+    while (digits.length < 6) digits.push('');
+    setOtpDigits(digits);
+    setErrorMessage(null);
+    inputRefs.current[Math.min(clean.length - 1, 5)]?.focus();
+  };
+
   const handleDigitChange = (value: string, index: number) => {
+    setErrorMessage(null);
     const clean = value.replace(/\D/g, '');
     const newDigits = [...otpDigits];
 
@@ -86,20 +108,26 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   };
 
   const handleKeyPress = (e: any, index: number) => {
+    setErrorMessage(null);
     if (e.nativeEvent.key === 'Backspace' && !otpDigits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
   const handleAdminLogin = async () => {
+    setErrorMessage(null);
     if (!adminPassword.trim()) {
-      Alert.alert('Password Required', 'Please enter admin password');
+      const msg = 'Please enter your admin password';
+      setErrorMessage(msg);
+      Alert.alert('Password Required', msg);
       return;
     }
 
     const fullOtp = otpDigits.join('');
     if (fullOtp.length < AppConstants.otpLength) {
-      Alert.alert('Incomplete OTP', 'Please enter complete 6-digit OTP');
+      const msg = 'Please enter the complete 6-digit OTP code';
+      setErrorMessage(msg);
+      Alert.alert('Incomplete OTP', msg);
       return;
     }
 
@@ -111,16 +139,21 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
         routes: [{ name: 'AdminPortal' }],
       });
     } catch (err: any) {
-      Alert.alert('Login Failed', err.message || 'Invalid admin credentials or OTP');
+      const msg = err.message || 'Invalid admin credentials or OTP. Please check and try again.';
+      setErrorMessage(msg);
+      Alert.alert('Login Failed', msg);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleVerify = async () => {
+    setErrorMessage(null);
     const fullOtp = otpDigits.join('');
     if (fullOtp.length < AppConstants.otpLength) {
-      Alert.alert('Incomplete', 'Please enter complete 6-digit OTP');
+      const msg = 'Please enter the complete 6-digit OTP code';
+      setErrorMessage(msg);
+      Alert.alert('Incomplete', msg);
       return;
     }
 
@@ -134,22 +167,28 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
         routes: [{ name: 'MainTabs' }],
       });
     } catch (err: any) {
-      Alert.alert('Verification Failed', err.message || 'Invalid or expired OTP');
+      const msg = err.message || 'Invalid or expired OTP. Please enter the correct code.';
+      setErrorMessage(msg);
+      Alert.alert('Verification Failed', msg);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleResend = async () => {
+    setErrorMessage(null);
     try {
       const response = await sendOtp(mobileNumber);
-      setDisplayedOtp(response.devOtp);
+      const newOtp = response.devOtp || '123456';
+      setDisplayedOtp(newOtp);
       setOtpDigits(['', '', '', '', '', '']);
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
-      Alert.alert('Success', response.devOtp ? `New OTP: ${response.devOtp}` : 'OTP resent successfully');
+      Alert.alert('Success', `New OTP sent: ${newOtp}`);
     } catch (err: any) {
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
-      Alert.alert('Notice', err.message || 'Could not resend OTP');
+      const msg = err.message || 'Could not resend OTP';
+      setErrorMessage(msg);
+      Alert.alert('Notice', msg);
     }
   };
 
@@ -189,8 +228,35 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
               )}
           </Text>
 
-          {displayedOtp ? (
-            <Text style={styles.devOtpHint}>Test OTP: {displayedOtp}</Text>
+          {/* Prominent Test OTP Card with Tap-To-Autofill */}
+          {AppEnvironment.showTestOtp && testOtpToDisplay ? (
+            <TouchableOpacity
+              style={styles.testOtpCard}
+              onPress={() => handleAutoFill(testOtpToDisplay)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.testOtpHeader}>
+                <View style={styles.testOtpBadge}>
+                  <Ionicons name="flask-outline" size={14} color="#0D9488" style={{ marginRight: 4 }} />
+                  <Text style={styles.testOtpBadgeText}>TEST OTP</Text>
+                </View>
+                <View style={styles.autoFillBtn}>
+                  <Text style={styles.autoFillBtnText}>Tap to Auto-Fill ⚡</Text>
+                </View>
+              </View>
+              <Text style={styles.testOtpCode}>{testOtpToDisplay}</Text>
+              <Text style={styles.testOtpHint}>
+                Use this code to verify. Real SMS is also dispatched via Punjab Gov gateway.
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {/* Prominent Inline Error Validation Banner */}
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={20} color="#DC2626" style={{ marginRight: 8 }} />
+              <Text style={styles.errorBannerText}>{errorMessage}</Text>
+            </View>
           ) : null}
 
           {isAdmin ? (
@@ -203,12 +269,15 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                   placeholderTextColor={AppColors.textHint}
                   secureTextEntry
                   value={adminPassword}
-                  onChangeText={setAdminPassword}
+                  onChangeText={(val) => {
+                    setErrorMessage(null);
+                    setAdminPassword(val);
+                  }}
                   autoFocus
                 />
               </View>
 
-              <Text style={[styles.subtitle, { marginTop: 12, marginBottom: 8 }]}>Enter 6-digit OTP:</Text>
+              <Text style={[styles.subtitle, { marginTop: 8, marginBottom: 8 }]}>Enter 6-digit OTP:</Text>
               <View style={styles.otpRow}>
                 {otpDigits.map((digit, idx) => (
                   <TextInput
@@ -219,6 +288,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                     style={[
                       styles.otpBox,
                       digit ? styles.otpBoxFilled : null,
+                      errorMessage ? styles.otpBoxError : null,
                     ]}
                     keyboardType="number-pad"
                     maxLength={1}
@@ -259,7 +329,10 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                     placeholder="Full Name"
                     placeholderTextColor={AppColors.textHint}
                     value={fullName}
-                    onChangeText={setFullName}
+                    onChangeText={(val) => {
+                      setErrorMessage(null);
+                      setFullName(val);
+                    }}
                   />
                 </View>
               )}
@@ -274,6 +347,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                     style={[
                       styles.otpBox,
                       digit ? styles.otpBoxFilled : null,
+                      errorMessage ? styles.otpBoxError : null,
                     ]}
                     keyboardType="number-pad"
                     maxLength={1}
@@ -331,7 +405,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: {
     fontSize: 26,
@@ -348,12 +422,74 @@ const styles = StyleSheet.create({
     color: AppColors.textPrimary,
     fontWeight: '700',
   },
-  devOtpHint: {
-    fontSize: 14,
-    color: AppColors.secondary,
+  testOtpCard: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#99F6E4',
+    borderWidth: 1.5,
+    borderRadius: AppRadius.lg,
+    padding: 14,
+    marginBottom: 16,
+    marginTop: 12,
+  },
+  testOtpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  testOtpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: AppRadius.sm,
+  },
+  testOtpBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 0.5,
+  },
+  autoFillBtn: {
+    backgroundColor: '#0D9488',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: AppRadius.sm,
+  },
+  autoFillBtnText: {
+    fontSize: 12,
     fontWeight: '700',
-    marginBottom: 28,
-    marginTop: 8,
+    color: '#FFFFFF',
+  },
+  testOtpCode: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#0F766E',
+    letterSpacing: 8,
+    marginBottom: 4,
+  },
+  testOtpHint: {
+    fontSize: 12,
+    color: '#115E59',
+    fontWeight: '500',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: AppRadius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '600',
   },
   extraInputContainer: {
     height: 52,
@@ -365,7 +501,7 @@ const styles = StyleSheet.create({
     borderColor: AppColors.border,
     paddingHorizontal: 16,
     marginBottom: 16,
-    marginTop: 16,
+    marginTop: 8,
   },
   inputIcon: {
     marginRight: 10,
@@ -395,9 +531,13 @@ const styles = StyleSheet.create({
   otpBoxFilled: {
     borderColor: AppColors.primary,
   },
+  otpBoxError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
   resendContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   timerText: {
     color: AppColors.textSecondary,

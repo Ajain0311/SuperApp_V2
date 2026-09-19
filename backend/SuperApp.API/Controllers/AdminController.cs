@@ -171,12 +171,79 @@ public class AdminController : ControllerBase
                 if (existingRole != null)
                 {
                     _db.UserRoles.Remove(existingRole);
+                    if (role.Name == RoleNames.RestaurantOwner)
+                    {
+                        var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
+                        if (restMapping != null)
+                        {
+                            restMapping.IsActive = false;
+                        }
+                    }
                     await _db.SaveChangesAsync();
                     return Ok(ApiResponse.Ok($"Removed role {role.Name} from user #{user.Id}"));
                 }
                 else
                 {
                     _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id, CreatedAt = DateTime.UtcNow });
+                    
+                    // Provision Driver profile & vehicle if assigning DRIVER
+                    if (role.Name == RoleNames.Driver)
+                    {
+                        var driver = await _db.Drivers.FirstOrDefaultAsync(d => d.UserId == user.Id);
+                        if (driver == null)
+                        {
+                            driver = new Driver
+                            {
+                                UserId = user.Id,
+                                IsOnline = false,
+                                Rating = 5.0m,
+                                TotalRides = 0,
+                                CurrentLatitude = 28.6139m,
+                                CurrentLongitude = 77.2090m,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            _db.Drivers.Add(driver);
+                            await _db.SaveChangesAsync();
+
+                            var vehicle = new Vehicle
+                            {
+                                DriverId = driver.Id,
+                                Type = VehicleTypes.Bike,
+                                Make = "Hero",
+                                Model = "Splendor Plus",
+                                RegistrationNumber = $"DL {Random.Shared.Next(1, 99):D2} AB {Random.Shared.Next(1000, 9999)}",
+                                Color = "Black",
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            _db.Vehicles.Add(vehicle);
+                        }
+                    }
+
+                    // Provision RestaurantUser mapping if assigning RESTAURANT_OWNER
+                    if (role.Name == RoleNames.RestaurantOwner)
+                    {
+                        var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
+                        if (restMapping == null)
+                        {
+                            var firstRest = await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
+                            if (firstRest != null)
+                            {
+                                _db.RestaurantUsers.Add(new RestaurantUser
+                                {
+                                    UserId = user.Id,
+                                    RestaurantId = firstRest.Id,
+                                    IsActive = true,
+                                    CreatedAt = DateTime.UtcNow
+                                });
+                            }
+                        }
+                        else
+                        {
+                            restMapping.IsActive = true;
+                        }
+                    }
+
                     await _db.SaveChangesAsync();
                     return Ok(ApiResponse.Ok($"Assigned role {role.Name} to user #{user.Id}"));
                 }

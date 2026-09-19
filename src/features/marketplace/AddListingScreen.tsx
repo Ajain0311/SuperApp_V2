@@ -24,6 +24,7 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { notificationService } from '../../services/notificationService';
 
 const CATEGORIES = [
   { id: 1, name: 'Mobiles' },
@@ -101,8 +102,8 @@ export const AddListingScreen: React.FC = () => {
       if (data?.id) {
         serverId = data.id;
       }
-    } catch (err) {
-      // Safe offline fallback
+    } catch (err: any) {
+      console.warn('[AddListing] Server error:', err?.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -125,6 +126,19 @@ export const AddListingScreen: React.FC = () => {
     };
 
     addListing(newListing);
+
+    // Trigger witty Zomato-style seller notification
+    try {
+      notificationService.scheduleLocalNotification({
+        title: 'Dhamaka! 🎉 Aapka ad live ho gaya!',
+        body: `Puraani cheezon ko kaho bye-bye, jeb me aayegi nayi kamai! 💰📦 (${title.trim()} for ₹${price.trim()})`,
+        data: {
+          module: 'MARKETPLACE',
+          listingId: (serverId || newListing.id).toString(),
+        },
+      });
+    } catch {}
+
     Alert.alert('Success 🎉', 'Your Ad has been published to Community Bazaar!');
     navigation.goBack();
   };

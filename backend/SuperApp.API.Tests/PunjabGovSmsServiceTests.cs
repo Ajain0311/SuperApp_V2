@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using SuperApp.API.Data;
 using SuperApp.API.Services;
@@ -46,7 +47,8 @@ public class PunjabGovSmsServiceTests
             .Options;
         using var db = new AppDbContext(options);
         var mockSms = new MockSmsClient();
-        var otpService = new PunjabGovOtpService(db, mockSms, NullLogger<PunjabGovOtpService>.Instance);
+        var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
         var testPhone = "+916375002348";
 
         // Act

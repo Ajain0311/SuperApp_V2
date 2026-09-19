@@ -273,7 +273,13 @@ public class VendorController : ControllerBase
         };
 
         if (!isValidTransition)
+        {
+            if (targetStatus == OrderStatus.Accepted && currentStatus != OrderStatus.Pending)
+            {
+                return Conflict(ApiResponse.Fail($"Order #{order.OrderNumber} is no longer pending or has already been accepted by another staff member."));
+            }
             return BadRequest(ApiResponse.Fail($"Invalid status transition from '{currentStatus}' to '{targetStatus}'"));
+        }
 
         order.Status = targetStatus;
         order.UpdatedAt = DateTime.UtcNow;
@@ -288,6 +294,49 @@ public class VendorController : ControllerBase
             estimatedMinutes = order.EstimatedDeliveryMinutes,
             updatedAt = DateTime.UtcNow
         });
+
+        // Broadcast to restaurant kitchen group to sync across all kitchen staff screens
+        await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("OrderAcceptedByOther", new
+        {
+            orderId = order.Id,
+            status = targetStatus,
+            updatedAt = DateTime.UtcNow
+        });
+
+        try
+        {
+            string notifTitle = targetStatus switch
+            {
+                "ACCEPTED" => "Chef ne tadka laga diya hai! 🔥",
+                "PREPARING" => "Khana bhati par chadh chuka hai! 🍲",
+                "READY" => "Khana pack ho gaya! Bas nikalne wala hai! 🛵",
+                "PICKED_UP" => "Aapka delivery partner hawa se baatein karte hue aa raha hai! 🛵💨",
+                "DELIVERED" => "Dastak ho chuki hai! 🚪😋 Pet bhar ke khao!",
+                _ => $"Order update: {targetStatus}"
+            };
+            string notifBody = targetStatus switch
+            {
+                "ACCEPTED" => $"{restaurant.Name} ne aapka order accept kar liya hai! Masale bhun rahe hain! 😋",
+                "PREPARING" => "Aapka khana ban raha hai, khushbu mast aa rahi hai! Bas thodi der aur!",
+                "READY" => "Garma-garam khana dispatch ke liye ready hai!",
+                "PICKED_UP" => "Rider aapke order ke sath nikal chuka hai. Bas 5-10 minute!",
+                "DELIVERED" => "Khana kaisa laga? Review deke chef ka din bana do! ❤️",
+                _ => $"Aapka order #{order.OrderNumber} ab {targetStatus} hai."
+            };
+
+            _db.Notifications.Add(new Notification
+            {
+                UserId = order.UserId,
+                Title = notifTitle,
+                Body = notifBody,
+                Type = "FOOD_ORDER",
+                ReferenceId = order.OrderNumber,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+        catch { }
 
         return Ok(ApiResponse.Ok($"Order status updated to {targetStatus}"));
     }

@@ -30,29 +30,47 @@ interface NotificationItem {
 const NOTIFICATIONS: NotificationItem[] = [
   {
     id: '1',
-    title: 'Order Placed Successfully!',
-    body: 'Your Meghana Foods biryani order #FO-1002 has been received.',
-    time: '10 mins ago',
-    icon: 'check-circle',
-    color: colors.secondary,
+    title: 'Raat ko biwi wo de ya na de... 🍕😋',
+    body: 'Par hum khana dene zaroor aayenge! Garma-garam khana order karo, dil khush ho jayega!',
+    time: '2 mins ago',
+    icon: 'restaurant',
+    color: colors.primary,
     isUnread: true,
   },
   {
     id: '2',
-    title: 'Ride Completed',
-    body: 'You arrived at Terminal 3, IGI Airport. Total fare ₹45.',
+    title: 'Bhookh lagi hai kya? 🌙🍔',
+    body: 'Kitchen band ho chuka hai, par humara dil aur delivery dono 24/7 khule hain!',
+    time: '15 mins ago',
+    icon: 'fastfood',
+    color: '#F59E0B',
+    isUnread: true,
+  },
+  {
+    id: '3',
+    title: 'Chef ne tadka laga diya hai! 🔥',
+    body: 'Aapka order kitchen me tezi se ban raha hai. Bas plate taiyaar rakho!',
+    time: '45 mins ago',
+    icon: 'local-dining',
+    color: colors.secondary,
+    isUnread: false,
+  },
+  {
+    id: '4',
+    title: 'Ghar baith ke kya karoge? 🚖✨',
+    body: 'Chalo ghoomne! Gaadi darwaze pe khadi hai, seatbelt baandho!',
     time: '2 hours ago',
-    icon: 'directions-bike',
+    icon: 'directions-car',
     color: colors.blue,
     isUnread: false,
   },
   {
-    id: '3',
-    title: '50% Weekend Food Discount',
-    body: 'Use code WELCOME50 for up to ₹100 off on your next feast!',
-    time: '1 day ago',
-    icon: 'local-offer',
-    color: colors.primary,
+    id: '5',
+    title: 'Dhamaka! 🎉 Bazaar me ad live!',
+    body: 'Puraani cheezon ko kaho bye-bye, jeb me aayegi nayi kamai! 💰📦',
+    time: '5 hours ago',
+    icon: 'storefront',
+    color: '#8B5CF6',
     isUnread: false,
   },
 ];
@@ -140,13 +158,117 @@ export const NotificationsScreen: React.FC = () => {
     setTimeout(() => setTestStatus(null), 5000);
   };
 
+  const handleTestZomatoPickupLine = async () => {
+    setTestStatus('Firing Zomato Pickup Line alert... 🍕');
+    await notificationService.scheduleLocalNotification({
+      title: 'Raat ko biwi wo de ya na de... 🍕😋',
+      body: 'Par hum khana dene zaroor aayenge! Garma-garam pizza order karo, dil khush ho jayega!',
+      data: {
+        module: 'FOOD_ORDER',
+        orderId: 'FO-ZOMATO-01',
+      },
+    });
+    setNotifications((prev) => [
+      {
+        id: Date.now().toString(),
+        title: 'Raat ko biwi wo de ya na de... 🍕😋',
+        body: 'Par hum khana dene zaroor aayenge! Garma-garam pizza order karo, dil khush ho jayega!',
+        time: 'Just now',
+        icon: 'restaurant',
+        color: colors.primary,
+        isUnread: true,
+      },
+      ...prev,
+    ]);
+    setTestStatus('Sent! Check notification banner on your phone 📱');
+    setTimeout(() => setTestStatus(null), 4000);
+  };
+
+  const handleTestLateNightCravings = async () => {
+    setTestStatus('Firing Midnight Cravings alert... 🌙');
+    await notificationService.scheduleLocalNotification({
+      title: 'Bhookh lagi hai kya? 🌙🍔',
+      body: 'Kitchen band ho chuka hai, par humara dil aur delivery dono 24/7 khule hain!',
+      data: {
+        module: 'FOOD_ORDER',
+        orderId: 'FO-MIDNIGHT-02',
+      },
+    });
+    setNotifications((prev) => [
+      {
+        id: Date.now().toString(),
+        title: 'Bhookh lagi hai kya? 🌙🍔',
+        body: 'Kitchen band ho chuka hai, par humara dil aur delivery dono 24/7 khule hain!',
+        time: 'Just now',
+        icon: 'fastfood',
+        color: '#F59E0B',
+        isUnread: true,
+      },
+      ...prev,
+    ]);
+    setTestStatus('Sent! Check notification banner on your phone 📱');
+    setTimeout(() => setTestStatus(null), 4000);
+  };
+
+  const handleTestWittyRide = async () => {
+    setTestStatus('Firing Witty Ride alert... 🚖');
+    await notificationService.scheduleLocalNotification({
+      title: 'Ghar baith ke kya karoge? 🚖✨',
+      body: 'Chalo ghoomne! Gaadi darwaze pe khadi hai, seatbelt baandho!',
+      data: {
+        module: 'RIDE',
+        rideId: 'RD-CAB-99',
+      },
+    });
+    setNotifications((prev) => [
+      {
+        id: Date.now().toString(),
+        title: 'Ghar baith ke kya karoge? 🚖✨',
+        body: 'Chalo ghoomne! Gaadi darwaze pe khadi hai, seatbelt baandho!',
+        time: 'Just now',
+        icon: 'directions-car',
+        color: colors.blue,
+        isUnread: true,
+      },
+      ...prev,
+    ]);
+    setTestStatus('Sent! Check notification banner on your phone 📱');
+    setTimeout(() => setTestStatus(null), 4000);
+  };
+
+  const handleTestSellerBazaar = async () => {
+    setTestStatus('Firing Bazaar Seller alert... 📦');
+    await notificationService.scheduleLocalNotification({
+      title: 'Dhamaka! 🎉 Bazaar me naya ad live!',
+      body: 'Puraani cheezon ko kaho bye-bye, jeb me aayegi nayi kamai! 💰📦',
+      data: {
+        module: 'MARKETPLACE',
+        listingId: '23',
+      },
+    });
+    setNotifications((prev) => [
+      {
+        id: Date.now().toString(),
+        title: 'Dhamaka! 🎉 Bazaar me naya ad live!',
+        body: 'Puraani cheezon ko kaho bye-bye, jeb me aayegi nayi kamai! 💰📦',
+        time: 'Just now',
+        icon: 'storefront',
+        color: '#8B5CF6',
+        isUnread: true,
+      },
+      ...prev,
+    ]);
+    setTestStatus('Sent! Check notification banner on your phone 📱');
+    setTimeout(() => setTestStatus(null), 4000);
+  };
+
   const renderDevTester = () => {
     if (!__DEV__) return null;
     return (
       <View style={styles.devPanel}>
         <View style={styles.devHeader}>
           <MaterialIcons name="developer-mode" size={16} color={colors.primary} />
-          <Text style={styles.devTitle}>PUSH NOTIFICATION TESTER (DEV)</Text>
+          <Text style={styles.devTitle}>ZOMATO-STYLE NOTIFICATION TESTER (DEV)</Text>
         </View>
 
         <Text style={styles.devTokenText} numberOfLines={1}>
@@ -157,30 +279,41 @@ export const NotificationsScreen: React.FC = () => {
 
         <View style={styles.devButtonsRow}>
           <TouchableOpacity
-            style={styles.devButton}
-            onPress={handleTestOrderNotification}
+            style={[styles.devButton, { backgroundColor: '#DC262620' }]}
+            onPress={handleTestZomatoPickupLine}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="fastfood" size={14} color={colors.primary} />
-            <Text style={styles.devButtonText}>Food Alert</Text>
+            <MaterialIcons name="restaurant" size={14} color="#DC2626" />
+            <Text style={[styles.devButtonText, { color: '#DC2626' }]}>🍕 Biwi De Na De...</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.devButton}
-            onPress={handleTestRideNotification}
+            style={[styles.devButton, { backgroundColor: '#F59E0B20' }]}
+            onPress={handleTestLateNightCravings}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="directions-car" size={14} color={colors.blue} />
-            <Text style={styles.devButtonText}>Ride Alert</Text>
+            <MaterialIcons name="nightlight" size={14} color="#D97706" />
+            <Text style={[styles.devButtonText, { color: '#D97706' }]}>🌙 Bhookh Lagi?</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.devButtonsRow, { marginTop: 8 }]}>
+          <TouchableOpacity
+            style={[styles.devButton, { backgroundColor: '#2563EB20' }]}
+            onPress={handleTestWittyRide}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="directions-car" size={14} color="#2563EB" />
+            <Text style={[styles.devButtonText, { color: '#2563EB' }]}>🚖 Chalo Ghoomne</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.devButton}
-            onPress={handleTestDelayedNotification}
+            style={[styles.devButton, { backgroundColor: '#8B5CF620' }]}
+            onPress={handleTestSellerBazaar}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="timer" size={14} color={colors.secondary} />
-            <Text style={styles.devButtonText}>3s Delay</Text>
+            <MaterialIcons name="storefront" size={14} color="#8B5CF6" />
+            <Text style={[styles.devButtonText, { color: '#8B5CF6' }]}>📦 Nayi Kamai Ad</Text>
           </TouchableOpacity>
         </View>
       </View>

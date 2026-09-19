@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { AppSearchBar } from '../../components/common/AppSearchBar';
@@ -47,7 +47,7 @@ export const MarketplaceHomeScreen: React.FC = () => {
 
   const { customListings, favorites, toggleFavorite } = useMarketplaceStore();
 
-  useEffect(() => {
+  const loadListings = useCallback(() => {
     // Fetch live categories from backend API
     apiClient
       .get<any>(ApiEndpoints.marketplace.categories)
@@ -71,6 +71,12 @@ export const MarketplaceHomeScreen: React.FC = () => {
       })
       .catch(() => {});
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadListings();
+    }, [loadListings])
+  );
 
   const initialListings: ListingSummary[] = useMemo(() => [
     {
