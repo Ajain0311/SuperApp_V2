@@ -14,6 +14,16 @@ public class RideTrackingHub : Hub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"ride-{rideId}");
     }
 
+    public async Task JoinDriversPool()
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, "drivers-pool");
+    }
+
+    public async Task LeaveDriversPool()
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, "drivers-pool");
+    }
+
     public async Task UpdateDriverLocation(long rideId, decimal latitude, decimal longitude, double? heading, double? speed)
     {
         await Clients.Group($"ride-{rideId}").SendAsync("DriverLocationUpdated", new

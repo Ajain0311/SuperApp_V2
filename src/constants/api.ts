@@ -56,6 +56,34 @@ export const ApiEndpoints = {
     paymentsMine: '/payments/my-payments',
   },
 
+  // Driver Mode
+  driver: {
+    profile: '/driver/profile',
+    toggleOnline: '/driver/toggle-online',
+    availableRides: '/driver/available-rides',
+    activeRide: '/driver/active-ride',
+    acceptRide: (id: string | number) => `/driver/rides/${id}/accept`,
+    arriving: (id: string | number) => `/driver/rides/${id}/arriving`,
+    startRide: (id: string | number) => `/driver/rides/${id}/start`,
+    completeRide: (id: string | number) => `/driver/rides/${id}/complete`,
+    cancelRide: (id: string | number) => `/driver/rides/${id}/cancel`,
+    updateLocation: '/driver/location',
+    history: '/driver/history',
+    earnings: '/driver/earnings',
+  },
+
+  // Vendor Mode (Restaurant Owner)
+  vendor: {
+    myRestaurant: '/vendor/my-restaurant',
+    dashboard: '/vendor/dashboard',
+    toggleStatus: '/vendor/toggle-status',
+    menu: '/vendor/menu',
+    orders: '/vendor/orders',
+    updateOrderStatus: (id: string | number) => `/vendor/orders/${id}/status`,
+    manageFoodItems: '/vendor/food-items',
+    earnings: '/vendor/earnings',
+  },
+
   // SignalR Hub Paths
   hubs: {
     ride: '/hubs/ride',

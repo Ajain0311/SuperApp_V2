@@ -3,6 +3,7 @@ export const AppColors = {
   background: '#0A0E21',
   surface: '#141829',
   surfaceLight: '#1C2039',
+  surfaceSecondary: '#1C2039',
   cardDark: '#141829',
   cardLight: '#1E2235',
 

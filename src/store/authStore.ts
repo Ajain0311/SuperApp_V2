@@ -4,6 +4,7 @@ import { storage } from '../services/storage';
 import { apiClient, ApiError } from '../services/apiClient';
 import { ApiEndpoints } from '../constants/api';
 import { signalRService } from '../services/signalr';
+import { useRoleStore } from './roleStore';
 
 interface AuthState {
   user: User | null;
@@ -63,6 +64,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
+      const currentUser = get().user;
+      if (currentUser?.roles) {
+        await useRoleStore.getState().syncWithUserRoles(currentUser.roles);
+      }
+
       return true;
     } catch {
       set({ user: null, token: null, isAuthenticated: false, isLoading: false, isFallbackSession: false });
@@ -120,6 +126,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           error: null,
           isFallbackSession: false,
         });
+        if (response.user?.roles) {
+          await useRoleStore.getState().syncWithUserRoles(response.user.roles);
+        }
       }
 
       return response;
@@ -179,6 +188,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           error: null,
           isFallbackSession: false,
         });
+        if (response.user?.roles) {
+          await useRoleStore.getState().syncWithUserRoles(response.user.roles);
+        }
       }
 
       return response;
@@ -201,6 +213,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           error: null,
           isFallbackSession: true,
         });
+        await useRoleStore.getState().syncWithUserRoles(adminUser.roles);
         return {
           success: true,
           token: devToken,
@@ -226,6 +239,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // Ignore hub disconnect errors so logout always completes.
     }
+    await useRoleStore.getState().resetRoles();
     set({ user: null, token: null, isAuthenticated: false, error: null, isFallbackSession: false });
   },
 

@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 
 const AUTH_TOKEN_KEY = 'superapp_auth_token';
 const USER_DATA_KEY = 'superapp_user_data';
+const ACTIVE_ROLE_KEY = 'superapp_active_role';
 
 class StorageService {
   private isWeb = Platform.OS === 'web';
@@ -57,9 +58,22 @@ class StorageService {
     }
   }
 
+  async setActiveRole(role: string): Promise<void> {
+    await AsyncStorage.setItem(ACTIVE_ROLE_KEY, role);
+  }
+
+  async getActiveRole(): Promise<string | null> {
+    return await AsyncStorage.getItem(ACTIVE_ROLE_KEY);
+  }
+
+  async clearActiveRole(): Promise<void> {
+    await AsyncStorage.removeItem(ACTIVE_ROLE_KEY);
+  }
+
   async clearAll(): Promise<void> {
     await this.clearToken();
     await AsyncStorage.removeItem(USER_DATA_KEY);
+    await this.clearActiveRole();
   }
 }
 

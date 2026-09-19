@@ -121,6 +121,34 @@ public class AuthController : ControllerBase
             await _db.SaveChangesAsync();
         }
 
+        // Multi-role provisioning for test user 6375002348 to enable Driver, RestaurantOwner, and Seller modes
+        if (user.MobileNumber == "6375002348")
+        {
+            var desiredRoles = new[] { RoleNames.Customer, RoleNames.Driver, RoleNames.RestaurantOwner, RoleNames.MarketplaceSeller };
+            var existingRoleNames = user.UserRoles.Select(ur => ur.Role.Name).ToHashSet();
+            bool added = false;
+            foreach (var rName in desiredRoles)
+            {
+                if (!existingRoleNames.Contains(rName))
+                {
+                    var rEntity = await _db.Roles.FirstOrDefaultAsync(r => r.Name == rName);
+                    if (rEntity != null)
+                    {
+                        _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = rEntity.Id, CreatedAt = DateTime.UtcNow });
+                        added = true;
+                    }
+                }
+            }
+            if (added)
+            {
+                await _db.SaveChangesAsync();
+                user = await _db.Users
+                    .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                    .FirstAsync(u => u.Id == user.Id);
+            }
+        }
+
         var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
         var token = _tokenService.GenerateToken(user, roles);
 
@@ -192,6 +220,18 @@ public class AuthController : ControllerBase
 
         user.LastLoginAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        // Ensure admin user also has CUSTOMER role for Citizen mode switching
+        var customerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.Customer);
+        if (customerRole != null && !user.UserRoles.Any(ur => ur.RoleId == customerRole.Id))
+        {
+            _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = customerRole.Id, CreatedAt = DateTime.UtcNow });
+            await _db.SaveChangesAsync();
+            user = await _db.Users
+                .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+                .FirstAsync(u => u.Id == user.Id);
+        }
 
         var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
         var token = _tokenService.GenerateToken(user, roles);

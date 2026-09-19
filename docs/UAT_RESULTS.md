@@ -14,9 +14,9 @@
 
 | Category | Count | Percentage | Definition |
 |---|:---:|:---:|---|
-| **Total Scenarios Evaluated** | **55** | **100.0%** | All test cases across Customer Mobile App, Admin, and Vendor modules |
-| **Passed (Real API)** | **51** | **92.7%** | Executed live over HTTP/SignalR against ASP.NET Core & Supabase PostgreSQL |
-| **Passed (Mock/Dev Only)** | **4** | **7.3%** | Intentional dev simulations (Maps Routing, Driver Telemetry, Dev Payment Capture, Binary Upload) |
+| **Total Scenarios Evaluated** | **69** | **100.0%** | All test cases across Customer Mobile App, Driver, Vendor, Seller, and Admin modules |
+| **Passed (Real API / Component)** | **65** | **94.2%** | Executed live over HTTP/SignalR against ASP.NET Core & Supabase PostgreSQL |
+| **Passed (Mock/Dev Only)** | **4** | **5.8%** | Intentional dev simulations (Maps Routing, Driver Telemetry, Dev Payment Capture, Binary Upload) |
 | **Partial** | **0** | **0.0%** | Zero partial implementations |
 | **Failed** | **0** | **0.0%** | Zero failing endpoints or unhandled exceptions |
 | **Blocked** | **0** | **0.0%** | Zero blocking defects |
@@ -27,8 +27,8 @@
 
 | Test Suite | Framework | Total Tests | Passed | Failed | Skipped | Health Status |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| **Backend Unit & Integration Tests** | xUnit / .NET 10 | 55 | 55 | 0 | 0 | **100% PASS** |
-| **Frontend Unit & Integration Tests** | Jest / React Native | 52 | 52 | 0 | 0 | **100% PASS** |
+| **Backend Unit & Integration Tests** | xUnit / .NET 10 | 65 | 65 | 0 | 0 | **100% PASS** |
+| **Frontend Unit & Integration Tests** | Jest / React Native | 71 | 71 | 0 | 0 | **100% PASS** |
 | **TypeScript Static Typecheck** | `tsc --noEmit` | N/A | 0 errors | 0 | 0 | **100% CLEAN** |
 | **Expo Ecosystem Doctor** | `npx expo-doctor` | 18 checks | 18 | 0 | 0 | **18/18 PASS** |
 
@@ -194,14 +194,47 @@
 
 ---
 
+### 3.11 Multi-Role Architecture & Driver Mode (ROLE)
+- **ROLE-001 (Multi-Role Token Issuance)**: `PASS (Real API)`  
+  - Tested with `POST /api/auth/verify-otp` using test number `6375002348`. Backend issues JWT containing multiple role claims (`CUSTOMER`, `DRIVER`, `RESTAURANT_OWNER`, `MARKETPLACE_SELLER`).
+- **ROLE-002 (Role Normalization)**: `PASS (Real Component)`  
+  - Client parses heterogeneous casing/naming variants into strict canonical enums; computes `hasMultipleRoles = true`.
+- **ROLE-003 (Authorized Mode Switching)**: `PASS (Real Component)`  
+  - Switched between `CUSTOMER`, `DRIVER`, `RESTAURANT_OWNER`, and `MARKETPLACE_SELLER`. Persisted directly to AsyncStorage key `superapp_active_role`.
+- **ROLE-004 (Unauthorized Mode Rejection)**: `PASS (Real Component)`  
+  - Switch attempts to unassigned roles (e.g., non-admin selecting `ADMIN`) return false; state remains safely guarded on current role.
+- **ROLE-005 (Role Persistence Across App Reboots)**: `PASS (Real Component)`  
+  - App rehydration reads stored active role, verifies against user's server-issued claims, and restores previous view seamlessly.
+- **ROLE-006 (Dynamic Tab Adaptation)**: `PASS (Real Component)`  
+  - `MainTabNavigator` replaces bottom navigation tabs instantaneously upon role change without triggering full application reloads or logging out.
+- **ROLE-007 (Driver Profile & Vehicle Information)**: `PASS (Real API)`  
+  - Tested with `GET /api/driver/profile`. Returns verified status, rating, total rides, and registered vehicle make/model/license.
+- **ROLE-008 (Driver Duty Online/Offline Toggle)**: `PASS (Real API)`  
+  - Tested with `POST /api/driver/toggle-online`. Updates `IsOnline` in PostgreSQL and invokes SignalR `JoinDriversPool` / `LeaveDriversPool`.
+- **ROLE-009 (Driver Available Rides Dispatch)**: `PASS (Real API)`  
+  - Tested with `GET /api/driver/available-rides`. Returns real pending rides searching for drivers.
+- **ROLE-010 (Driver Ride Acceptance)**: `PASS (Real API)`  
+  - Tested with `POST /api/driver/rides/{id}/accept`. Assigns driver ID to ride, transitions status to `ACCEPTED`, and alerts customer over SignalR.
+- **ROLE-011 (Driver Arriving at Pickup)**: `PASS (Real API)`  
+  - Tested with `POST /api/driver/rides/{id}/arriving`. Status updates to `ARRIVING`; passenger UI notifies customer of driver arrival.
+- **ROLE-012 (Driver OTP Verification & Trip Start)**: `PASS (Real API)`  
+  - Tested with `POST /api/driver/rides/{id}/start`. Verified against 4-digit OTP; transitions status to `STARTED`. Rejects incorrect OTP codes.
+- **ROLE-013 (Driver Trip Completion & Earnings Settle)**: `PASS (Real API)`  
+  - Tested with `POST /api/driver/rides/{id}/complete`. Marks ride `COMPLETED`, adds trip fare to driver total revenue and ride counter.
+- **ROLE-014 (Driver Foreground GPS Telemetry)**: `PASS (Real API)`  
+  - Tested with `POST /api/driver/location`. Saves vehicle position in database and relays real-time coordinates to customer tracking map via SignalR `DriverLocationUpdated`.
+
+---
+
 ## 4. Contract Alignment & Database Persistence Summary
 
-All customer data is persisted directly into the Supabase PostgreSQL database:
-- `users`: User profiles, roles, and registration states.
+All customer and operator data is persisted directly into the Supabase PostgreSQL database:
+- `users`, `roles`, `user_roles`: Unified user identity and multi-role assignments.
+- `drivers`, `vehicles`: Driver duty status, ratings, and vehicle information.
 - `restaurants`, `menu_categories`, `menu_items`, `menu_item_addons`: Food menu catalog.
 - `food_orders`, `food_order_items`: Placed food orders with applied coupons.
 - `coupons`: Active promotion discount codes (`WELCOME50`).
-- `rides`, `drivers`: Ride bookings and driver assignments.
+- `rides`: Ride bookings, OTP security codes, and live statuses.
 - `marketplace_listings`, `marketplace_categories`: Bazaar listings and categories.
 - `addresses`: User saved addresses with geocodes.
 - `notifications`, `device_tokens`: Push notification registry and message logs.

@@ -1,10 +1,26 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
 
 export type MainTabParamList = {
+  // Customer tabs
   Home: undefined;
   Food: undefined;
   Rides: undefined;
   Bazaar: undefined;
+  // Shared profile tab
+  ProfileTab: undefined;
+  // Driver tabs
+  DriverHome: undefined;
+  DriverRides: undefined;
+  DriverEarnings: undefined;
+  // Vendor tabs
+  VendorDashboard: undefined;
+  VendorOrders: undefined;
+  VendorMenu: undefined;
+  // Seller tabs
+  SellerDashboard: undefined;
+  SellerAddListing: undefined;
+  // Admin tabs
+  AdminDashboard: undefined;
 };
 
 export type RootStackParamList = {
@@ -41,4 +57,8 @@ export type RootStackParamList = {
   Activity: {
     initialTab?: number;
   };
+  KitchenOrders: undefined;
+  VendorMenu: undefined;
+  DriverRides: undefined;
+  DriverEarnings: undefined;
 };

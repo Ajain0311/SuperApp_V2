@@ -55,6 +55,11 @@ Every flow, service, controller, and screen was tested directly against the runn
 | **Notifications** | Push Token Registration | `App.tsx` / `NotificationService.ts` | `POST /api/notifications/device-token` | `REAL + VERIFIED` | Requests permissions, fetches EAS token / dev token, and persists token to Supabase `device_tokens`. |
 | **Geolocation** | Real Foreground GPS | `RideBookingScreen.tsx` | `LocationService.getCurrentLocation()` | `REAL + VERIFIED` | Queries device GPS with timeout protection, reverse geocodes to street address. |
 | **Vendor** | Vendor Access Control | `VendorController.cs` | `GET /api/vendor/menu`, `GET /api/vendor/orders` | `REAL + VERIFIED` | Insecure fallback removed. Strictly checks `RestaurantUsers` mapping or `Admin` role; unauthorized returns 403/404. |
+| **Driver** | Duty & Available Dispatch | `DriverHomeScreen.tsx` | `POST /api/driver/toggle-online`, `GET /api/driver/available-rides` | `REAL + VERIFIED` | Real duty toggle joins/leaves SignalR driver pool; queries live pending rides in dispatch range. |
+| **Driver** | Ride Lifecycle & OTP Verification | `DriverHomeScreen.tsx` | `POST /api/driver/rides/{id}/*` | `REAL + VERIFIED` | Complete lifecycle (accept, arriving, 4-digit OTP start, complete, cancel) verified with database updates. |
+| **Driver** | Foreground GPS Telemetry | `DriverHomeScreen.tsx` | `POST /api/driver/location` + SignalR `/hubs/ride` | `REAL + VERIFIED` | Coordinates posted to backend and relayed directly to passenger tracking screen via SignalR. |
+| **Driver** | Earnings & Ride History | `DriverEarningsScreen.tsx`, `DriverRidesScreen.tsx` | `GET /api/driver/earnings`, `GET /api/driver/history` | `REAL + VERIFIED` | Aggregates daily, weekly, and total driver revenue and lists past trips with status filters. |
+| **Multi-Role** | Dynamic Role Switching | `RoleSwitchModal.tsx`, `MainTabNavigator.tsx` | Client `useRoleStore` + `storage.ts` | `REAL + VERIFIED` | Dynamically mounts role-specific tab navigators for Citizen, Driver, Vendor, Seller, and Admin without re-login. |
 
 ---
 
@@ -85,6 +90,11 @@ During end-to-end verification and UAT, the following key contract alignments we
 7. **SignalR Connection Management**:
    - `SignalRService` listeners return unregister closures (`() => conn.off(...)`). Tracking screens unregister handlers in `useEffect` cleanup to prevent memory leaks.
 
+8. **Driver Controller & Multi-Role Architecture**:
+   - Implemented `DriverController.cs` exposing duty toggles, available ride queries, lifecycle transitions (accept, arriving, OTP start, complete, cancel), telemetry updates, history, and earnings.
+   - Enhanced `RideTrackingHub.cs` with `JoinDriversPool` and `LeaveDriversPool` methods.
+   - Built zero-cost `useRoleStore` Zustand state with persistent storage fallback and dynamic bottom tab swapping.
+
 ---
 
 ## 4. Diagnostics & Verification Summary
@@ -93,7 +103,7 @@ During end-to-end verification and UAT, the following key contract alignments we
 | :--- | :--- | :--- |
 | **TypeScript Compilation** | `npx tsc --noEmit` | **0 errors (PASSED)** |
 | **Expo Health Diagnostics** | `npx expo-doctor` | **18/18 checks passed (PASSED)** |
-| **Automated Test Suite (Mobile)** | `npm test` (Jest) | **10/10 suites, 52/52 tests passed (PASSED)** |
-| **ASP.NET Core Unit Tests** | `dotnet test` (SuperApp.API.Tests) | **55/55 tests passed (PASSED)** |
+| **Automated Test Suite (Mobile)** | `npm test` (Jest) | **12/12 suites, 71/71 tests passed (PASSED)** |
+| **ASP.NET Core Unit Tests** | `dotnet test` (SuperApp.API.Tests) | **65/65 tests passed (PASSED)** |
 | **Database Persistence** | Supabase PostgreSQL | **Verified Live over TCP/IP** |
 | **Active App Version** | Expo SDK ~57.0.24 / React Native 0.86.3 | **Healthy & Standalone** |

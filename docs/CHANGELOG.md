@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-09-19
+
+### Unified Multi-Role Architecture, Driver Mode & Role Switching
+- **Unified Multi-Role Architecture (Zero-Cost Infrastructure)**:
+  - Maintained single React Native + Expo codebase dynamically adapting across `CUSTOMER`, `ADMIN`, `DRIVER`, `RESTAURANT_OWNER`, and `MARKETPLACE_SELLER` modes.
+  - No added Redis, RabbitMQ, Kafka, Hangfire, microservices, or secondary databases.
+  - Backend source of truth using existing relational tables (`Users`, `Roles`, `UserRoles`).
+  - Pre-seeded multi-role test users: `6375002348` (Citizen, Driver, Restaurant Owner, Marketplace Seller) and `9999999999` (Admin, Citizen).
+- **Backend Driver Controller & Real-Time Hubs**:
+  - Implemented `DriverController.cs` with 12 endpoints: `profile`, `toggle-online`, `available-rides`, `active-ride`, `rides/{id}/accept`, `rides/{id}/arriving`, `rides/{id}/start` (4-digit OTP), `rides/{id}/complete`, `rides/{id}/cancel`, `location`, `history`, `earnings`.
+  - Added `JoinDriversPool` and `LeaveDriversPool` to `RideTrackingHub.cs`.
+  - Extended `VendorController.cs` with `toggle-status`, `menu`, and `earnings` endpoints.
+- **Frontend Role Management & Mode Switching**:
+  - Created `src/store/roleStore.ts` with Zustand, role normalization, unauthorized switch rejection, and local persistence via `AsyncStorage` (`superapp_active_role`).
+  - Integrated `useRoleStore` synchronization in `authStore.ts` (`checkAuth`, `verifyOtp`, `adminLogin`, `logout`).
+  - Built `src/components/RoleSwitchModal.tsx` modal for one-tap switching between authorized roles.
+  - Updated `src/features/profile/ProfileScreen.tsx` with Mode Switcher card.
+  - Updated `src/navigation/MainTabNavigator.tsx` to dynamically mount role-specific bottom tab bars without requiring app reload or re-login.
+- **Driver Mode Mobile Implementation**:
+  - Created `DriverHomeScreen.tsx`: Duty toggle, available rides queue, active trip card, 4-digit OTP start input, live status transitions, and passenger call action.
+  - Created `DriverRidesScreen.tsx`: Trip history with status filter, fare breakdowns, and timestamps.
+  - Created `DriverEarningsScreen.tsx`: Daily/weekly/total earnings KPIs and vehicle registration view.
+  - Battery-conscious foreground GPS tracking via `expo-location` running only when online and in an active trip (`ACCEPTED`, `ARRIVING`, `STARTED`).
+- **Vendor & Marketplace Seller Dashboards**:
+  - Created `VendorDashboardScreen.tsx`, `VendorOrdersScreen.tsx`, and `VendorMenuScreen.tsx`.
+  - Created `SellerDashboardScreen.tsx` for community bazaar merchants.
+- **Comprehensive Quality & Automated Testing**:
+  - Backend unit tests: **65/65 tests passed** (+10 tests in `DriverTests.cs` and `MultiRoleTests.cs`).
+  - Mobile Jest tests: **12/12 suites, 71/71 tests passed** (+19 tests in `roleStore.test.ts` and `driverService.test.ts`).
+  - TypeScript static typecheck: **0 errors** (`npx tsc --noEmit`).
+  - Expo doctor: **18/18 checks passed** (`npx expo-doctor`).
+- **Documentation**:
+  - Created `docs/MULTI_ROLE_ARCHITECTURE.md`, `docs/DRIVER_MODE.md`, `docs/ROLE_SWITCHING.md`.
+  - Updated `docs/UAT_TEST_PLAN.md`, `docs/UAT_RESULTS.md`, `docs/REACT_NATIVE_STATUS.md`, and `docs/REAL_IMPLEMENTATION_AUDIT.md`.
+
+---
+
 ## [2.0.0] - 2026-09-19
 
 ### Full Application UAT, Real API Integration & Security Hardening

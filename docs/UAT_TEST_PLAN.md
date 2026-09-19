@@ -159,11 +159,33 @@ This UAT Test Plan validates all primary user flows across the React Native cust
 
 ---
 
+### 2.11 Multi-Role & Driver Mode (ROLE-001 to ROLE-014)
+
+| Test ID | Scenario | API Endpoint / Method | Contract / Payload | Expected Behavior | Actual Behavior | Status |
+|---|---|---|---|---|---|---|
+| **ROLE-001** | Multi-Role Token Issuance | `POST /api/auth/verify-otp` | `{ "mobileNumber": "6375002348", "otp": "123456" }` | Emits JWT with multiple roles (`CUSTOMER`, `DRIVER`, `RESTAURANT_OWNER`, `MARKETPLACE_SELLER`). | Returns JWT token and roles array in response body. | **PASS (Real API)** |
+| **ROLE-002** | Role Normalization | Client `roleStore.syncWithUserRoles` | Roles array from auth payload | Normalizes legacy/case variations to standard canonical roles. | Normalizes strings into canonical enum; detects `hasMultipleRoles: true`. | **PASS (Real Component)** |
+| **ROLE-003** | Authorized Role Switch | Client `useRoleStore.switchRole` | Target: `'DRIVER'` | Switches `activeRole` to `DRIVER`, persists in storage, updates UI. | State updates instantly; saved in AsyncStorage. | **PASS (Real Component)** |
+| **ROLE-004** | Unauthorized Switch Rejection | Client `useRoleStore.switchRole` | Target: `'ADMIN'` on non-admin user | Rejects switch; retains current active role; warns in console. | Returns `false`; state remains unchanged. | **PASS (Real Component)** |
+| **ROLE-005** | Role Persistence on Restart | Client `storage.getActiveRole` | Local storage key `superapp_active_role` | Rehydrates stored role if still authorized; falls back to `CUSTOMER` otherwise. | Rehydrates previous mode seamlessly on app reboot. | **PASS (Real Component)** |
+| **ROLE-006** | Dynamic Tab Adaptation | Client `MainTabNavigator` | `activeRole` state hook | Dynamic tab bar mounts driver-specific tabs (`DriverHome`, `DriverRides`, `DriverEarnings`). | Bottom bar adapts immediately without page reload. | **PASS (Real Component)** |
+| **ROLE-007** | Driver Profile & Vehicle Info | `GET /api/driver/profile` | Header: Driver Bearer | Returns driver stats, rating, license, and registered vehicle details. | Fetches live profile joined with `vehicles` table. | **PASS (Real API)** |
+| **ROLE-008** | Driver Duty Online/Offline Toggle | `POST /api/driver/toggle-online` | `{ "isOnline": true }` | Sets `is_online` flag in DB; joins/leaves SignalR driver pool. | DB flag updated; SignalR `JoinDriversPool` invoked. | **PASS (Real API)** |
+| **ROLE-009** | Available Rides Queue | `GET /api/driver/available-rides` | Header: Driver Bearer | Queries pending rides with status `SEARCHING`. | Returns pending dispatch rides with pickup/drop addresses. | **PASS (Real API)** |
+| **ROLE-010** | Driver Ride Acceptance | `POST /api/driver/rides/{id}/accept` | Path: `id` | Assigns driver to ride, transitions status to `ACCEPTED`. | Supabase updated; SignalR broadcasts `RideStatusChanged`. | **PASS (Real API)** |
+| **ROLE-011** | Driver Arrived at Pickup | `POST /api/driver/rides/{id}/arriving` | Path: `id` | Transitions status to `ARRIVING`; alerts passenger. | Status updated; passenger screen receives arrival alert. | **PASS (Real API)** |
+| **ROLE-012** | Driver OTP Trip Start | `POST /api/driver/rides/{id}/start` | `{ "otpCode": "1234" }` | Validates customer OTP; begins trip (`STARTED`); rejects wrong OTP. | Valid OTP starts trip; invalid code returns 400 Bad Request. | **PASS (Real API)** |
+| **ROLE-013** | Driver Trip Completion & Earnings | `POST /api/driver/rides/{id}/complete` | Path: `id` | Transitions status to `COMPLETED`, records driver earnings, frees driver. | Settle ride, updates driver total earnings, frees driver duty. | **PASS (Real API)** |
+| **ROLE-014** | Driver Foreground GPS Telemetry | `POST /api/driver/location` | `{ "latitude": 28.61, "longitude": 77.20, "rideId": 1 }` | Stores vehicle position, relays live coordinates to passenger via SignalR. | Coords updated in DB; SignalR `DriverLocationUpdated` broadcast. | **PASS (Real API)** |
+
+---
+
 ## 3. Classification Summary
 
-- **Total Scenarios**: 55
-- **Passed (Real API)**: 51
+- **Total Scenarios**: 69
+- **Passed (Real API / Component)**: 65
 - **Passed (Mock/Dev Only)**: 4 (Ride Fare Distance/Routing, Ride Telemetry Simulation, Payment Dev Gateway Capture, Storage Binary Upload)
 - **Partial**: 0
 - **Failed**: 0
 - **Blocked**: 0
+

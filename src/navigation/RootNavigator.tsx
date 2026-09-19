@@ -16,6 +16,10 @@ import { SavedAddressesScreen } from '../features/profile/SavedAddressesScreen';
 import { PaymentTestScreen } from '../features/payments/PaymentTestScreen';
 import { NotificationsScreen } from '../features/notifications/NotificationsScreen';
 import { ActivityScreen } from '../features/activity/ActivityScreen';
+import { VendorOrdersScreen } from '../features/vendor/VendorOrdersScreen';
+import { VendorMenuScreen } from '../features/vendor/VendorMenuScreen';
+import { DriverRidesScreen } from '../features/driver/DriverRidesScreen';
+import { DriverEarningsScreen } from '../features/driver/DriverEarningsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -43,6 +47,10 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen name="PaymentTest" component={PaymentTestScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Activity" component={ActivityScreen} />
+      <Stack.Screen name="KitchenOrders" component={VendorOrdersScreen} />
+      <Stack.Screen name="VendorMenu" component={VendorMenuScreen} />
+      <Stack.Screen name="DriverRides" component={DriverRidesScreen} />
+      <Stack.Screen name="DriverEarnings" component={DriverEarningsScreen} />
     </Stack.Navigator>
   );
 };

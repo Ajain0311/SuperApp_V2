@@ -18,6 +18,11 @@ export const AppTypography = StyleSheet.create({
     fontWeight: '600',
     color: AppColors.textPrimary,
   } as TextStyle,
+  h4: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+  } as TextStyle,
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
@@ -36,6 +41,12 @@ export const AppTypography = StyleSheet.create({
     lineHeight: 20,
   } as TextStyle,
   bodySmall: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: AppColors.textTertiary,
+    lineHeight: 16,
+  } as TextStyle,
+  bodySm: {
     fontSize: 12,
     fontWeight: '400',
     color: AppColors.textTertiary,

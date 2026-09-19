@@ -41,6 +41,25 @@ public class VendorController : ControllerBase
             return await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
         }
 
+        // If user has RESTAURANT_OWNER role, provision mapping to first active restaurant
+        if (User.IsInRole(RoleNames.RestaurantOwner))
+        {
+            var rest = await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
+            if (rest != null)
+            {
+                var newMapping = new RestaurantUser
+                {
+                    UserId = userId,
+                    RestaurantId = rest.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.RestaurantUsers.Add(newMapping);
+                await _db.SaveChangesAsync();
+                return rest;
+            }
+        }
+
         return null;
     }
 
@@ -297,4 +316,97 @@ public class VendorController : ControllerBase
             ActiveMenuItemsCount = activeMenuItems
         }));
     }
+
+    /// <summary>
+    /// Toggle restaurant open/closed status
+    /// </summary>
+    [HttpPost("toggle-status")]
+    public async Task<ActionResult<ApiResponse<bool>>> ToggleStatus([FromBody] ToggleRestaurantStatusRequest request)
+    {
+        var restaurant = await GetAuthorizedRestaurantAsync();
+        if (restaurant == null)
+            return NotFound(ApiResponse<bool>.Fail("Restaurant not found"));
+
+        restaurant.IsActive = request.IsOpen;
+        restaurant.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(ApiResponse<bool>.Ok(restaurant.IsActive, restaurant.IsActive ? "Restaurant is now OPEN" : "Restaurant is now CLOSED"));
+    }
+
+    /// <summary>
+    /// Get restaurant menu categories and items for vendor management
+    /// </summary>
+    [HttpGet("menu")]
+    public async Task<ActionResult<ApiResponse<List<RestaurantCategoryDto>>>> GetVendorMenu()
+    {
+        var restaurant = await GetAuthorizedRestaurantAsync();
+        if (restaurant == null)
+            return NotFound(ApiResponse<List<RestaurantCategoryDto>>.Fail("Restaurant not found"));
+
+        var categories = await _db.RestaurantCategories
+            .Include(c => c.FoodItems.Where(f => f.IsActive))
+            .Where(c => c.RestaurantId == restaurant.Id && c.IsActive)
+            .OrderBy(c => c.SortOrder)
+            .Select(c => new RestaurantCategoryDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Description = c.Description,
+                SortOrder = c.SortOrder,
+                Items = c.FoodItems.Select(f => new FoodItemDto
+                {
+                    Id = f.Id,
+                    RestaurantId = restaurant.Id,
+                    RestaurantCategoryId = c.Id,
+                    Name = f.Name,
+                    Description = f.Description,
+                    ImageUrl = f.ImageUrl,
+                    BasePrice = f.BasePrice,
+                    DiscountPercent = f.DiscountPercent,
+                    DiscountedPrice = f.BasePrice * (1 - (f.DiscountPercent / 100m)),
+                    IsVeg = f.IsVeg,
+                    IsAvailable = f.IsAvailable,
+                    IsBestseller = f.IsBestseller,
+                    IsCustomizable = f.IsCustomizable
+                }).ToList()
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<RestaurantCategoryDto>>.Ok(categories));
+    }
+
+    /// <summary>
+    /// Get vendor settled earnings
+    /// </summary>
+    [HttpGet("earnings")]
+    public async Task<ActionResult<ApiResponse<object>>> GetEarnings()
+    {
+        var restaurant = await GetAuthorizedRestaurantAsync();
+        if (restaurant == null)
+            return NotFound(ApiResponse<object>.Fail("Restaurant not found"));
+
+        var deliveredOrders = await _db.FoodOrders
+            .Where(o => o.RestaurantId == restaurant.Id && o.Status == OrderStatus.Delivered)
+            .ToListAsync();
+
+        var totalRevenue = deliveredOrders.Sum(o => o.SubTotal - o.DiscountAmount);
+        var commission = totalRevenue * 0.15m; // 15% platform commission
+        var netPayout = totalRevenue - commission;
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            totalOrders = deliveredOrders.Count,
+            grossSales = totalRevenue,
+            commissionDeducted = commission,
+            netEarnings = netPayout,
+            settlementStatus = "SETTLED"
+        }));
+    }
 }
+
+public class ToggleRestaurantStatusRequest
+{
+    public bool IsOpen { get; set; }
+}
+

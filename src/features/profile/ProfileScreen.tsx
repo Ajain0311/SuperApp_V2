@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,13 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
+import { useRoleStore, ROLE_CONFIGS } from '../../store/roleStore';
+import { RoleSwitchModal } from '../../components/RoleSwitchModal';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -45,6 +47,9 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, title, subtitle, color, onPre
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, logout } = useAuthStore();
+  const { activeRole, hasMultipleRoles } = useRoleStore();
+  const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const activeConfig = ROLE_CONFIGS[activeRole] || ROLE_CONFIGS.CUSTOMER;
 
   const performLogout = async () => {
     try {
@@ -128,6 +133,30 @@ export const ProfileScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Multi-Role Switcher Card */}
+        {hasMultipleRoles && (
+          <TouchableOpacity
+            style={[styles.roleSwitchCard, { borderColor: `${activeConfig.color}60` }]}
+            activeOpacity={0.8}
+            onPress={() => setRoleModalVisible(true)}
+          >
+            <View style={[styles.roleIconBox, { backgroundColor: `${activeConfig.color}25` }]}>
+              <Ionicons name={activeConfig.icon as any} size={24} color={activeConfig.color} />
+            </View>
+            <View style={styles.roleTextCol}>
+              <View style={styles.roleHeaderRow}>
+                <Text style={styles.roleLabel}>CURRENT APP MODE</Text>
+                <View style={[styles.switchBadge, { backgroundColor: activeConfig.color }]}>
+                  <Text style={styles.switchBadgeText}>SWITCH</Text>
+                </View>
+              </View>
+              <Text style={[styles.roleTitle, { color: activeConfig.color }]}>{activeConfig.badge}</Text>
+              <Text style={styles.roleSubtitle}>{activeConfig.tagline}</Text>
+            </View>
+            <MaterialIcons name="swap-horiz" size={24} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+
         {/* Section 1: Activity & Orders */}
         <Text style={styles.sectionHeader}>Activity & Orders</Text>
         <View style={styles.sectionCard}>
@@ -199,8 +228,13 @@ export const ProfileScreen: React.FC = () => {
         </TouchableOpacity>
 
         {/* App Version Info */}
-        <Text style={styles.versionText}>SuperApp v1.0.0 (Build 2026.09.16)</Text>
+        <Text style={styles.versionText}>SuperApp v2.0.0 (Unified Multi-Role)</Text>
       </ScrollView>
+
+      <RoleSwitchModal
+        visible={roleModalVisible}
+        onClose={() => setRoleModalVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -347,5 +381,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textTertiary,
     marginTop: spacing.lg,
+  },
+  roleSwitchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1.5,
+  },
+  roleIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  roleTextCol: {
+    flex: 1,
+  },
+  roleHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  roleLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.textTertiary,
+    letterSpacing: 0.5,
+  },
+  switchBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  switchBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  roleTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  roleSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });
