@@ -49,16 +49,18 @@ public class AuthController : ControllerBase
 
         // Generate OTP for both Citizen and Admin (Admin requires Password + OTP)
         string devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
+        var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
+        bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
 
         return Ok(new SendOtpResponse
         {
             Success = true,
             Message = isAdmin
                 ? "Admin detected. Password and OTP verification required."
-                : "OTP sent successfully",
+                : "OTP sent successfully to your mobile number",
             IsNewUser = isNewUser,
             IsAdmin = isAdmin,
-            DevOtp = devOtp // Testing only — remove in production SMS flow
+            DevOtp = isRealSms ? null : devOtp
         });
     }
 

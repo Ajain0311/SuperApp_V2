@@ -1057,7 +1057,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">Promotional Banners</h2>
-                        <button class="btn btn-primary btn-sm" onclick="alert('Add Banner modal ready')">+ Add Banner</button>
+                        <button class="btn btn-primary btn-sm" onclick="openAddBannerModal()">+ Add Banner</button>
                     </div>
                     <div class="table-container">
                         <table>
@@ -1067,26 +1067,14 @@
                                     <th>Title</th>
                                     <th>Module</th>
                                     <th>Image Preview</th>
+                                    <th>Target</th>
                                     <th>Status</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody id="bannersTableBody">
                                 <tr>
-                                    <td>1</td>
-                                    <td>50% OFF on Top Biryanis</td>
-                                    <td><span class="badge badge-active">FOOD</span></td>
-                                    <td><a href="https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600" target="_blank" style="color: var(--blue);">View Image</a></td>
-                                    <td><span class="badge badge-active">ACTIVE</span></td>
-                                    <td><button class="btn btn-secondary btn-sm">Deactivate</button></td>
-                                </tr>
-                                <tr>
-                                    <td>2</td>
-                                    <td>Quick & Safe Rides Across City</td>
-                                    <td><span class="badge badge-verified">RIDE</span></td>
-                                    <td><a href="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=600" target="_blank" style="color: var(--blue);">View Image</a></td>
-                                    <td><span class="badge badge-active">ACTIVE</span></td>
-                                    <td><button class="btn btn-secondary btn-sm">Deactivate</button></td>
+                                    <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading live promotional banners...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1099,24 +1087,24 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">System & Global Commission Settings</h2>
-                        <button class="btn btn-primary btn-sm" onclick="alert('Settings saved successfully')">Save Changes</button>
+                        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save Changes</button>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="form-group">
                             <label>Food Partner Commission (%)</label>
-                            <input type="number" class="form-input" value="15">
+                            <input type="number" class="form-input" id="settingFoodComm" value="15">
                         </div>
                         <div class="form-group">
                             <label>Driver Ride Commission (%)</label>
-                            <input type="number" class="form-input" value="20">
+                            <input type="number" class="form-input" id="settingRideComm" value="20">
                         </div>
                         <div class="form-group">
                             <label>Platform Currency</label>
-                            <input type="text" class="form-input" value="INR (₹)" readonly>
+                            <input type="text" class="form-input" id="settingCurrency" value="INR (₹)">
                         </div>
                         <div class="form-group">
                             <label>Customer Support Hotline</label>
-                            <input type="text" class="form-input" value="+91 1800 123 4567">
+                            <input type="text" class="form-input" id="settingHotline" value="+91 1800 123 4567">
                         </div>
                     </div>
                 </div>
@@ -1127,27 +1115,84 @@
 
     <!-- New Coupon Modal -->
     <div class="modal-backdrop" id="couponModal">
-        <div class="modal">
-            <h3 style="font-size: 16px; font-weight: 800;">Create New Promo Coupon</h3>
+        <div class="modal" style="max-width: 480px;">
+            <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 14px;">🏷️ Create New Promo Coupon</h3>
             <div class="form-group">
-                <label>Coupon Code</label>
-                <input type="text" class="form-input" id="couponCode" placeholder="e.g. SUPER100">
+                <label>Coupon Code *</label>
+                <input type="text" class="form-input" id="couponCode" placeholder="e.g. SUPER100" style="text-transform: uppercase;">
             </div>
             <div class="form-group">
-                <label>Discount Value</label>
-                <input type="number" class="form-input" id="couponValue" placeholder="e.g. 50">
+                <label>Description</label>
+                <input type="text" class="form-input" id="couponDesc" placeholder="e.g. Special Discount for Festive Season">
             </div>
-            <div class="form-group">
-                <label>Applicable Module</label>
-                <select class="form-input" id="couponModule">
-                    <option value="FOOD">Food Delivery</option>
-                    <option value="RIDE">Ride Hailing</option>
-                    <option value="ALL">All Services</option>
-                </select>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>Discount Value *</label>
+                    <input type="number" class="form-input" id="couponValue" placeholder="e.g. 50">
+                </div>
+                <div class="form-group">
+                    <label>Discount Type</label>
+                    <select class="form-input" id="couponDiscountType">
+                        <option value="PERCENTAGE">PERCENTAGE (%)</option>
+                        <option value="FLAT">FLAT (₹)</option>
+                    </select>
+                </div>
             </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>Min Order (₹)</label>
+                    <input type="number" class="form-input" id="couponMinOrder" value="100">
+                </div>
+                <div class="form-group">
+                    <label>Applicable Module</label>
+                    <select class="form-input" id="couponModule">
+                        <option value="FOOD">Food Delivery</option>
+                        <option value="RIDE">Ride Hailing</option>
+                        <option value="ALL">All Services</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
                 <button class="btn btn-secondary" onclick="closeCouponModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="submitNewCoupon()">Create Coupon</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Banner Modal -->
+    <div class="modal-backdrop" id="bannerModal">
+        <div class="modal" style="max-width: 480px;">
+            <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 14px;">🎨 Add Promotional Banner</h3>
+            <div class="form-group">
+                <label>Banner Title *</label>
+                <input type="text" class="form-input" id="bannerTitle" placeholder="e.g. 50% Flat Discount on Biryani">
+            </div>
+            <div class="form-group">
+                <label>Image URL *</label>
+                <input type="text" class="form-input" id="bannerImageUrl" placeholder="https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>Target Module</label>
+                    <select class="form-input" id="bannerModule">
+                        <option value="FOOD">FOOD</option>
+                        <option value="RIDE">RIDE</option>
+                        <option value="MARKETPLACE">MARKETPLACE</option>
+                        <option value="HOME">HOME</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Target Type</label>
+                    <select class="form-input" id="bannerTargetType">
+                        <option value="PROMO">PROMO</option>
+                        <option value="RESTAURANT">RESTAURANT</option>
+                        <option value="CATEGORY">CATEGORY</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
+                <button class="btn btn-secondary" onclick="closeAddBannerModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitNewBanner()">Save & Publish Banner</button>
             </div>
         </div>
     </div>
@@ -1245,16 +1290,26 @@
                 'settings': 'Global System Settings'
             };
             document.getElementById('tabTitle').innerText = titles[tabId] || 'Admin Console';
-            if (tabId === 'restaurants') {
-                fetchRestaurants();
-            }
+
+            // Dynamically load data from database for each active tab
+            if (tabId === 'overview') fetchDashboardMetrics();
+            if (tabId === 'users') fetchUsers();
+            if (tabId === 'restaurants') fetchRestaurants();
+            if (tabId === 'drivers') fetchDrivers();
+            if (tabId === 'marketplace') fetchMarketplaceListings();
+            if (tabId === 'coupons') fetchCoupons();
+            if (tabId === 'banners') fetchBanners();
+            if (tabId === 'settings') fetchSettings();
+
             toggleSidebar(false);
         }
 
         function refreshCurrentTab() {
             fetchDashboardMetrics();
+            fetchRestaurants();
         }
 
+        // --- TAB 1: OVERVIEW METRICS ---
         async function fetchDashboardMetrics() {
             try {
                 const res = await fetch('/api/admin/dashboard');
@@ -1269,50 +1324,64 @@
                     }
                 }
             } catch (err) {
-                console.log('Using default cached admin stats', err);
+                console.log('Error fetching admin dashboard metrics', err);
             }
         }
 
-        function openNewCouponModal() {
-            document.getElementById('couponModal').classList.add('open');
-        }
-
-        function closeCouponModal() {
-            document.getElementById('couponModal').classList.remove('open');
-        }
-
-        function submitNewCoupon() {
-            const code = document.getElementById('couponCode').value.trim().toUpperCase();
-            const val = document.getElementById('couponValue').value.trim();
-            const mod = document.getElementById('couponModule').value;
-
-            if (!code || !val) {
-                alert('Please provide code and discount value');
-                return;
+        // --- TAB 2: USERS MANAGEMENT ---
+        async function fetchUsers() {
+            try {
+                const res = await fetch('/api/admin/users');
+                if (res.ok) {
+                    const json = await res.json();
+                    const users = json.data?.items || json.data || [];
+                    if (Array.isArray(users) && users.length > 0) {
+                        const tbody = document.getElementById('usersTableBody');
+                        tbody.innerHTML = users.map(u => `
+                            <tr>
+                                <td>#${u.id}</td>
+                                <td><strong>${u.fullName || 'User'}</strong></td>
+                                <td>${u.mobileNumber}</td>
+                                <td>${(u.roles || ['CUSTOMER']).map(r => `<span class="badge ${r === 'ADMIN' ? 'badge-verified' : 'badge-role'}">${r}</span>`).join(' ')}</td>
+                                <td><span class="badge ${u.isActive ? 'badge-active' : ''}">${u.isActive ? 'ACTIVE' : 'SUSPENDED'}</span></td>
+                                <td>
+                                    <button class="btn btn-secondary btn-sm" onclick="toggleUserStatus(${u.id}, ${u.isActive})">
+                                        ${u.isActive ? 'Suspend' : 'Activate'}
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.log('Error fetching users', err);
             }
-
-            const tbody = document.getElementById('couponsTableBody');
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><strong>${code}</strong></td>
-                <td>Admin Special Promotion</td>
-                <td>PERCENTAGE</td>
-                <td>${val}%</td>
-                <td>₹100.00</td>
-                <td><span class="badge badge-active">${mod}</span></td>
-                <td><span class="badge badge-active">ACTIVE</span></td>
-                <td><button class="btn btn-secondary btn-sm">Toggle</button></td>
-            `;
-            tbody.insertBefore(row, tbody.firstChild);
-
-            closeCouponModal();
-            alert(`Coupon ${code} created successfully!`);
         }
 
-        function toggleUserStatus(userId) {
-            alert(`User #${userId} status updated`);
+        async function toggleUserStatus(userId, currentStatus) {
+            try {
+                const res = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'STATUS',
+                        userId: userId,
+                        isActive: !currentStatus
+                    })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    alert(json.message || 'User status updated');
+                    fetchUsers();
+                } else {
+                    alert(json.message || 'Update failed');
+                }
+            } catch (err) {
+                alert('Error updating user status: ' + err.message);
+            }
         }
 
+        // --- TAB 3: RESTAURANTS MANAGEMENT ---
         function openAddRestaurantModal() {
             document.getElementById('restaurantModal').classList.add('open');
             document.getElementById('restName').focus();
@@ -1345,7 +1414,7 @@
                         action: 'ADD',
                         name: name,
                         description: desc || name,
-                        phone: phone,
+                        phone: phone || '9876543210',
                         city: city,
                         addressLine: addr,
                         isVeg: isVeg,
@@ -1357,28 +1426,14 @@
 
                 const json = await res.json();
                 if (json.success) {
-                    const newRest = json.data;
-                    const tbody = document.getElementById('restaurantsTableBody');
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${newRest.id}</td>
-                        <td><strong>${newRest.name}</strong></td>
-                        <td>${newRest.city} • ${newRest.addressLine || ''}</td>
-                        <td><span class="badge" style="background: ${newRest.isVeg ? 'rgba(16, 185, 129, 0.15); color: var(--green)' : 'rgba(255, 82, 82, 0.15); color: var(--red)'}">${newRest.isVeg ? 'Pure Veg' : 'Non-Veg'}</span></td>
-                        <td>5.0 ★ (New)</td>
-                        <td><span class="badge badge-active">NEW</span></td>
-                        <td><span class="badge badge-active">ACTIVE</span></td>
-                        <td><button class="btn btn-secondary btn-sm" onclick="alert('Restaurant ID ${newRest.id} is active')">Active</button></td>
-                    `;
-                    tbody.insertBefore(row, tbody.firstChild);
-
                     closeAddRestaurantModal();
                     document.getElementById('restName').value = '';
                     document.getElementById('restDesc').value = '';
                     document.getElementById('restPhone').value = '';
                     document.getElementById('restAddress').value = '';
 
-                    alert(`🎉 Restaurant "${name}" added successfully!`);
+                    alert(`🎉 Restaurant "${name}" added and saved in database successfully!`);
+                    fetchRestaurants();
                 } else {
                     alert(json.message || 'Could not add restaurant');
                 }
@@ -1433,6 +1488,373 @@
                 }
             } catch (err) {
                 alert('Error updating status: ' + err.message);
+            }
+        }
+
+        // --- TAB 4: DRIVERS FLEET & VERIFICATION ---
+        async function fetchDrivers() {
+            try {
+                const res = await fetch('/api/admin/drivers');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success && Array.isArray(json.data)) {
+                        const tbody = document.getElementById('driversTableBody');
+                        tbody.innerHTML = json.data.map(d => `
+                            <tr>
+                                <td>DRV-${d.id}</td>
+                                <td><strong>${d.driverName}</strong></td>
+                                <td>${d.mobileNumber}</td>
+                                <td>${d.vehicle ? `${d.vehicle.make} ${d.vehicle.model} (${d.vehicle.registrationNumber})` : 'Hero Splendor (DL 01 AB 1234)'}</td>
+                                <td>${d.licenseNumber || 'DL-KA-2024-9918'}</td>
+                                <td><span class="badge ${d.isVerified ? 'badge-active' : 'badge-pending'}">${d.isVerified ? 'VERIFIED' : 'PENDING'}</span></td>
+                                <td>${d.rating || 5.0} ★ (${d.totalRides || 0} rides)</td>
+                                <td>
+                                    <button class="btn ${d.isVerified ? 'btn-secondary' : 'btn-success'} btn-sm" onclick="verifyDriver(${d.id}, ${d.isVerified})">
+                                        ${d.isVerified ? 'Revoke' : 'Approve'}
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.log('Error fetching drivers', err);
+            }
+        }
+
+        async function verifyDriver(driverId, currentVerified) {
+            try {
+                const res = await fetch('/api/admin/drivers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'VERIFY',
+                        driverId: driverId,
+                        isVerified: !currentVerified
+                    })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    alert(json.message || 'Driver verification status updated');
+                    fetchDrivers();
+                } else {
+                    alert(json.message || 'Action failed');
+                }
+            } catch (err) {
+                alert('Error updating driver: ' + err.message);
+            }
+        }
+
+        // --- TAB 5: MARKETPLACE LISTINGS MODERATION ---
+        async function fetchMarketplaceListings() {
+            try {
+                const res = await fetch('/api/admin/marketplace/listings');
+                if (res.ok) {
+                    const json = await res.json();
+                    const listings = json.data || [];
+                    if (Array.isArray(listings)) {
+                        const tbody = document.getElementById('marketplaceTableBody');
+                        tbody.innerHTML = listings.map(l => `
+                            <tr>
+                                <td>#${l.id}</td>
+                                <td><strong>${l.title}</strong></td>
+                                <td>${l.categoryName || 'General'}</td>
+                                <td>₹${(l.price || 0).toLocaleString()}</td>
+                                <td><span class="badge badge-active">${l.condition || 'Good'}</span></td>
+                                <td>${l.sellerName || 'Seller'}</td>
+                                <td><span class="badge ${l.status === 'ACTIVE' ? 'badge-active' : ''}">${l.status}</span></td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" onclick="removeListing(${l.id})">Remove</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.log('Error fetching marketplace listings', err);
+            }
+        }
+
+        async function removeListing(listingId) {
+            if (!confirm(`Are you sure you want to remove listing #${listingId}?`)) return;
+            try {
+                const res = await fetch('/api/admin/marketplace/listings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'DELETE',
+                        listingId: listingId
+                    })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    alert('Listing removed successfully');
+                    fetchMarketplaceListings();
+                } else {
+                    alert(json.message || 'Could not remove listing');
+                }
+            } catch (err) {
+                alert('Error removing listing: ' + err.message);
+            }
+        }
+
+        // --- TAB 6: COUPONS MANAGEMENT ---
+        function openNewCouponModal() {
+            document.getElementById('couponModal').classList.add('open');
+            document.getElementById('couponCode').focus();
+        }
+
+        function closeCouponModal() {
+            document.getElementById('couponModal').classList.remove('open');
+        }
+
+        async function submitNewCoupon() {
+            const code = document.getElementById('couponCode').value.trim().toUpperCase();
+            const desc = document.getElementById('couponDesc').value.trim();
+            const val = parseFloat(document.getElementById('couponValue').value);
+            const discType = document.getElementById('couponDiscountType').value;
+            const minOrder = parseFloat(document.getElementById('couponMinOrder').value) || 0;
+            const mod = document.getElementById('couponModule').value;
+
+            if (!code || isNaN(val)) {
+                alert('Please provide coupon code and discount value');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/coupons', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'ADD',
+                        code: code,
+                        description: desc || `Discount coupon ${code}`,
+                        discountValue: val,
+                        discountType: discType,
+                        minOrderAmount: minOrder,
+                        applicableModule: mod
+                    })
+                });
+
+                const json = await res.json();
+                if (json.success) {
+                    closeCouponModal();
+                    document.getElementById('couponCode').value = '';
+                    document.getElementById('couponDesc').value = '';
+                    document.getElementById('couponValue').value = '';
+                    alert(`🎉 Coupon "${code}" created and saved in database successfully!`);
+                    fetchCoupons();
+                } else {
+                    alert(json.message || 'Could not create coupon');
+                }
+            } catch (err) {
+                alert('Error creating coupon: ' + err.message);
+            }
+        }
+
+        async function fetchCoupons() {
+            try {
+                const res = await fetch('/api/admin/coupons');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success && Array.isArray(json.data)) {
+                        const tbody = document.getElementById('couponsTableBody');
+                        tbody.innerHTML = json.data.map(c => `
+                            <tr>
+                                <td><strong>${c.code}</strong></td>
+                                <td>${c.description || 'Promotion'}</td>
+                                <td>${c.discountType}</td>
+                                <td>${c.discountType === 'PERCENTAGE' ? c.discountValue + '%' : '₹' + c.discountValue}</td>
+                                <td>₹${(c.minOrderAmount || 0).toFixed(2)}</td>
+                                <td><span class="badge badge-active">${c.applicableModule}</span></td>
+                                <td><span class="badge ${c.isActive ? 'badge-active' : ''}">${c.isActive ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                                <td><button class="btn btn-secondary btn-sm" onclick="toggleCouponStatus(${c.id}, ${c.isActive})">${c.isActive ? 'Deactivate' : 'Activate'}</button></td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.log('Error fetching coupons', err);
+            }
+        }
+
+        async function toggleCouponStatus(id, currentStatus) {
+            try {
+                const res = await fetch('/api/admin/coupons', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'STATUS',
+                        id: id,
+                        isActive: !currentStatus
+                    })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    alert(json.message || 'Coupon status updated');
+                    fetchCoupons();
+                } else {
+                    alert(json.message || 'Update failed');
+                }
+            } catch (err) {
+                alert('Error updating coupon: ' + err.message);
+            }
+        }
+
+        // --- TAB 7: BANNERS MANAGEMENT ---
+        function openAddBannerModal() {
+            document.getElementById('bannerModal').classList.add('open');
+            document.getElementById('bannerTitle').focus();
+        }
+
+        function closeAddBannerModal() {
+            document.getElementById('bannerModal').classList.remove('open');
+        }
+
+        async function submitNewBanner() {
+            const title = document.getElementById('bannerTitle').value.trim();
+            const img = document.getElementById('bannerImageUrl').value.trim();
+            const mod = document.getElementById('bannerModule').value;
+            const targetType = document.getElementById('bannerTargetType').value;
+
+            if (!title || !img) {
+                alert('Please enter banner title and image URL');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/banners', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'ADD',
+                        title: title,
+                        imageUrl: img,
+                        module: mod,
+                        targetType: targetType
+                    })
+                });
+
+                const json = await res.json();
+                if (json.success) {
+                    closeAddBannerModal();
+                    document.getElementById('bannerTitle').value = '';
+                    document.getElementById('bannerImageUrl').value = '';
+                    alert(`🎉 Banner "${title}" created and saved in database successfully!`);
+                    fetchBanners();
+                } else {
+                    alert(json.message || 'Could not create banner');
+                }
+            } catch (err) {
+                alert('Error creating banner: ' + err.message);
+            }
+        }
+
+        async function fetchBanners() {
+            try {
+                const res = await fetch('/api/admin/banners');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success && Array.isArray(json.data)) {
+                        const tbody = document.getElementById('bannersTableBody');
+                        tbody.innerHTML = json.data.map(b => `
+                            <tr>
+                                <td>${b.id}</td>
+                                <td><strong>${b.title}</strong></td>
+                                <td><span class="badge badge-active">${b.module}</span></td>
+                                <td><a href="${b.imageUrl}" target="_blank" style="color: var(--blue);">View Image</a></td>
+                                <td>${b.targetType || 'PROMO'}</td>
+                                <td><span class="badge ${b.isActive ? 'badge-active' : ''}">${b.isActive ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                                <td>
+                                    <button class="btn btn-secondary btn-sm" onclick="toggleBannerStatus(${b.id}, ${b.isActive})">
+                                        ${b.isActive ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.log('Error fetching banners', err);
+            }
+        }
+
+        async function toggleBannerStatus(id, currentStatus) {
+            try {
+                const res = await fetch('/api/admin/banners', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'STATUS',
+                        id: id,
+                        isActive: !currentStatus
+                    })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    alert(json.message || 'Banner status updated');
+                    fetchBanners();
+                } else {
+                    alert(json.message || 'Update failed');
+                }
+            } catch (err) {
+                alert('Error updating banner: ' + err.message);
+            }
+        }
+
+        // --- TAB 8: SYSTEM SETTINGS ---
+        async function fetchSettings() {
+            try {
+                const res = await fetch('/api/admin/settings');
+                if (res.ok) {
+                    const json = await res.json();
+                    const settings = json.data || [];
+                    if (Array.isArray(settings)) {
+                        settings.forEach(s => {
+                            if (s.key === 'PlatformCommission.FoodVendor') {
+                                const el = document.getElementById('settingFoodComm');
+                                if (el) el.value = s.value;
+                            } else if (s.key === 'PlatformCommission.DriverRide') {
+                                const el = document.getElementById('settingRideComm');
+                                if (el) el.value = s.value;
+                            } else if (s.key === 'Platform.Currency') {
+                                const el = document.getElementById('settingCurrency');
+                                if (el) el.value = s.value;
+                            } else if (s.key === 'Support.Hotline') {
+                                const el = document.getElementById('settingHotline');
+                                if (el) el.value = s.value;
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.log('Error fetching settings', err);
+            }
+        }
+
+        async function saveSettings() {
+            const foodComm = document.getElementById('settingFoodComm')?.value || '15';
+            const rideComm = document.getElementById('settingRideComm')?.value || '20';
+            const currency = document.getElementById('settingCurrency')?.value || 'INR (₹)';
+            const hotline = document.getElementById('settingHotline')?.value || '+91 1800 123 4567';
+
+            try {
+                const pairs = [
+                    { key: 'PlatformCommission.FoodVendor', value: foodComm },
+                    { key: 'PlatformCommission.DriverRide', value: rideComm },
+                    { key: 'Platform.Currency', value: currency },
+                    { key: 'Support.Hotline', value: hotline }
+                ];
+                for (const p of pairs) {
+                    await fetch('/api/admin/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(p)
+                    });
+                }
+                alert('✅ System settings saved to database successfully!');
+            } catch (err) {
+                alert('Error saving settings: ' + err.message);
             }
         }
 

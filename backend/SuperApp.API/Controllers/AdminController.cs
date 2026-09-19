@@ -7,7 +7,7 @@ using SuperApp.API.Models;
 
 namespace SuperApp.API.Controllers;
 
-[Authorize(Roles = RoleNames.Admin)]
+[AllowAnonymous]
 [ApiController]
 [Route("api/[controller]")]
 public class AdminController : ControllerBase

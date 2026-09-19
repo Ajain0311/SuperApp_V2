@@ -47,16 +47,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [timerSeconds, setTimerSeconds] = useState<number>(AppConstants.otpTimeoutSeconds);
 
-  const testOtpToDisplay = AppEnvironment.showTestOtp
-    ? (displayedOtp || AppEnvironment.testOtp || '123456')
-    : displayedOtp;
-
-  const [otpDigits, setOtpDigits] = useState<string[]>(() => {
-    if (AppEnvironment.showTestOtp && testOtpToDisplay && testOtpToDisplay.length === 6) {
-      return testOtpToDisplay.split('');
-    }
-    return ['', '', '', '', '', ''];
-  });
+  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [fullName, setFullName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
@@ -227,29 +218,6 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                 </>
               )}
           </Text>
-
-          {/* Prominent Test OTP Card with Tap-To-Autofill */}
-          {AppEnvironment.showTestOtp && testOtpToDisplay ? (
-            <TouchableOpacity
-              style={styles.testOtpCard}
-              onPress={() => handleAutoFill(testOtpToDisplay)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.testOtpHeader}>
-                <View style={styles.testOtpBadge}>
-                  <Ionicons name="flask-outline" size={14} color="#0D9488" style={{ marginRight: 4 }} />
-                  <Text style={styles.testOtpBadgeText}>TEST OTP</Text>
-                </View>
-                <View style={styles.autoFillBtn}>
-                  <Text style={styles.autoFillBtnText}>Tap to Auto-Fill ⚡</Text>
-                </View>
-              </View>
-              <Text style={styles.testOtpCode}>{testOtpToDisplay}</Text>
-              <Text style={styles.testOtpHint}>
-                Use this code to verify. Real SMS is also dispatched via Punjab Gov gateway.
-              </Text>
-            </TouchableOpacity>
-          ) : null}
 
           {/* Prominent Inline Error Validation Banner */}
           {errorMessage ? (
