@@ -156,6 +156,9 @@ export const ActiveRideScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
+          testID="active-ride-back-btn"
         >
           <MaterialIcons name="chevron-left" size={28} color={colors.textPrimary} />
         </TouchableOpacity>

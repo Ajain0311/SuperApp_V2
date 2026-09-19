@@ -117,7 +117,13 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
+          testID="payment-back-btn"
+        >
           <Ionicons name="chevron-back" size={26} color={AppColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Easebuzz Payment</Text>

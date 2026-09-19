@@ -150,7 +150,13 @@ export const AddListingScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Post an Item for Sale</Text>
-        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Close Post Item"
+          testID="add-listing-close-btn"
+        >
           <MaterialIcons name="close" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>

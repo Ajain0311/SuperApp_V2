@@ -265,9 +265,14 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       {/* Header Bar */}
       <View style={styles.appBar}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            navigation.navigate('MainTabs', { screen: 'Food' });
+          }}
           style={styles.backButton}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Food"
+          testID="restaurant-back-btn"
         >
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -351,6 +356,9 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
                   style={styles.addButton}
                   onPress={() => handleAddItem(item)}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${item.name}`}
+                  testID={`add-dish-btn-${item.id}`}
                 >
                   <Text style={styles.addButtonText}>ADD +</Text>
                 </TouchableOpacity>

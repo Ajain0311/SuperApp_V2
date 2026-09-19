@@ -17,10 +17,17 @@ public class MockPaymentService : IPaymentService
         var orderId = $"order_mock_{Guid.NewGuid().ToString("N")[..12]}";
         var txnId = $"txn_{Guid.NewGuid().ToString("N")[..16]}";
 
+        var normalizedModule = module?.ToUpperInvariant() switch
+        {
+            "FOOD" => "FOOD",
+            "RIDE" => "RIDE",
+            _ => "FOOD"
+        };
+
         var payment = new Payment
         {
             UserId = userId,
-            Module = module.ToUpperInvariant(),
+            Module = normalizedModule,
             OrderId = long.TryParse(receiptId, out var id) ? id : 0,
             Amount = amount,
             PaymentMethod = "UPI",

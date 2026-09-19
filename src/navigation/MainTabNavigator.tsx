@@ -55,6 +55,7 @@ export const MainTabNavigator: React.FC = () => {
             component={HomeScreen}
             options={{
               tabBarLabel: 'Home',
+              tabBarTestID: 'tab-home',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
@@ -68,6 +69,7 @@ export const MainTabNavigator: React.FC = () => {
             component={FoodHomeScreen}
             options={{
               tabBarLabel: 'Food',
+              tabBarTestID: 'tab-food',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'restaurant' : 'restaurant-outline'} size={22} color={color} />
@@ -81,6 +83,7 @@ export const MainTabNavigator: React.FC = () => {
             component={RideBookingScreen}
             options={{
               tabBarLabel: 'Rides',
+              tabBarTestID: 'tab-rides',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'car-sport' : 'car-sport-outline'} size={22} color={color} />
@@ -94,6 +97,7 @@ export const MainTabNavigator: React.FC = () => {
             component={MarketplaceHomeScreen}
             options={{
               tabBarLabel: 'Bazaar',
+              tabBarTestID: 'tab-bazaar',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'bag-handle' : 'bag-handle-outline'} size={22} color={color} />

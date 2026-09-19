@@ -157,10 +157,17 @@ public class EasebuzzPaymentService : IPaymentService
             };
         }
 
+        var normalizedModule = productinfo.ToUpperInvariant() switch
+        {
+            "FOOD" => "FOOD",
+            "RIDE" => "RIDE",
+            _ => "FOOD"
+        };
+
         var payment = new Payment
         {
             UserId = userId,
-            Module = productinfo.Length > 20 ? productinfo[..20] : productinfo,
+            Module = normalizedModule,
             OrderId = long.TryParse(receiptId, out var id) ? id : 0,
             Amount = amount,
             PaymentMethod = "EASEBUZZ",
