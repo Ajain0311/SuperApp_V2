@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import { AppRadius } from '../../theme/spacing';
 import { AppTypography } from '../../theme/typography';
 import { AppSearchBar } from '../../components/common/AppSearchBar';
 import { useAuthStore } from '../../store/authStore';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 interface HomeScreenProps {
   navigation: any;
@@ -21,6 +23,42 @@ interface HomeScreenProps {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const user = useAuthStore((state) => state.user);
+  const [activeRide, setActiveRide] = useState<any>(null);
+  const [banners, setBanners] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch live promotional banners
+    apiClient
+      .get<any>(ApiEndpoints.common.banners)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          setBanners(data);
+        }
+      })
+      .catch(() => {});
+
+    // Check for real active ride in transit
+    apiClient
+      .get<any>(ApiEndpoints.ride.myRides)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          const live = data.find(
+            (r: any) =>
+              r.status === 'PENDING' ||
+              r.status === 'ACCEPTED' ||
+              r.status === 'STARTED'
+          );
+          if (live) {
+            setActiveRide(live);
+          } else {
+            setActiveRide(null);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const getInitials = () => {
     if (!user?.fullName) return 'JD';
@@ -85,39 +123,56 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <Ionicons name="chevron-forward" size={20} color={AppColors.textPrimary} />
         </TouchableOpacity>
 
-        {/* Live Ride Card */}
-        <View style={styles.liveRideCard}>
-          <View style={styles.liveRideHeader}>
-            <View style={styles.liveRideIndicatorGroup}>
-              <View style={styles.livePulseDot} />
-              <Text style={styles.liveRideStatusText}>LIVE RIDE • IN TRANSIT</Text>
-            </View>
-            <View style={styles.etaPill}>
-              <Text style={styles.etaPillText}>3 mins away</Text>
-            </View>
-          </View>
-
-          <View style={styles.liveRideBody}>
-            <View style={styles.vehicleIconCircle}>
-              <Ionicons name="bicycle" size={24} color={AppColors.secondary} />
-            </View>
-            <View style={styles.liveRideDetails}>
-              <Text style={styles.liveRideTitle}>Rapido Bike (DL 04 AB 9821)</Text>
-              <View style={styles.driverOtpRow}>
-                <Text style={styles.driverText}>Driver: Amit Singh • OTP: </Text>
-                <Text style={styles.otpHighlight}>4829</Text>
+        {/* Live Ride Card (Rendered only when a real ride is active/in-transit) */}
+        {activeRide ? (
+          <View style={styles.liveRideCard}>
+            <View style={styles.liveRideHeader}>
+              <View style={styles.liveRideIndicatorGroup}>
+                <View style={styles.livePulseDot} />
+                <Text style={styles.liveRideStatusText}>
+                  LIVE RIDE • {activeRide.status === 'STARTED' ? 'IN TRANSIT' : 'DRIVER ASSIGNED'}
+                </Text>
+              </View>
+              <View style={styles.etaPill}>
+                <Text style={styles.etaPillText}>Active</Text>
               </View>
             </View>
-            <TouchableOpacity
-              style={styles.trackButton}
-              onPress={() => navigation.navigate('ActiveRide', { rideId: 'RD-5021' })}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.trackButtonText}>Track</Text>
-              <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
+
+            <View style={styles.liveRideBody}>
+              <View style={styles.vehicleIconCircle}>
+                <Ionicons
+                  name={activeRide.vehicleType === 'CAB' ? 'car' : 'bicycle'}
+                  size={24}
+                  color={AppColors.secondary}
+                />
+              </View>
+              <View style={styles.liveRideDetails}>
+                <Text style={styles.liveRideTitle}>
+                  {activeRide.vehicleType || 'Ride'} ({activeRide.rideNumber})
+                </Text>
+                <View style={styles.driverOtpRow}>
+                  <Text style={styles.driverText}>
+                    {activeRide.driver?.fullName ? `Driver: ${activeRide.driver.fullName} • ` : ''}OTP:{' '}
+                  </Text>
+                  <Text style={styles.otpHighlight}>{activeRide.otpCode || '4829'}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.trackButton}
+                onPress={() =>
+                  navigation.navigate('ActiveRide', {
+                    rideId: activeRide.rideNumber || 'RD-5021',
+                    rideNumericId: activeRide.id,
+                  })
+                }
+                activeOpacity={0.8}
+              >
+                <Text style={styles.trackButtonText}>Track</Text>
+                <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        ) : null}
 
         {/* Section Title */}
         <Text style={[AppTypography.sectionTitle, styles.sectionMargin]}>

@@ -5,8 +5,11 @@ using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace SuperApp.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class VendorController : ControllerBase
@@ -21,11 +24,10 @@ public class VendorController : ControllerBase
     private async Task<Restaurant?> GetAuthorizedRestaurantAsync()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-        long userId = 1;
-        if (claim != null && long.TryParse(claim.Value, out var id))
-            userId = id;
+        if (claim == null || !long.TryParse(claim.Value, out var userId))
+            return null;
 
-        // Check if user is mapped via RestaurantUsers
+        // Check if user is explicitly mapped via RestaurantUsers
         var mapping = await _db.RestaurantUsers
             .Include(ru => ru.Restaurant)
             .FirstOrDefaultAsync(ru => ru.UserId == userId && ru.IsActive);
@@ -33,8 +35,13 @@ public class VendorController : ControllerBase
         if (mapping != null)
             return mapping.Restaurant;
 
-        // In development/fallback mode, pick the first active restaurant
-        return await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
+        // System administrators are authorized to access the managed restaurant
+        if (User.IsInRole(RoleNames.Admin))
+        {
+            return await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
+        }
+
+        return null;
     }
 
     /// <summary>

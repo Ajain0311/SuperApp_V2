@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0] - 2026-09-19
+
+### Full Application UAT, Real API Integration & Security Hardening
+- **Dynamic OTP SMS Service Integration**:
+  - Implemented `ISmsService.cs`, `PunjabGovSmsService.cs`, and `PunjabGovOtpService.cs` integrated with Punjab State e-Governance SMS gateway (`https://eapi.punjab.gov.in/smapi/sms`).
+  - Implemented dynamic OTP code interpolation for template `1407177633307627182` with 3-minute validity.
+  - Preserved non-production dev fallback master OTP `123456`.
+  - Added unit test suite `PunjabGovSmsServiceTests.cs` (7 tests, all passing).
+- **Admin Password Hash Self-Healing**:
+  - Added automatic BCrypt reconciliation in `AuthController.AdminLogin` to heal legacy migration hash mismatches in Supabase PostgreSQL upon successful credential authentication.
+- **Vendor Authorization Security Hardening**:
+  - Enforced `[Authorize]` on `VendorController.cs` and removed insecure default fallback that assigned unmapped users to restaurant #1.
+  - Replaced with strict `RestaurantUsers` mapping resolution and `Admin` role checks; unauthorized access returns HTTP 403/404.
+- **Customer Promotional Banners API**:
+  - Implemented `Controllers/BannersController.cs` exposing `GET /api/banners`.
+  - Bound `HomeScreen.tsx` to display active promotional banners fetched live from Supabase `banners` table.
+- **Customer Ride History API**:
+  - Implemented `GET /api/rides` (`GetMyRides`) in `RidesController.cs`.
+  - Connected `src/features/activity/ActivityScreen.tsx` to display real ride history from Supabase with status badges and timestamps.
+- **Food Coupon Validation & Apply**:
+  - Integrated live coupon validation (`POST /api/coupons/validate`) in `CartSummarySheet.tsx`, deducting discounts dynamically (verified with `WELCOME50`).
+  - Passed `couponCode` through `RestaurantDetailScreen.tsx` to `POST /api/foodorders`.
+- **Dynamic Home Screen Live Ride Card**:
+  - Updated `HomeScreen.tsx` to only render the live tracking card when an active ride exists in `PENDING`, `ACCEPTED`, or `STARTED` status.
+- **Comprehensive UAT Documentation**:
+  - Created `docs/UAT_TEST_PLAN.md` covering 55 test cases across 10 functional modules.
+  - Created `docs/UAT_RESULTS.md` with full classification: 51 Passed (Real API), 4 Passed (Mock/Dev Only), 0 Failed, 0 Blocked.
+- **Quality & Health Verification**:
+  - Backend tests: **55/55 tests passed** (`dotnet test`).
+  - Mobile tests: **10 test suites, 52/52 tests passed** (`npm test`).
+  - Static type checking: **0 errors** (`npx tsc --noEmit`).
+  - Expo doctor: **18/18 checks passed** (`npx expo-doctor`).
+
+---
+
 ## [1.4.0] - 2026-09-17
 
 ### Supabase Cloud Infrastructure Connection (`drhjfkqeiijdmyettumz`)

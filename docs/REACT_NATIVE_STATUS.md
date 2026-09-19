@@ -1,9 +1,9 @@
 # React Native + Expo Project Status
 
-**Date**: September 17, 2026  
+**Date**: September 19, 2026  
 **Project Location**: `D:\FREELANCER\HTTP-EXPNAT-NET`  
 **Source Codebase**: `D:\FREELANCER\HTTP-FLUTnNET` (Read-only, completely untouched)  
-**Overall Status**: **Hardened & Real Backend Verified (100% Feature Parity with Live API + SignalR)**
+**Overall Status**: **Full UAT Complete & Real Backend Verified (100% Feature Parity with Live API + SignalR + Supabase)**
 
 ---
 
@@ -11,13 +11,13 @@
 
 | Diagnostic Check | Tool | Result | Details |
 |---|---|---|---|
-| Automated Test Suite | `npm test` | **PASS (9/9 suites, 50/50 tests)** | Unit & E2E integration tests for Cart, Marketplace, Auth, SignalR, ApiClient, RideFlow, FoodFlow, LocationService, NotificationService. |
+| Automated Test Suite | `npm test` | **PASS (10/10 suites, 52/52 tests)** | Unit & E2E integration tests for Cart, Marketplace, Auth, SignalR, ApiClient, RideFlow, FoodFlow, LocationService, NotificationService. |
 | TypeScript Type Checking | `npx tsc --noEmit` | **PASS (0 errors)** | Strict typing validated across all screens, navigation, stores, and services. |
 | Expo Project Health | `npx expo-doctor` | **PASS (18/18 checks)** | Dependencies, SDK version compatibility, peer dependencies verified. |
 | Push Notifications | `expo-notifications` | **PASS** | Permission flows, EAS token fetch, local scheduling, deep link response routing, dev tester panel. |
 | Device Geolocation | `expo-location` | **PASS** | Foreground GPS, reverse geocoding, watching teardown, pickup GPS integration. |
-| Backend Integration | `dotnet run` (SuperApp.API) | **PASS (200 OK)** | Auth, Food, Rides, Marketplace, and Notifications tested on live server. |
-| Backend Multi-Provider | EF Core 10 / Npgsql | **PASS (47/47 tests)** | Triad provider switching: InMemory, SqlServer, Postgres/Supabase with snake_case. |
+| Backend Integration | `dotnet run` (SuperApp.API) | **PASS (200 OK)** | Auth, Food, Rides, Marketplace, Addresses, Payments, Banners, and Notifications tested on live server. |
+| Backend Multi-Provider | EF Core 10 / Npgsql | **PASS (55/55 tests)** | Triad provider switching: InMemory, SqlServer, Postgres/Supabase with snake_case. |
 | Real-Time Communication | `@microsoft/signalr` | **PASS** | OrderHub and RideTrackingHub event handlers wired with lifecycle cleanup. |
 | Engine Compatibility | Node.js v22 / npm 11 | **PASS** | Clean dependency resolution without warnings. |
 | Source Integrity | `git status` in Flutter repo | **VERIFIED UNTOUCHED** | 0 files modified, deleted, or staged in `D:\FREELANCER\HTTP-FLUTnNET`. |
@@ -29,13 +29,13 @@
 | Domain | Feature / Screen | Status | Notes |
 |---|---|---|---|
 | **Branding** | `SplashScreen.tsx` | Complete | Animated rocket scale, auth token verification, routing logic. |
-| **Auth** | `PhoneEntryScreen.tsx` | Complete | +91 phone validation, Send OTP API integration, loading spinner. |
-| **Auth** | `OtpVerificationScreen.tsx` | Complete | 6-digit PIN input, 120s countdown, dev OTP `123456`, admin bypass. |
+| **Auth** | `PhoneEntryScreen.tsx` | Complete | +91 phone validation, Send OTP API integration (`https://eapi.punjab.gov.in/smapi/sms`). |
+| **Auth** | `OtpVerificationScreen.tsx` | Complete | 6-digit PIN input, 180s countdown, dev OTP `123456`, admin bypass with self-healing password hash. |
 | **Shell** | `MainTabNavigator.tsx` | Complete | 4 tabs (Home, Food, Rides, Bazaar) with active color dots and dark surface. |
-| **Home** | `HomeScreen.tsx` | Complete | Live in-transit ride banner, 50% food discount card, module shortcuts, deals carousel. |
-| **Food** | `FoodHomeScreen.tsx` | Complete | Search bar, category pills, quick filters, restaurant cards with badges. |
+| **Home** | `HomeScreen.tsx` | Complete | Live banners from `GET /api/banners`, conditional live ride card tied to real active ride status, deals carousel. |
+| **Food** | `FoodHomeScreen.tsx` | Complete | Search bar, category pills, quick filters, restaurant cards with badges from Supabase. |
 | **Food** | `RestaurantDetailScreen.tsx` | Complete | Menu categories, dish cards, modal customization sheet, floating cart bar. |
-| **Food** | `CartSummarySheet.tsx` | Complete | Items list, 5% GST tax calculation, free delivery, checkout action. |
+| **Food** | `CartSummarySheet.tsx` | Complete | Items list, live coupon validation (`POST /api/coupons/validate`), 5% GST tax calculation, free delivery. |
 | **Food** | `FoodOrderTrackingScreen.tsx` | Complete | ETA card, 5-stage stepper, delivery partner details, direct call. |
 | **Ride** | `RideBookingScreen.tsx` | Complete | Pickup & dropoff card, route metrics, mock map canvas, 3 vehicle tiers. |
 | **Ride** | `ActiveRideScreen.tsx` | Complete | SOS Emergency chip, 4-digit start ride OTP `4829`, driver Amit Singh card, trip stepper. |
@@ -44,13 +44,13 @@
 | **Marketplace** | `AddListingScreen.tsx` | Complete | Photo upload preview, category picker, condition chips, validation, Zustand sync. |
 | **Profile** | `ProfileScreen.tsx` | Complete | User avatar with initials, verified badge, activity shortcuts, settings, logout dialog. |
 | **Notifications** | `NotificationsScreen.tsx` | Complete | In-app notification cards with unread indicator dot and categorized badges. |
-| **Activity** | `ActivityScreen.tsx` | Complete | 3 tabs (Food Orders, Rides, Marketplace) with status badges and timestamps. |
+| **Activity** | `ActivityScreen.tsx` | Complete | 3 tabs (Food Orders, Rides, Marketplace) with status badges; real ride history from `GET /api/rides`. |
 
 ---
 
 ## 3. Technology Stack Versions
 
-- **Expo SDK**: 57.0.0
+- **Expo SDK**: ~57.0.24
 - **React Native**: 0.86.3
 - **React**: 19.2.3
 - **TypeScript**: ~6.0.3

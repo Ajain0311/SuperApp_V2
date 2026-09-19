@@ -86,6 +86,7 @@ export const ActivityScreen: React.FC = () => {
   ];
 
   const [foodOrders, setFoodOrders] = useState(initialFoodOrders);
+  const [ridesList, setRidesList] = useState(rides);
   const [listings, setListings] = useState(initialListings);
 
   useEffect(() => {
@@ -104,6 +105,26 @@ export const ActivityScreen: React.FC = () => {
             date: o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'Recent',
           }));
           setFoodOrders(mapped);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch user rides history
+    apiClient
+      .get<any>(ApiEndpoints.ride.myRides)
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((r: any) => ({
+            id: `#${r.rideNumber || `RD-${r.id}`}`,
+            vehicle: `${r.vehicleType || 'Ride'} (${r.driver?.registrationNumber || 'DL 04 AB 9821'})`,
+            route: `${r.pickupAddress || 'Pickup'} ➔ ${r.dropoffAddress || 'Dropoff'}`,
+            distance: `${r.distanceKm || 0} km`,
+            fare: `₹${r.actualFare || r.estimatedFare || 0}`,
+            status: String(r.status || 'PENDING').toUpperCase(),
+            date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+          }));
+          setRidesList(mapped);
         }
       })
       .catch(() => {});
@@ -184,7 +205,7 @@ export const ActivityScreen: React.FC = () => {
 
         {activeTab === 1 && (
           <FlatList
-            data={rides}
+            data={ridesList}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (

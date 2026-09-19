@@ -27,6 +27,39 @@ public class RidesController : ControllerBase
     }
 
     /// <summary>
+    /// Get list of past and active rides for the current authenticated user
+    /// </summary>
+    [HttpGet]
+    public async Task<ActionResult<ApiResponse<List<RideDto>>>> GetMyRides()
+    {
+        var userId = GetCurrentUserId();
+        var rides = await _db.Rides
+            .Where(r => r.UserId == userId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(50)
+            .ToListAsync();
+
+        var dtos = rides.Select(r => new RideDto
+        {
+            Id = r.Id,
+            RideNumber = r.RideNumber,
+            VehicleType = r.VehicleType,
+            PickupAddress = r.PickupAddress,
+            DropoffAddress = r.DropoffAddress,
+            DistanceKm = r.DistanceKm,
+            EstimatedFare = r.EstimatedFare,
+            ActualFare = r.ActualFare,
+            Status = r.Status,
+            OtpCode = r.OtpCode,
+            PaymentMethod = r.PaymentMethod,
+            PaymentStatus = r.PaymentStatus,
+            CreatedAt = r.CreatedAt
+        }).ToList();
+
+        return Ok(ApiResponse<List<RideDto>>.Ok(dtos));
+    }
+
+    /// <summary>
     /// Calculate distance, ETA, and fare estimate across vehicle tiers (BIKE, AUTO, CAB)
     /// </summary>
     [HttpPost("estimate")]

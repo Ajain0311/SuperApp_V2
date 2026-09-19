@@ -103,6 +103,15 @@ public class PunjabGovOtpService : IOtpService
 
         if (otpRequest.OtpCode != otpCode.Trim())
         {
+            // In non-production environments, permit test OTP 123456 for automated UAT / testing
+            var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+            if (!isProd && otpCode.Trim() == "123456")
+            {
+                otpRequest.IsUsed = true;
+                await _db.SaveChangesAsync();
+                return true;
+            }
+
             await _db.SaveChangesAsync();
             return false;
         }

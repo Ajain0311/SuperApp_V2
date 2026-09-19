@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,16 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { AppConstants } from '../../constants/app';
 import { CartItem } from '../../models/food';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 
 interface CartSummarySheetProps {
   visible: boolean;
@@ -19,7 +23,7 @@ interface CartSummarySheetProps {
   restaurantName: string;
   cartItems: CartItem[];
   onClear: () => void;
-  onOrderPlaced: () => void;
+  onOrderPlaced: (couponCode?: string) => void;
   isSubmitting?: boolean;
 }
 
@@ -32,10 +36,53 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   onOrderPlaced,
   isSubmitting = false,
 }) => {
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+
   const itemTotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const deliveryFee = 0; // FREE
-  const taxesAndPackaging = Math.round(itemTotal * 0.05 * 100) / 100; // 5% GST
-  const grandTotal = itemTotal + deliveryFee + taxesAndPackaging;
+  const discountedSubtotal = Math.max(0, itemTotal - discountAmount);
+  const taxesAndPackaging = Math.round(discountedSubtotal * 0.05 * 100) / 100; // 5% GST
+  const grandTotal = discountedSubtotal + deliveryFee + taxesAndPackaging;
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setIsValidatingCoupon(true);
+    setCouponMessage(null);
+    try {
+      const res = await apiClient.post<any>(ApiEndpoints.food.validateCoupon, {
+        code: couponCode.trim().toUpperCase(),
+        orderAmount: itemTotal,
+        module: 'FOOD',
+      });
+      const data = res.data?.data || res.data;
+      if (data?.isValid) {
+        setAppliedCoupon(data.code || couponCode.trim().toUpperCase());
+        setDiscountAmount(Number(data.discountAmount) || 0);
+        setCouponMessage(data.message || `Coupon applied! You saved ₹${data.discountAmount}`);
+      } else {
+        setAppliedCoupon(null);
+        setDiscountAmount(0);
+        setCouponMessage(data?.message || 'Invalid coupon code');
+      }
+    } catch (err: any) {
+      setAppliedCoupon(null);
+      setDiscountAmount(0);
+      setCouponMessage(err?.message || 'Could not validate coupon');
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+    setCouponMessage(null);
+    setCouponCode('');
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -79,6 +126,47 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
               ))}
             </View>
 
+            {/* Coupon Code Section */}
+            <View style={styles.couponSection}>
+              <View style={styles.couponInputRow}>
+                <View style={styles.couponInputBox}>
+                  <Ionicons name="pricetag-outline" size={18} color={AppColors.primary} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.couponInput}
+                    placeholder="Enter Coupon (e.g. WELCOME50)"
+                    placeholderTextColor={AppColors.textTertiary}
+                    value={couponCode}
+                    onChangeText={setCouponCode}
+                    autoCapitalize="characters"
+                    editable={!appliedCoupon && !isValidatingCoupon}
+                  />
+                </View>
+                {appliedCoupon ? (
+                  <TouchableOpacity style={styles.removeCouponBtn} onPress={handleRemoveCoupon}>
+                    <Text style={styles.removeCouponText}>Remove</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.applyCouponBtn, (!couponCode.trim() || isValidatingCoupon) && { opacity: 0.6 }]}
+                    onPress={handleApplyCoupon}
+                    disabled={!couponCode.trim() || isValidatingCoupon}
+                  >
+                    {isValidatingCoupon ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.applyCouponText}>Apply</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {couponMessage ? (
+                <Text style={[styles.couponMessageText, appliedCoupon ? styles.couponSuccess : styles.couponError]}>
+                  {couponMessage}
+                </Text>
+              ) : null}
+            </View>
+
             {/* Bill Breakdown */}
             <View style={styles.billBox}>
               <View style={styles.billRow}>
@@ -88,6 +176,15 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
                   {itemTotal.toFixed(0)}
                 </Text>
               </View>
+
+              {discountAmount > 0 && (
+                <View style={styles.billRow}>
+                  <Text style={[styles.billLabel, { color: AppColors.secondary }]}>Coupon Discount ({appliedCoupon})</Text>
+                  <Text style={[styles.billValue, { color: AppColors.secondary }]}>
+                    -{AppConstants.currency}{discountAmount.toFixed(0)}
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>Delivery Partner Fee</Text>
@@ -120,6 +217,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
               style={styles.clearButton}
               onPress={() => {
                 onClear();
+                handleRemoveCoupon();
                 onClose();
               }}
               activeOpacity={0.8}
@@ -129,7 +227,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
 
             <TouchableOpacity
               style={[styles.placeOrderButton, isSubmitting && { opacity: 0.7 }]}
-              onPress={onOrderPlaced}
+              onPress={() => onOrderPlaced(appliedCoupon || undefined)}
               disabled={isSubmitting}
               activeOpacity={0.85}
             >
@@ -187,26 +285,23 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.border,
   },
   scrollArea: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
   },
   itemsList: {
-    marginBottom: 12,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   itemCard: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: AppColors.surfaceLight,
-    borderRadius: AppRadius.md,
-    borderWidth: 1,
-    borderColor: `${AppColors.border}80`,
-    padding: 14,
-    marginBottom: 8,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.surfaceLight,
   },
   itemInfo: {
     flex: 1,
-    marginRight: 12,
+    paddingRight: 16,
   },
   itemTitle: {
     fontSize: 14,
@@ -220,7 +315,7 @@ const styles = StyleSheet.create({
   },
   itemAddons: {
     fontSize: 11,
-    color: AppColors.primaryLight,
+    color: AppColors.textTertiary,
     marginTop: 2,
   },
   itemPriceCol: {
@@ -232,21 +327,88 @@ const styles = StyleSheet.create({
     color: AppColors.textPrimary,
   },
   itemQuantity: {
-    fontSize: 11,
-    color: AppColors.textTertiary,
+    fontSize: 12,
+    color: AppColors.textSecondary,
     marginTop: 2,
+  },
+  couponSection: {
+    marginVertical: 12,
+    backgroundColor: AppColors.surfaceLight,
+    padding: 12,
+    borderRadius: AppRadius.md,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  couponInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  couponInputBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: AppRadius.sm,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    marginRight: 10,
+  },
+  couponInput: {
+    flex: 1,
+    color: AppColors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    padding: 0,
+  },
+  applyCouponBtn: {
+    backgroundColor: AppColors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: AppRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  applyCouponText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  removeCouponBtn: {
+    backgroundColor: `${AppColors.error}22`,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: AppRadius.sm,
+    borderWidth: 1,
+    borderColor: AppColors.error,
+  },
+  removeCouponText: {
+    color: AppColors.error,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  couponMessageText: {
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  couponSuccess: {
+    color: AppColors.secondary,
+  },
+  couponError: {
+    color: AppColors.error,
   },
   billBox: {
     backgroundColor: AppColors.surfaceLight,
-    borderRadius: AppRadius.lg,
-    borderWidth: 1,
-    borderColor: AppColors.border,
+    borderRadius: AppRadius.md,
     padding: 16,
-    marginBottom: 16,
+    marginVertical: 12,
   },
   billRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   billLabel: {
@@ -260,7 +422,7 @@ const styles = StyleSheet.create({
   },
   freeDeliveryText: {
     color: AppColors.secondary,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   billDivider: {
     height: 1,
@@ -271,6 +433,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 2,
   },
   grandTotalLabel: {
     fontSize: 16,
@@ -280,45 +443,40 @@ const styles = StyleSheet.create({
   grandTotalValue: {
     fontSize: 18,
     fontWeight: '900',
-    color: AppColors.textPrimary,
+    color: AppColors.primary,
   },
   actionsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 28,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: AppColors.border,
+    backgroundColor: AppColors.surface,
   },
   clearButton: {
-    height: 50,
-    paddingHorizontal: 18,
-    backgroundColor: AppColors.surfaceLight,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginRight: 10,
     borderRadius: AppRadius.md,
     borderWidth: 1,
     borderColor: AppColors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
   },
   clearButtonText: {
-    color: AppColors.textSecondary,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: AppColors.textSecondary,
   },
   placeOrderButton: {
     flex: 1,
-    height: 50,
     backgroundColor: AppColors.primary,
+    paddingVertical: 14,
     borderRadius: AppRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   placeOrderText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    color: '#FFFFFF',
   },
 });

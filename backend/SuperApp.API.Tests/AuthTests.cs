@@ -23,6 +23,8 @@ public class AuthTests
         Assert.False(isInvalid);
     }
 
+
+
     [Theory]
     [InlineData("CUSTOMER")]
     [InlineData("ADMIN")]

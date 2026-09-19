@@ -176,7 +176,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       ? foodItems
       : foodItems.filter((f) => f.category === menuCategories[selectedCategoryIndex]);
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = async (couponCode?: string) => {
     setIsPlacingOrder(true);
     try {
       const restId = Number(route.params?.restaurantId) || 1;
@@ -198,6 +198,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
           selectedAddonIds: [],
         })),
         addressId,
+        couponCode: couponCode || null,
         paymentMethod: 'CASH_ON_DELIVERY',
         deliveryInstructions: 'Leave at front door',
       };
