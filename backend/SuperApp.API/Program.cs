@@ -109,11 +109,27 @@ else
     builder.Services.AddScoped<IStorageService, LocalStorageService>();
 }
 
-// 2. OTP / SMS Provider (Mock in development; Karix/Twilio in production)
+// 2. OTP / SMS Provider (Mock in development; PunjabGov / Live SMS in production)
 var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") 
     ?? builder.Configuration["Providers:Otp"] 
-    ?? "Mock";
-builder.Services.AddScoped<IOtpService, MockOtpService>();
+    ?? "PunjabGov";
+
+builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<ISmsService, PunjabGovSmsService>();
+builder.Services.AddScoped<MockOtpService>();
+builder.Services.AddScoped<PunjabGovOtpService>();
+
+if (string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddScoped<IOtpService, MockOtpService>();
+}
+else
+{
+    builder.Services.AddScoped<IOtpService, PunjabGovOtpService>();
+}
 
 // 3. Payment Gateway Provider (Easebuzz test/live; Mock fallback)
 var paymentProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER")
