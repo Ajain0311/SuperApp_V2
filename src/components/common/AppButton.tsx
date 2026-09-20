@@ -23,6 +23,7 @@ interface AppButtonProps {
   icon?: React.ReactNode;
   disabled?: boolean;
   style?: ViewStyle;
+  testID?: string;
 }
 
 export const AppButton: React.FC<AppButtonProps> = ({
@@ -37,12 +38,15 @@ export const AppButton: React.FC<AppButtonProps> = ({
   icon,
   disabled = false,
   style,
+  testID,
 }) => {
   const bg = backgroundColor || AppColors.primary;
   const tc = textColor || (isOutlined ? bg : '#FFFFFF');
 
   return (
     <TouchableOpacity
+      testID={testID}
+      accessibilityRole="button"
       activeOpacity={0.8}
       disabled={disabled || isLoading}
       onPress={onPressed}

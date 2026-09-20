@@ -193,6 +193,7 @@ export const AddListingScreen: React.FC = () => {
         {/* Title */}
         <Text style={styles.inputLabel}>Item Title *</Text>
         <TextInput
+          testID="add-listing-title-input"
           placeholder="e.g. MacBook Pro M2 16GB / 512GB"
           placeholderTextColor={colors.textTertiary}
           value={title}
@@ -232,6 +233,7 @@ export const AddListingScreen: React.FC = () => {
         <View style={styles.priceInputWrapper}>
           <Text style={styles.pricePrefix}>₹</Text>
           <TextInput
+            testID="add-listing-price-input"
             keyboardType="numeric"
             placeholder="0.00"
             placeholderTextColor={colors.textTertiary}
@@ -271,6 +273,7 @@ export const AddListingScreen: React.FC = () => {
         {/* Location */}
         <Text style={styles.inputLabel}>Pickup Location *</Text>
         <TextInput
+          testID="add-listing-location-input"
           placeholder="e.g. Koramangala, Bengaluru"
           placeholderTextColor={colors.textTertiary}
           value={location}
@@ -296,6 +299,8 @@ export const AddListingScreen: React.FC = () => {
           style={styles.submitButton}
           onPress={handleSubmit}
           disabled={isSubmitting}
+          testID="add-listing-publish-btn"
+          accessibilityLabel="Publish Ad"
         >
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" />
