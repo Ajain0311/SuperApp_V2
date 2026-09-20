@@ -31,7 +31,6 @@ Complete architecture, database, API, and deployment documentation is organized 
 - [**UAT & Live Browser Test Results**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/UAT_RESULTS.md)
 - [**Production Release Checklist**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/RELEASE_CHECKLIST.md)
 - [**Project Changelog**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/CHANGELOG.md)
-- [**Cleanup & Consolidation Audit**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/CLEANUP_AUDIT.md)
 
 ---
 
@@ -85,10 +84,8 @@ HTTP-EXPNAT-NET/
 │   ├── SuperApp_Supabase.sql    # Idempotent 28-table PostgreSQL schema
 │   └── migrations/              # Incremental database migrations
 ├── docs/                        # 11 Canonical documentation files
-│   └── archive/                 # 23 Archived historical & intermediate reports
 ├── e2e/
-│   ├── master_live_test.js      # Canonical Playwright Chromium live browser test
-│   └── archive/                 # Archived legacy test runners
+│   └── master_live_test.js      # Canonical Playwright Chromium live browser test
 ├── scripts/
 │   ├── execute_full_uat.js      # Canonical 48-scenario automated UAT runner
 │   ├── seed-food-all.js         # Food catalog seed script

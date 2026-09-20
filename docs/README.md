@@ -20,21 +20,6 @@ All architectural, operational, and development documentation has been audited a
 | [**UAT & Verification Results**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/UAT_RESULTS.md) | Formal results record: 48/48 automated UAT scenarios passing, 15/15 Playwright live browser flows passing, 67/67 xUnit backend tests, and 73/73 Jest frontend tests. | Product Owners, QA Leads, Stakeholders |
 | [**Release Checklist**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/RELEASE_CHECKLIST.md) | Pre-flight release verification gates: schema checks, secret sanitization, smoke testing, performance validation, and rollback protocols. | Release Engineers, Tech Leads |
 | [**Changelog**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/CHANGELOG.md) | Complete version history following Keep a Changelog and Semantic Versioning specifications. | All Team Members |
-| [**Cleanup & Consolidation Audit**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/CLEANUP_AUDIT.md) | Historical record of the repository cleanup, classified file inventory, secret sanitization, and migration of legacy documents to the archive. | Compliance, Tech Leads |
-
----
-
-## 🗄️ Historical Archive
-
-Superseded research notes, intermediate migration summaries, and exploratory test plans from early phases of the project have been preserved for historical reference under [`docs/archive/`](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/archive/):
-
-- `CODING_COMPLETION_AUDIT.md` & `CODING_COMPLETION_REPORT.md`: Pre-UAT feature audit.
-- `DATABASE_CONTRACT.md` & `DATABASE_PROVIDER_CONFIGURATION.md`: Initial Supabase migration notes.
-- `FINAL_DATABASE_AUDIT.md`: Early database alignment report.
-- `FULL_UAT_TEST_PLAN.md` & `FULL_UAT_RESULTS.md`: Historical UAT milestone notes.
-- `REACT_NATIVE_*.md`: Initial cross-platform migration notes from the Flutter prototype.
-- `ROLE_SWITCHING.md` & `MULTI_ROLE_ARCHITECTURE.md`: Early multi-role design notes.
-- `SUPABASE_DATABASE.md` & `SUPABASE_SETUP.md`: Initial cloud database provisioning logs.
 
 ---
 

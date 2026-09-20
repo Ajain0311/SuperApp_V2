@@ -20,10 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Audited and sanitized utility scripts (`scripts/check-supabase.js`, `scripts/seed-food-all.js`, `scripts/seed-items.js`) to dynamically read database credentials from environment variables and `.env` instead of hardcoded strings.
   - Verified no plaintext passwords exist in active codebase.
 - **Repository Audit & Documentation Consolidation**:
-  - Audited full repository and created 11 canonical documentation references in `docs/`: `README.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `ROLES_AND_PERMISSIONS.md`, `DEVELOPMENT_SETUP.md`, `PRODUCTION_SETUP.md`, `TESTING.md`, `UAT_RESULTS.md`, `RELEASE_CHECKLIST.md`, and `CHANGELOG.md`.
-  - Archived 23 legacy/superseded reports under `docs/archive/` preserving historical context.
-  - Reorganized SQL files, creating `database/migrations/20260919_schema_audit_enhancements.sql`.
-  - Archived obsolete test runners under `e2e/archive/`.
+  - Audited full repository and established strictly the 11 canonical documentation references in `docs/`: `README.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `ROLES_AND_PERMISSIONS.md`, `DEVELOPMENT_SETUP.md`, `PRODUCTION_SETUP.md`, `TESTING.md`, `UAT_RESULTS.md`, `RELEASE_CHECKLIST.md`, and `CHANGELOG.md`.
+  - Purged obsolete reports, duplicate audits, and unused test runners from repository.
+  - Reorganized SQL files, centralizing migrations under `database/migrations/20260919_schema_audit_enhancements.sql`.
 - **Quality & Test Verification**:
   - Backend xUnit tests: **67/67 passed** (100%).
   - Frontend Jest tests: **73/73 passed** (100%).
