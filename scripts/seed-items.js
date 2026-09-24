@@ -1,11 +1,24 @@
+const fs = require('fs');
+const path = require('path');
 const { Client } = require("pg");
 
+function getDbPassword() {
+  if (process.env.SUPABASE_PASSWORD) return process.env.SUPABASE_PASSWORD;
+  if (process.env.DB_PASSWORD) return process.env.DB_PASSWORD;
+  try {
+    const envFile = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
+    const match = envFile.match(/Password=([^;]+);/i);
+    if (match && match[1]) return match[1];
+  } catch (_) {}
+  return process.env.SUPABASE_DB_PASSWORD || '';
+}
+
 const c = new Client({
-  host: "aws-0-ap-northeast-1.pooler.supabase.com",
-  port: 5432,
-  database: "postgres",
-  user: "postgres.drhjfkqeiijdmyettumz",
-  password: "Adi@supabase123!",
+  host: process.env.SUPABASE_HOST || "aws-0-ap-northeast-1.pooler.supabase.com",
+  port: parseInt(process.env.SUPABASE_PORT || "5432", 10),
+  database: process.env.SUPABASE_DB || "postgres",
+  user: process.env.SUPABASE_USER || "postgres.drhjfkqeiijdmyettumz",
+  password: getDbPassword(),
   ssl: { rejectUnauthorized: false },
 });
 

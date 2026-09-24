@@ -117,7 +117,13 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
+          testID="payment-back-btn"
+        >
           <Ionicons name="chevron-back" size={26} color={AppColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Easebuzz Payment</Text>
@@ -143,6 +149,8 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
         <View style={styles.card}>
           <Text style={styles.label}>Amount (INR)</Text>
           <TextInput
+            testID="payment-amount-input"
+            nativeID="payment-amount-input"
             style={styles.input}
             value={amount}
             onChangeText={(t) => setAmount(t.replace(/[^\d.]/g, ''))}
@@ -150,7 +158,13 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
           />
           <View style={styles.chips}>
             {AMOUNTS.map((n) => (
-              <TouchableOpacity key={n} style={styles.chip} onPress={() => setAmount(String(n))}>
+              <TouchableOpacity
+                key={n}
+                style={styles.chip}
+                onPress={() => setAmount(String(n))}
+                accessibilityRole="button"
+                testID={`payment-amount-chip-${n}`}
+              >
                 <Text style={styles.chipText}>₹{n}</Text>
               </TouchableOpacity>
             ))}
@@ -163,6 +177,8 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
                 key={m}
                 style={[styles.chip, module === m && styles.chipOn]}
                 onPress={() => setModule(m)}
+                accessibilityRole="button"
+                testID={`payment-module-chip-${m.toLowerCase()}`}
               >
                 <Text style={[styles.chipText, module === m && styles.chipTextOn]}>{m}</Text>
               </TouchableOpacity>
@@ -170,6 +186,7 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
           </View>
 
           <AppButton
+            testID="payment-submit-btn"
             text={busy ? 'Working…' : `Pay ₹${amount || '0'}`}
             onPressed={runPay}
             isLoading={busy}

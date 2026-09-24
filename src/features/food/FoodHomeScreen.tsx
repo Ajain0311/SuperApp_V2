@@ -172,6 +172,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
         {/* Search Bar */}
         <View style={styles.searchWrapper}>
           <AppSearchBar
+            testID="food-search-input"
             placeholder="Search Biryani, Burgers, Domino's..."
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -270,6 +271,9 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
             key={restaurant.id}
             style={styles.restaurantCard}
             activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={`Restaurant ${restaurant.name}`}
+            testID={`restaurant-card-${restaurant.id}`}
             onPress={() =>
               navigation.navigate('RestaurantDetail', {
                 restaurantId: restaurant.id.toString(),

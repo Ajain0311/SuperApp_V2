@@ -112,6 +112,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           style={styles.payTestBanner}
           activeOpacity={0.85}
           onPress={() => navigation.navigate('PaymentTest')}
+          accessibilityRole="button"
+          accessibilityLabel="Test Payment"
+          testID="payment-test-banner"
         >
           <View style={styles.payTestIcon}>
             <Ionicons name="card" size={22} color="#FFFFFF" />

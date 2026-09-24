@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { MainTabParamList } from './types';
@@ -55,6 +55,7 @@ export const MainTabNavigator: React.FC = () => {
             component={HomeScreen}
             options={{
               tabBarLabel: 'Home',
+              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-home" />,
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
@@ -68,6 +69,7 @@ export const MainTabNavigator: React.FC = () => {
             component={FoodHomeScreen}
             options={{
               tabBarLabel: 'Food',
+              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-food" />,
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'restaurant' : 'restaurant-outline'} size={22} color={color} />
@@ -81,6 +83,7 @@ export const MainTabNavigator: React.FC = () => {
             component={RideBookingScreen}
             options={{
               tabBarLabel: 'Rides',
+              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-rides" />,
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'car-sport' : 'car-sport-outline'} size={22} color={color} />
@@ -94,6 +97,7 @@ export const MainTabNavigator: React.FC = () => {
             component={MarketplaceHomeScreen}
             options={{
               tabBarLabel: 'Bazaar',
+              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-bazaar" />,
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'bag-handle' : 'bag-handle-outline'} size={22} color={color} />

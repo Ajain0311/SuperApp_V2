@@ -5,6 +5,30 @@ All notable changes in this migration project are documented below.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-09-20
+
+### Live Browser Testing, UAT Automation, Secret Sanitization & Documentation Consolidation
+- **Master Live Browser E2E Automation**:
+  - Implemented and executed `e2e/master_live_test.js` using Playwright Chromium against running Expo Web (`http://localhost:8081`) and ASP.NET Core 10 backend (`http://localhost:5000`).
+  - Successfully verified **15/15 form flows**: Authentication OTP, Restaurant Search, Menu & Addon selection, Cart & Coupon redemption, Order Placement, Order Tracking Stepper, Ride Estimation, Ride Booking, Bazaar Search, Ad Publishing, Ad Reporting, Role Switching, Driver Duty Toggle, and Admin Command Center.
+  - Recorded 36 live API network requests with **100% HTTP 200/201 success rate** and 0 browser console exceptions.
+- **Automated Full UAT Test Suite**:
+  - Created and executed `scripts/execute_full_uat.js` covering 48 comprehensive HTTP/SignalR test scenarios across all 12 backend controllers.
+  - Verified restaurant vendor kitchen state transitions (`PENDING` -> `ACCEPTED` -> `PREPARING` -> `READY` -> `DELIVERED`), driver lifecycle, coupon validation, reviews rolling averages, and negative authorization tests (`SEC-01` through `SEC-05`).
+  - Achieved **100% pass rate (48/48 scenarios)**.
+- **Security & Secret Sanitization**:
+  - Audited and sanitized utility scripts (`scripts/check-supabase.js`, `scripts/seed-food-all.js`, `scripts/seed-items.js`) to dynamically read database credentials from environment variables and `.env` instead of hardcoded strings.
+  - Verified no plaintext passwords exist in active codebase.
+- **Repository Audit & Documentation Consolidation**:
+  - Audited full repository and established strictly the 11 canonical documentation references in `docs/`: `README.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`, `ROLES_AND_PERMISSIONS.md`, `DEVELOPMENT_SETUP.md`, `PRODUCTION_SETUP.md`, `TESTING.md`, `UAT_RESULTS.md`, `RELEASE_CHECKLIST.md`, and `CHANGELOG.md`.
+  - Purged obsolete reports, duplicate audits, and unused test runners from repository.
+  - Reorganized SQL files, centralizing migrations under `database/migrations/20260919_schema_audit_enhancements.sql`.
+- **Quality & Test Verification**:
+  - Backend xUnit tests: **67/67 passed** (100%).
+  - Frontend Jest tests: **73/73 passed** (100%).
+  - TypeScript static analysis: **0 errors** (`npx tsc --noEmit`).
+  - Expo doctor audit: **18/18 checks passed** (`npx expo-doctor`).
+
 ---
 
 ## [2.2.0] - 2026-09-19

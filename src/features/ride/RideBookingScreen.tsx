@@ -354,6 +354,8 @@ export const RideBookingScreen: React.FC = () => {
             style={[styles.bookButton, isBooking && { opacity: 0.7 }]}
             disabled={isBooking}
             onPress={handleBookRide}
+            testID="book-ride-button"
+            accessibilityLabel="Book Ride"
           >
             <Text style={styles.bookButtonText}>
               {isBooking

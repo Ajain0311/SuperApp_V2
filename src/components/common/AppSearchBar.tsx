@@ -12,6 +12,7 @@ interface AppSearchBarProps {
   onSubmitEditing?: () => void;
   editable?: boolean;
   onPress?: () => void;
+  testID?: string;
 }
 
 export const AppSearchBar: React.FC<AppSearchBarProps> = ({
@@ -22,11 +23,13 @@ export const AppSearchBar: React.FC<AppSearchBarProps> = ({
   onSubmitEditing,
   editable = true,
   onPress,
+  testID,
 }) => {
   const content = (
     <View style={styles.container}>
       <Ionicons name="search-outline" size={20} color={AppColors.textTertiary} style={styles.icon} />
       <TextInput
+        testID={testID}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
