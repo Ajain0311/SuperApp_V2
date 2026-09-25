@@ -28,7 +28,7 @@ HTTP-EXPNAT-NET/
 │   │   ├── Controllers/         # 12 REST API controllers
 │   │   ├── Hubs/                # SignalR WebSocket hubs (order, ride, chat)
 │   │   ├── Models/              # Entity Framework Core 10 database entities
-│   │   ├── Services/            # Postal, SMS, Payment, and Notification services
+│   │   ├── Services/            # SMS, Payment, and Notification services
 │   │   └── Program.cs           # Dependency injection & middleware pipeline
 │   └── SuperApp.API.Tests/      # xUnit unit and integration test suite (67 tests)
 ├── database/

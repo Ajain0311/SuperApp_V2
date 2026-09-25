@@ -92,7 +92,7 @@ The tasks below represent the logical sequence of work remaining for production 
 - [x] **Master Playwright Live Browser Suite**: 15 form flows tested live against running Chromium with 100% HTTP 200 responses (`e2e/master_live_test.js`).
 - [x] **Automated Full UAT Test Suite**: 48 end-to-end scenarios covering all 12 controllers and multi-role operations (`scripts/execute_full_uat.js`).
 - [x] **Multi-Role Single-Identity Architecture**: Seamless switching between Customer, Driver, Restaurant Owner, Marketplace Seller, and Admin.
-- [x] **Zero-Cost Offline Postal Lookup Engine**: ~19,000 Indian PIN codes loaded in memory (`PostalService.cs`).
+- [x] **Manual Address Entry**: Removed external india-pincode API / postal lookup; Saved Addresses form uses manual City, State, and PIN fields.
 - [x] **Real-Time SignalR WebSockets**: Order tracking (`OrderStatusHub`), Ride telemetry (`RideTrackingHub`), and Chat (`ChatHub`).
 - [x] **Database Schema Alignment**: 28 PostgreSQL tables in Supabase with foreign key indexes and status check constraints.
 
@@ -100,6 +100,6 @@ The tasks below represent the logical sequence of work remaining for production 
 
 ## 📝 Last Session Handoff
 
-- **Date**: September 21, 2026
-- **Status**: Repository is 100% clean, all tests passing, pushed to `origin/main`.
-- **Next Agent Action**: Pick from **Phase 1: Production Gateway & Secret Provisioning** (e.g. testing production DLT SMS or EAS build setup).
+- **Date**: September 25, 2026
+- **Status**: Removed external india-pincode API from Saved Addresses (manual City / State / PIN). `git pull origin main` was already up to date. Verification: `npx tsc --noEmit` clean, Jest 73/73, `dotnet test` 67/67. Live UAT blocked by Supabase/Npgsql connectivity (env), not by this change. `npx expo-doctor` still reports unrelated patch version mismatches.
+- **Next Agent Action**: Continue **Phase 1: Production Gateway & Secret Provisioning**. Optionally fix Expo patch bumps and restore DB connectivity for live UAT.

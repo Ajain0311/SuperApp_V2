@@ -20,7 +20,6 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { apiClient, ApiError } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
-import { indiaPostalService, IndiaState, IndiaDistrict } from '../../services/indiaPostalService';
 
 type SavedAddress = {
   id: number;
@@ -43,8 +42,6 @@ const emptyForm = {
   state: '',
   pinCode: '',
   isDefault: false,
-  latitude: undefined as number | undefined,
-  longitude: undefined as number | undefined,
 };
 
 export const SavedAddressesScreen: React.FC = () => {
@@ -56,15 +53,6 @@ export const SavedAddressesScreen: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [states, setStates] = useState<IndiaState[]>([]);
-  const [districts, setDistricts] = useState<IndiaDistrict[]>([]);
-  const [districtsLoading, setDistrictsLoading] = useState(false);
-  const [stateOpen, setStateOpen] = useState(false);
-  const [districtOpen, setDistrictOpen] = useState(false);
-  const [stateQuery, setStateQuery] = useState('');
-  const [districtQuery, setDistrictQuery] = useState('');
-  const [pinStatus, setPinStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
-  const [pinMessage, setPinMessage] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,86 +76,10 @@ export const SavedAddressesScreen: React.FC = () => {
     }, [load])
   );
 
-  const loadDistrictsForState = async (stateName: string, keepDistrict?: string) => {
-    const slug = indiaPostalService.slugFromDisplay(stateName, states.length ? states : await indiaPostalService.getStates());
-    if (!slug) {
-      setDistricts([]);
-      return;
-    }
-    setDistrictsLoading(true);
-    try {
-      const list = await indiaPostalService.getDistricts(slug);
-      setDistricts(list);
-      if (keepDistrict) {
-        const match = list.find(
-          (d) => d.displayName.toLowerCase() === keepDistrict.toLowerCase() || d.name.toLowerCase() === keepDistrict.toLowerCase()
-        );
-        if (match) setForm((f) => ({ ...f, city: match.displayName }));
-      }
-    } catch {
-      setDistricts([]);
-    } finally {
-      setDistrictsLoading(false);
-    }
-  };
-
-  const ensureStates = async () => {
-    if (states.length > 0) return states;
-    const list = await indiaPostalService.getStates();
-    setStates(list);
-    return list;
-  };
-
-  const verifyPin = async (pin: string, currentStates?: IndiaState[]) => {
-    if (!/^\d{6}$/.test(pin)) {
-      setPinStatus('idle');
-      setPinMessage('');
-      return false;
-    }
-    setPinStatus('checking');
-    setPinMessage('Verifying PIN...');
-    const result = await indiaPostalService.lookupPincode(pin);
-    if (!result.valid || !result.state) {
-      setPinStatus('invalid');
-      setPinMessage(result.message || 'Invalid PIN code');
-      return false;
-    }
-    setPinStatus('valid');
-    setPinMessage(result.message || 'PIN verified');
-    const list = currentStates || (states.length ? states : await ensureStates());
-    const slug = result.stateSlug || indiaPostalService.slugFromDisplay(result.state, list);
-    setForm((f) => ({
-      ...f,
-      state: result.state || f.state,
-      city: result.district || f.city,
-      pinCode: pin,
-      latitude: result.latitude,
-      longitude: result.longitude,
-    }));
-    if (slug) {
-      setDistrictsLoading(true);
-      try {
-        const dlist = await indiaPostalService.getDistricts(slug);
-        setDistricts(dlist);
-      } finally {
-        setDistrictsLoading(false);
-      }
-    }
-    return true;
-  };
-
   const openAdd = () => {
     setEditingId(null);
     setForm({ ...emptyForm, isDefault: addresses.length === 0 });
-    setDistricts([]);
-    setPinStatus('idle');
-    setPinMessage('');
-    setStateOpen(false);
-    setDistrictOpen(false);
-    setStateQuery('');
-    setDistrictQuery('');
     setModalOpen(true);
-    void ensureStates();
   };
 
   const openEdit = (item: SavedAddress) => {
@@ -180,38 +92,18 @@ export const SavedAddressesScreen: React.FC = () => {
       state: item.state,
       pinCode: item.pinCode,
       isDefault: item.isDefault,
-      latitude: undefined,
-      longitude: undefined,
     });
-    setPinStatus(/^\d{6}$/.test(item.pinCode) ? 'valid' : 'idle');
-    setPinMessage(/^\d{6}$/.test(item.pinCode) ? 'Saved PIN' : '');
-    setStateOpen(false);
-    setDistrictOpen(false);
-    setStateQuery('');
-    setDistrictQuery('');
     setModalOpen(true);
-    void (async () => {
-      const list = await ensureStates();
-      await loadDistrictsForState(item.state, item.city);
-      if (/^\d{6}$/.test(item.pinCode)) void verifyPin(item.pinCode, list);
-    })();
   };
 
   const handleSave = async () => {
     if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim() || !form.pinCode.trim()) {
-      Alert.alert('Missing fields', 'Address, district, state and PIN are required.');
+      Alert.alert('Missing fields', 'Address, city, state and PIN are required.');
       return;
     }
     if (!/^\d{6}$/.test(form.pinCode.trim())) {
       Alert.alert('Invalid PIN', 'Enter a 6-digit Indian PIN code.');
       return;
-    }
-    if (pinStatus !== 'valid') {
-      const ok = await verifyPin(form.pinCode.trim());
-      if (!ok) {
-        Alert.alert('Invalid PIN', pinMessage || 'This PIN code could not be verified.');
-        return;
-      }
     }
     setSaving(true);
     try {
@@ -223,8 +115,6 @@ export const SavedAddressesScreen: React.FC = () => {
         state: form.state.trim(),
         pinCode: form.pinCode.trim(),
         isDefault: form.isDefault,
-        latitude: form.latitude,
-        longitude: form.longitude,
       };
       if (editingId) {
         await apiClient.put(ApiEndpoints.common.address(editingId), body);
@@ -330,190 +220,77 @@ export const SavedAddressesScreen: React.FC = () => {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalTitle}>{editingId ? 'Edit address' : 'Add address'}</Text>
-            <View style={styles.labelRow}>
-              {LABELS.map((label) => (
-                <TouchableOpacity
-                  key={label}
-                  style={[styles.chip, form.label === label && styles.chipOn]}
-                  onPress={() => setForm((f) => ({ ...f, label }))}
-                >
-                  <Text style={[styles.chipText, form.label === label && styles.chipTextOn]}>{label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder="House / street"
-              placeholderTextColor={colors.textTertiary}
-              value={form.addressLine1}
-              onChangeText={(addressLine1) => setForm((f) => ({ ...f, addressLine1 }))}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Landmark (optional)"
-              placeholderTextColor={colors.textTertiary}
-              value={form.addressLine2}
-              onChangeText={(addressLine2) => setForm((f) => ({ ...f, addressLine2 }))}
-            />
-            <TextInput
-              style={[
-                styles.input,
-                pinStatus === 'valid' && styles.inputValid,
-                pinStatus === 'invalid' && styles.inputInvalid,
-              ]}
-              placeholder="PIN code"
-              placeholderTextColor={colors.textTertiary}
-              keyboardType="number-pad"
-              maxLength={6}
-              value={form.pinCode}
-              onChangeText={(pinCode) => {
-                const next = pinCode.replace(/\D/g, '').slice(0, 6);
-                setForm((f) => ({ ...f, pinCode: next }));
-                if (next.length === 6) void verifyPin(next);
-                else {
-                  setPinStatus('idle');
-                  setPinMessage('');
-                }
-              }}
-            />
-            {pinStatus === 'checking' ? <ActivityIndicator color={colors.primary} style={{ marginBottom: 8 }} /> : null}
-            {pinMessage ? (
-              <Text style={pinStatus === 'invalid' ? styles.pinError : styles.pinOk}>{pinMessage}</Text>
-            ) : (
-              <Text style={styles.helper}>6-digit PIN auto-fills state and district</Text>
-            )}
-
-            <TouchableOpacity
-              style={styles.select}
-              onPress={() => {
-                setDistrictOpen(false);
-                setDistrictQuery('');
-                setStateOpen((v) => {
-                  const next = !v;
-                  if (next) setStateQuery('');
-                  return next;
-                });
-                void ensureStates();
-              }}
-            >
-              <Text style={form.state ? styles.selectValue : styles.selectPlaceholder}>
-                {form.state || 'Select state'}
-              </Text>
-              <MaterialIcons name={stateOpen ? 'expand-less' : 'expand-more'} size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-            {stateOpen ? (
-              <View style={styles.dropdown}>
-                <View style={styles.searchRow}>
-                  <MaterialIcons name="search" size={18} color={colors.textTertiary} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search state..."
-                    placeholderTextColor={colors.textTertiary}
-                    value={stateQuery}
-                    onChangeText={setStateQuery}
-                    autoFocus
-                  />
-                </View>
-                <ScrollView style={styles.optionList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                  {states
-                    .filter((s) => s.displayName.toLowerCase().includes(stateQuery.trim().toLowerCase()))
-                    .map((s) => (
-                      <TouchableOpacity
-                        key={s.slug}
-                        style={styles.option}
-                        onPress={() => {
-                          setForm((f) => ({ ...f, state: s.displayName, city: '' }));
-                          setStateOpen(false);
-                          setStateQuery('');
-                          setDistrictQuery('');
-                          void loadDistrictsForState(s.displayName);
-                        }}
-                      >
-                        <Text style={styles.optionText}>{s.displayName}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  {states.filter((s) => s.displayName.toLowerCase().includes(stateQuery.trim().toLowerCase())).length === 0 ? (
-                    <Text style={styles.emptyOption}>No state matched</Text>
-                  ) : null}
-                </ScrollView>
+              <Text style={styles.modalTitle}>{editingId ? 'Edit address' : 'Add address'}</Text>
+              <View style={styles.labelRow}>
+                {LABELS.map((label) => (
+                  <TouchableOpacity
+                    key={label}
+                    style={[styles.chip, form.label === label && styles.chipOn]}
+                    onPress={() => setForm((f) => ({ ...f, label }))}
+                  >
+                    <Text style={[styles.chipText, form.label === label && styles.chipTextOn]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.select, !form.state && styles.selectDisabled]}
-              disabled={!form.state}
-              onPress={() => {
-                if (!form.state) return;
-                setStateOpen(false);
-                setStateQuery('');
-                setDistrictOpen((v) => {
-                  const next = !v;
-                  if (next) setDistrictQuery('');
-                  return next;
-                });
-                if (districts.length === 0) void loadDistrictsForState(form.state, form.city);
-              }}
-            >
-              <Text style={form.city ? styles.selectValue : styles.selectPlaceholder}>
-                {districtsLoading ? 'Loading districts...' : form.city || 'Select district'}
-              </Text>
-              <MaterialIcons name={districtOpen ? 'expand-less' : 'expand-more'} size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-            {districtOpen ? (
-              <View style={styles.dropdown}>
-                <View style={styles.searchRow}>
-                  <MaterialIcons name="search" size={18} color={colors.textTertiary} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search district..."
-                    placeholderTextColor={colors.textTertiary}
-                    value={districtQuery}
-                    onChangeText={setDistrictQuery}
-                    autoFocus
-                  />
-                </View>
-                <ScrollView style={styles.optionList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                  {districts
-                    .filter((d) => d.displayName.toLowerCase().includes(districtQuery.trim().toLowerCase()))
-                    .map((d) => (
-                      <TouchableOpacity
-                        key={d.slug}
-                        style={styles.option}
-                        onPress={() => {
-                          setForm((f) => ({ ...f, city: d.displayName }));
-                          setDistrictOpen(false);
-                          setDistrictQuery('');
-                        }}
-                      >
-                        <Text style={styles.optionText}>{d.displayName}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  {districts.filter((d) => d.displayName.toLowerCase().includes(districtQuery.trim().toLowerCase())).length === 0 ? (
-                    <Text style={styles.emptyOption}>{districtsLoading ? 'Loading...' : 'No district matched'}</Text>
-                  ) : null}
-                </ScrollView>
-              </View>
-            ) : null}
-            <TouchableOpacity
-              style={styles.defaultRow}
-              onPress={() => setForm((f) => ({ ...f, isDefault: !f.isDefault }))}
-            >
-              <MaterialIcons
-                name={form.isDefault ? 'check-box' : 'check-box-outline-blank'}
-                size={22}
-                color={colors.primary}
+              <TextInput
+                style={styles.input}
+                placeholder="House / street"
+                placeholderTextColor={colors.textTertiary}
+                value={form.addressLine1}
+                onChangeText={(addressLine1) => setForm((f) => ({ ...f, addressLine1 }))}
               />
-              <Text style={styles.defaultRowText}>Use as default delivery address</Text>
-            </TouchableOpacity>
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalOpen(false)}>
-                <Text style={styles.cancelText}>Cancel</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Landmark (optional)"
+                placeholderTextColor={colors.textTertiary}
+                value={form.addressLine2}
+                onChangeText={(addressLine2) => setForm((f) => ({ ...f, addressLine2 }))}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="City"
+                placeholderTextColor={colors.textTertiary}
+                value={form.city}
+                onChangeText={(city) => setForm((f) => ({ ...f, city }))}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="State"
+                placeholderTextColor={colors.textTertiary}
+                value={form.state}
+                onChangeText={(state) => setForm((f) => ({ ...f, state }))}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="PIN code"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+                maxLength={6}
+                value={form.pinCode}
+                onChangeText={(pinCode) => {
+                  const next = pinCode.replace(/\D/g, '').slice(0, 6);
+                  setForm((f) => ({ ...f, pinCode: next }));
+                }}
+              />
+              <TouchableOpacity
+                style={styles.defaultRow}
+                onPress={() => setForm((f) => ({ ...f, isDefault: !f.isDefault }))}
+              >
+                <MaterialIcons
+                  name={form.isDefault ? 'check-box' : 'check-box-outline-blank'}
+                  size={22}
+                  color={colors.primary}
+                />
+                <Text style={styles.defaultRowText}>Use as default delivery address</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save</Text>}
-              </TouchableOpacity>
-            </View>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalOpen(false)}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveBtn} onPress={() => void handleSave()} disabled={saving}>
+                  {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save</Text>}
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -596,51 +373,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  inputValid: { borderColor: colors.secondary },
-  inputInvalid: { borderColor: colors.error },
-  helper: { color: colors.textTertiary, fontSize: 12, marginBottom: 10, marginTop: -4 },
-  pinOk: { color: colors.secondary, fontSize: 12, marginBottom: 10, marginTop: -4 },
-  pinError: { color: colors.error, fontSize: 12, marginBottom: 10, marginTop: -4 },
-  select: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  selectDisabled: { opacity: 0.5 },
-  selectValue: { color: colors.textPrimary, flex: 1 },
-  selectPlaceholder: { color: colors.textTertiary, flex: 1 },
-  dropdown: {
-    maxHeight: 240,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    marginBottom: 10,
-    backgroundColor: colors.surfaceLight,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    paddingVertical: 10,
-  },
-  optionList: { maxHeight: 180 },
-  option: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
-  optionText: { color: colors.textPrimary },
-  emptyOption: { color: colors.textTertiary, padding: 14 },
   defaultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 8 },
   defaultRowText: { color: colors.textPrimary },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },

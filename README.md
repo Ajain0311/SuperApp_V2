@@ -12,7 +12,7 @@
 
 A cross-platform mobile ecosystem built with **React Native** and **Expo SDK 57**, integrating Food Delivery, Ride Hailing, and Community Marketplace into a single application.
 
-Powered by an **ASP.NET Core 10** Web API with real-time **SignalR** WebSocket hubs, a pooled **PostgreSQL** database (28 relational tables), zero-cost offline postal lookup engine, and native device push notifications and geolocation.
+Powered by an **ASP.NET Core 10** Web API with real-time **SignalR** WebSocket hubs, a pooled **PostgreSQL** database (28 relational tables), and native device push notifications and geolocation.
 
 ---
 

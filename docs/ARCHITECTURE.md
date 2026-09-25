@@ -17,7 +17,7 @@ A fundamental engineering constraint of SuperApp V2 is **Zero Operational Overhe
 
 | Architectural Dimension | Traditional Enterprise Solution | SuperApp V2 Zero-Cost Solution |
 |---|---|---|
-| **Map & Geocoding APIs** | Google Maps Platform / Mapbox ($5–$10 per 1,000 requests) | Built-in Haversine spherical math calculation engine + offline India Postal PIN database (~19,000 PIN codes embedded in C# memory). Zero external API calls. |
+| **Map & Geocoding APIs** | Google Maps Platform / Mapbox ($5–$10 per 1,000 requests) | Built-in Haversine spherical math calculation engine. Address forms use manual city / state / PIN entry (no external geocoding or postal APIs). |
 | **Message Broker / Queue** | RabbitMQ / Apache Kafka / Redis PubSub | ASP.NET Core in-memory SignalR WebSockets with typed group channels (`order-{id}`, `drivers-pool`, `ride-{id}`). |
 | **Background Job Scheduler** | Hangfire / Quartz.NET with Redis storage | ASP.NET Core native `IHostedService` / `BackgroundService` with cancellation tokens. |
 | **SMS Gateway** | Twilio / AWS SNS / MessageBird ($0.05/SMS) | Direct integration with **Punjab State e-Governance DLT SMS Gateway** (`https://eapi.punjab.gov.in/smapi/sms`) with dev-mode secure fallbacks. |
@@ -78,7 +78,7 @@ flowchart LR
         AuthMiddleware["JWT Bearer Authentication\n& Role Authorization Middleware"]
         Controllers["12 API Controllers\n(Auth, Food, Rides, Bazaar, etc.)"]
         Hubs["3 SignalR Hubs\n(OrderStatusHub, RideTrackingHub, ChatHub)"]
-        Services["Domain Services\n(Postal, SMS, Payment, Notification)"]
+        Services["Domain Services\n(SMS, Payment, Notification)"]
         EF["Entity Framework Core 10\n(Npgsql Data Provider)"]
 
         Kestrel --> AuthMiddleware
@@ -221,13 +221,9 @@ sequenceDiagram
 
 ---
 
-## 7. Zero-Cost Offline Postal Lookup Engine
+## 7. Address Entry (Manual)
 
-To eliminate costly Google Geocoding / Place API queries ($5 per 1,000 requests), SuperApp V2 includes an embedded in-memory Indian Postal Index:
-- **Dataset**: ~19,000 distinct Indian 6-digit postal PIN codes mapped to District, State, and Primary Post Office name.
-- **Implementation**: [`PostalService.cs`](file:///D:/FREELANCER/HTTP-EXPNAT-NET/backend/SuperApp.API/Services/PostalService.cs) loads an optimized dictionary on application startup.
-- **Lookup Latency**: `< 0.05 ms` in-memory retrieval without network I/O.
-- **Frontend Integration**: As the user types a 6-digit PIN code in address forms, the city, state, and district auto-populate instantly.
+Saved address forms collect house/street, optional landmark, city, state, and 6-digit PIN as plain text fields. There is no client or server postal lookup API, so city and state are entered manually by the user.
 
 ---
 
