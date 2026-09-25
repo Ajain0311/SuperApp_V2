@@ -89,6 +89,8 @@ export const SavedAddressesScreen: React.FC = () => {
   };
 
   const openEdit = (item: SavedAddress) => {
+    const lat = item.latitude != null ? Number(item.latitude) : undefined;
+    const lng = item.longitude != null ? Number(item.longitude) : undefined;
     setEditingId(item.id);
     setForm({
       label: item.label || 'Home',
@@ -98,8 +100,8 @@ export const SavedAddressesScreen: React.FC = () => {
       state: item.state,
       pinCode: item.pinCode,
       isDefault: item.isDefault,
-      latitude: item.latitude ?? undefined,
-      longitude: item.longitude ?? undefined,
+      latitude: lat != null && Number.isFinite(lat) ? lat : undefined,
+      longitude: lng != null && Number.isFinite(lng) ? lng : undefined,
     });
     setModalOpen(true);
   };
@@ -116,6 +118,36 @@ export const SavedAddressesScreen: React.FC = () => {
     }));
   };
 
+  const resolveCoordinates = () => {
+    const fromFormLat = form.latitude;
+    const fromFormLng = form.longitude;
+    if (
+      typeof fromFormLat === 'number' &&
+      typeof fromFormLng === 'number' &&
+      Number.isFinite(fromFormLat) &&
+      Number.isFinite(fromFormLng) &&
+      !(fromFormLat === 0 && fromFormLng === 0)
+    ) {
+      return { latitude: fromFormLat, longitude: fromFormLng };
+    }
+
+    // Edit safety net: if the form lost pins, keep whatever was already saved.
+    if (editingId != null) {
+      const existing = addresses.find((a) => a.id === editingId);
+      if (
+        existing &&
+        typeof existing.latitude === 'number' &&
+        typeof existing.longitude === 'number' &&
+        Number.isFinite(existing.latitude) &&
+        Number.isFinite(existing.longitude)
+      ) {
+        return { latitude: existing.latitude, longitude: existing.longitude };
+      }
+    }
+
+    return null;
+  };
+
   const handleSave = async () => {
     if (!form.addressLine1.trim() || !form.city.trim() || !form.state.trim() || !form.pinCode.trim()) {
       Alert.alert('Missing fields', 'Address, city, state and PIN are required.');
@@ -127,7 +159,8 @@ export const SavedAddressesScreen: React.FC = () => {
     }
     setSaving(true);
     try {
-      const body = {
+      const coords = resolveCoordinates();
+      const body: Record<string, unknown> = {
         label: form.label,
         addressLine1: form.addressLine1.trim(),
         addressLine2: form.addressLine2.trim() || null,
@@ -135,9 +168,13 @@ export const SavedAddressesScreen: React.FC = () => {
         state: form.state.trim(),
         pinCode: form.pinCode.trim(),
         isDefault: form.isDefault,
-        latitude: form.latitude,
-        longitude: form.longitude,
       };
+      // Only send coordinates when we have a real pin — never send null/undefined
+      // that could clear an existing DB value through a buggy client/server path.
+      if (coords) {
+        body.latitude = coords.latitude;
+        body.longitude = coords.longitude;
+      }
       if (editingId) {
         await apiClient.put(ApiEndpoints.common.address(editingId), body);
       } else {
@@ -173,7 +210,9 @@ export const SavedAddressesScreen: React.FC = () => {
 
   const setDefault = async (item: SavedAddress) => {
     try {
-      await apiClient.put(ApiEndpoints.common.setDefaultAddress(item.id));
+      // Dedicated endpoint updates ONLY is_default — do not PUT the full address
+      // payload here (that path previously risked dropping latitude/longitude).
+      await apiClient.put(ApiEndpoints.common.setDefaultAddress(item.id), {});
       await load();
     } catch (e) {
       Alert.alert('Could not update', e instanceof ApiError ? e.message : 'Try again.');
@@ -216,6 +255,13 @@ export const SavedAddressesScreen: React.FC = () => {
             <Text style={styles.lineMuted}>
               {item.city}, {item.state} {item.pinCode}
             </Text>
+            {item.latitude != null && item.longitude != null ? (
+              <Text style={styles.coordsText}>
+                📍 {Number(item.latitude).toFixed(5)}, {Number(item.longitude).toFixed(5)}
+              </Text>
+            ) : (
+              <Text style={styles.coordsMissing}>No map pin saved — edit and pick location</Text>
+            )}
             <View style={styles.actions}>
               {!item.isDefault ? (
                 <TouchableOpacity onPress={() => void setDefault(item)}>
@@ -360,6 +406,8 @@ const styles = StyleSheet.create({
   defaultBadge: { color: colors.secondary, fontSize: 11, fontWeight: '700' },
   line: { color: colors.textPrimary, marginTop: 2 },
   lineMuted: { color: colors.textSecondary, marginTop: 2 },
+  coordsText: { color: colors.secondary, fontSize: 12, marginTop: 6, fontWeight: '600' },
+  coordsMissing: { color: colors.textTertiary, fontSize: 12, marginTop: 6 },
   actions: { flexDirection: 'row', gap: 16, marginTop: 12 },
   actionLink: { color: colors.blue, fontWeight: '600' },
   addBtn: {

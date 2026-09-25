@@ -103,6 +103,8 @@ The tasks below represent the logical sequence of work remaining for production 
 - [x] **Automated Full UAT Test Suite**: 48 end-to-end scenarios covering all 12 controllers and multi-role operations (`scripts/execute_full_uat.js`).
 - [x] **Multi-Role Single-Identity Architecture**: Seamless switching between Customer, Driver, Restaurant Owner, Marketplace Seller, and Admin.
 - [x] **Manual Address Entry**: Removed external india-pincode API / postal lookup; Saved Addresses form uses manual City, State, and PIN fields.
+- [x] **Address Pin Persistence**: Set-default / update paths preserve `latitude`/`longitude` (column-scoped default update + frontend omits null coords).
+- [x] **Web Bottom Tabs**: Fixed full-page refresh back to Home caused by custom `tabBarButton` `href` handling on React Native Web.
 - [x] **Real-Time SignalR WebSockets**: Order tracking (`OrderStatusHub`), Ride telemetry (`RideTrackingHub`), and Chat (`ChatHub`).
 - [x] **Database Schema Alignment**: 28 PostgreSQL tables in Supabase with foreign key indexes and status check constraints.
 
@@ -111,5 +113,5 @@ The tasks below represent the logical sequence of work remaining for production 
 ## 📝 Last Session Handoff
 
 - **Date**: September 25, 2026
-- **Status**: Mapbox rides + address search shipped on `main`. Verification: `tsc` clean, Jest 73/73, backend 66/66 offline (+ live Supabase schema test flaky then pass). Tokens stay in gitignored `.env` only. Native MapView needs Dev Client rebuild.
-- **Next Agent Action**: `npx expo prebuild` + `npx expo run:android` for device Mapbox smoke; then MAP-02 live ActiveRide map or Phase 1 production gateways.
+- **Status**: Local web run healthy (`localhost:8081` + API `:5000` via Supabase pooler). Fixed (1) OTP/DB by switching to pooler + localhost API URLs; (2) bottom-tab full page refresh on web by replacing custom `TouchableOpacity` `tabBarButton` with `tabBarButtonTestID`; (3) Saved Addresses set-default/update no longer risk wiping `latitude`/`longitude` — SetDefault uses column-scoped `ExecuteUpdate`, Update only overwrites coords when both values are present, frontend omits null coords and shows pin on cards. AddressTests 2/2 passed; live API set-default/update coord-preservation PASS.
+- **Next Agent Action**: Confirm Rides/Food/Bazaar tabs + Saved Addresses set-default in browser after hard refresh. Then MAP-02 or finish Android SDK/`npx expo run:android` if native Mapbox needed.

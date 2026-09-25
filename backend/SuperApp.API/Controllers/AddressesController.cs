@@ -71,8 +71,10 @@ public class AddressesController : ControllerBase
 
         if (makeDefault)
         {
-            await ClearDefaults(userId.Value);
+            await ClearDefaultsAsync(userId.Value);
         }
+
+        var (lat, lng) = NormalizeCoordinates(request.Latitude, request.Longitude);
 
         var address = new Address
         {
@@ -83,8 +85,8 @@ public class AddressesController : ControllerBase
             City = request.City.Trim(),
             State = request.State.Trim(),
             PinCode = request.PinCode.Trim(),
-            Latitude = request.Latitude,
-            Longitude = request.Longitude,
+            Latitude = lat,
+            Longitude = lng,
             IsDefault = makeDefault,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
@@ -116,13 +118,18 @@ public class AddressesController : ControllerBase
         address.City = request.City.Trim();
         address.State = request.State.Trim();
         address.PinCode = request.PinCode.Trim();
-        address.Latitude = request.Latitude ?? address.Latitude;
-        address.Longitude = request.Longitude ?? address.Longitude;
+        // Never wipe existing map pins: only overwrite when the client sends real coordinates.
+        var (lat, lng) = NormalizeCoordinates(request.Latitude, request.Longitude);
+        if (lat.HasValue && lng.HasValue)
+        {
+            address.Latitude = lat;
+            address.Longitude = lng;
+        }
         address.UpdatedAt = DateTime.UtcNow;
 
         if (request.IsDefault)
         {
-            await ClearDefaults(userId.Value, address.Id);
+            await ClearDefaultsAsync(userId.Value, address.Id);
             address.IsDefault = true;
         }
 
@@ -137,15 +144,22 @@ public class AddressesController : ControllerBase
         if (userId == null)
             return Unauthorized(ApiResponse<AddressDto>.Fail("Please log in"));
 
-        var address = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId && a.IsActive);
+        var address = await _db.Addresses.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId && a.IsActive);
         if (address == null)
             return NotFound(ApiResponse<AddressDto>.Fail("Address not found"));
 
-        await ClearDefaults(userId.Value, address.Id);
+        // Column-scoped updates only — never touch latitude/longitude on set-default.
+        await ClearDefaultsAsync(userId.Value, id);
+
+        await _db.Addresses
+            .Where(a => a.Id == id && a.UserId == userId.Value && a.IsActive)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.IsDefault, true)
+                .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+
         address.IsDefault = true;
         address.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-
         return Ok(ApiResponse<AddressDto>.Ok(Map(address), "Default address updated"));
     }
 
@@ -160,30 +174,57 @@ public class AddressesController : ControllerBase
         if (address == null)
             return NotFound(ApiResponse.Fail("Address not found"));
 
+        var wasDefault = address.IsDefault;
         address.IsActive = false;
         address.IsDefault = false;
         address.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        var next = await _db.Addresses
-            .Where(a => a.UserId == userId && a.IsActive)
-            .OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt)
-            .FirstOrDefaultAsync();
-        if (next != null)
+        if (wasDefault)
         {
-            next.IsDefault = true;
-            await _db.SaveChangesAsync();
+            var nextId = await _db.Addresses
+                .Where(a => a.UserId == userId && a.IsActive)
+                .OrderByDescending(a => a.UpdatedAt ?? a.CreatedAt)
+                .Select(a => (long?)a.Id)
+                .FirstOrDefaultAsync();
+            if (nextId != null)
+            {
+                await _db.Addresses
+                    .Where(a => a.Id == nextId.Value)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(a => a.IsDefault, true)
+                        .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+            }
         }
 
         return Ok(ApiResponse.Ok("Address removed"));
     }
 
-    private async Task ClearDefaults(long userId, long? exceptId = null)
+    /// <summary>
+    /// Clears other default flags with a column-scoped SQL update so latitude/longitude
+    /// and other address fields cannot be accidentally overwritten by change-tracking.
+    /// </summary>
+    private async Task ClearDefaultsAsync(long userId, long? exceptId = null)
     {
-        var current = await _db.Addresses
+        await _db.Addresses
             .Where(a => a.UserId == userId && a.IsActive && a.IsDefault && (exceptId == null || a.Id != exceptId))
-            .ToListAsync();
-        foreach (var a in current)
-            a.IsDefault = false;
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
+    }
+
+    private static (decimal? Latitude, decimal? Longitude) NormalizeCoordinates(decimal? latitude, decimal? longitude)
+    {
+        if (!latitude.HasValue || !longitude.HasValue)
+            return (null, null);
+
+        var lat = latitude.Value;
+        var lng = longitude.Value;
+        if (lat is < -90m or > 90m || lng is < -180m or > 180m)
+            return (null, null);
+
+        // Treat exact 0,0 as unset (common client placeholder / cleared pin).
+        if (lat == 0m && lng == 0m)
+            return (null, null);
+
+        return (lat, lng);
     }
 }

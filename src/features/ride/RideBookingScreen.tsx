@@ -209,7 +209,14 @@ export const RideBookingScreen: React.FC = () => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.navigate('MainTabs', { screen: 'Home' })}
+          onPress={() => {
+            // Prefer sibling tab jump; avoid nested MainTabs navigate which can remount web stack.
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+              return;
+            }
+            navigation.navigate('MainTabs', { screen: 'Home' });
+          }}
         >
           <MaterialIcons name="chevron-left" size={28} color={colors.textPrimary} />
         </TouchableOpacity>

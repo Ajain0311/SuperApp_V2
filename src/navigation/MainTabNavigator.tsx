@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { MainTabParamList } from './types';
@@ -55,7 +55,9 @@ export const MainTabNavigator: React.FC = () => {
             component={HomeScreen}
             options={{
               tabBarLabel: 'Home',
-              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-home" />,
+              // Use tabBarButtonTestID (not custom TouchableOpacity) — spreading href onto
+              // TouchableOpacity on web causes a full page refresh back to Home/Splash.
+              tabBarButtonTestID: 'tab-home',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
@@ -69,7 +71,7 @@ export const MainTabNavigator: React.FC = () => {
             component={FoodHomeScreen}
             options={{
               tabBarLabel: 'Food',
-              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-food" />,
+              tabBarButtonTestID: 'tab-food',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'restaurant' : 'restaurant-outline'} size={22} color={color} />
@@ -83,7 +85,7 @@ export const MainTabNavigator: React.FC = () => {
             component={RideBookingScreen}
             options={{
               tabBarLabel: 'Rides',
-              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-rides" />,
+              tabBarButtonTestID: 'tab-rides',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'car-sport' : 'car-sport-outline'} size={22} color={color} />
@@ -97,7 +99,7 @@ export const MainTabNavigator: React.FC = () => {
             component={MarketplaceHomeScreen}
             options={{
               tabBarLabel: 'Bazaar',
-              tabBarButton: (props) => <TouchableOpacity {...(props as any)} testID="tab-bazaar" />,
+              tabBarButtonTestID: 'tab-bazaar',
               tabBarIcon: ({ color, focused }) => (
                 <View style={styles.iconWrapper}>
                   <Ionicons name={focused ? 'bag-handle' : 'bag-handle-outline'} size={22} color={color} />
@@ -252,6 +254,7 @@ export const MainTabNavigator: React.FC = () => {
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Account',
+          tabBarButtonTestID: 'tab-account',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconWrapper}>
               <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={24} color={color} />
