@@ -7,6 +7,7 @@ using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Hubs;
 using SuperApp.API.Models;
+using SuperApp.API.Services;
 
 namespace SuperApp.API.Controllers;
 
@@ -17,11 +18,13 @@ public class DriverController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<RideTrackingHub> _hub;
+    private readonly INotificationService? _notificationService;
 
-    public DriverController(AppDbContext db, IHubContext<RideTrackingHub> hub)
+    public DriverController(AppDbContext db, IHubContext<RideTrackingHub> hub, INotificationService? notificationService = null)
     {
         _db = db;
         _hub = hub;
+        _notificationService = notificationService;
     }
 
     private async Task<Driver?> GetAuthorizedDriverAsync()
@@ -295,6 +298,16 @@ public class DriverController : ControllerBase
             status = ride.Status
         });
 
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Driver Assigned! 🚖",
+                $"{driverSummary.FullName} has accepted your ride {ride.RideNumber} and is heading to pickup.",
+                "RIDE",
+                ride.Id.ToString());
+        }
+
         return Ok(ApiResponse<RideDto>.Ok(new RideDto
         {
             Id = ride.Id,
@@ -338,6 +351,16 @@ public class DriverController : ControllerBase
             updatedAt = DateTime.UtcNow
         });
 
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Driver Arrived! 📍",
+                $"Your driver has arrived at the pickup location. Share OTP: {ride.OtpCode}",
+                "RIDE",
+                ride.Id.ToString());
+        }
+
         return Ok(ApiResponse.Ok("Status updated to ARRIVING"));
     }
 
@@ -351,9 +374,11 @@ public class DriverController : ControllerBase
         if (driver == null)
             return Forbid();
 
-        var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == id && r.DriverId == driver.Id);
+        var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == id);
         if (ride == null)
-            return NotFound(ApiResponse.Fail("Ride not found for this driver"));
+            return NotFound(ApiResponse.Fail("Ride not found"));
+        if (ride.DriverId != driver.Id)
+            return Forbid();
 
         if (ride.OtpCode != request.OtpCode)
             return BadRequest(ApiResponse.Fail("Invalid ride OTP code"));
@@ -369,6 +394,16 @@ public class DriverController : ControllerBase
             status = ride.Status,
             updatedAt = DateTime.UtcNow
         });
+
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Ride Started! 🚗💨",
+                $"Your ride {ride.RideNumber} has started. Have a safe journey!",
+                "RIDE",
+                ride.Id.ToString());
+        }
 
         return Ok(ApiResponse.Ok("Ride started successfully"));
     }
@@ -405,6 +440,25 @@ public class DriverController : ControllerBase
             updatedAt = DateTime.UtcNow
         });
 
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Ride Completed! 🎉",
+                $"You have reached your destination. Final fare: ₹{ride.ActualFare}.",
+                "RIDE",
+                ride.Id.ToString());
+        }
+        if (_notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                driver.UserId,
+                "Ride Completed! 💰",
+                $"Ride {ride.RideNumber} completed. Fare ₹{ride.ActualFare} recorded.",
+                "RIDE",
+                ride.Id.ToString());
+        }
+
         return Ok(ApiResponse.Ok("Ride completed successfully"));
     }
 
@@ -438,6 +492,16 @@ public class DriverController : ControllerBase
             reason = ride.CancellationReason,
             updatedAt = DateTime.UtcNow
         });
+
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Ride Cancelled by Driver ❌",
+                $"Your ride {ride.RideNumber} was cancelled by driver. Reason: {ride.CancellationReason}",
+                "RIDE",
+                ride.Id.ToString());
+        }
 
         return Ok(ApiResponse.Ok("Ride cancelled"));
     }
@@ -477,6 +541,7 @@ public class DriverController : ControllerBase
     /// Get ride history for this driver
     /// </summary>
     [HttpGet("history")]
+    [HttpGet("rides/history")]
     public async Task<ActionResult<ApiResponse<List<DriverRideSummaryDto>>>> GetHistory()
     {
         var driver = await GetAuthorizedDriverAsync();

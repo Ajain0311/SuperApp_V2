@@ -107,11 +107,21 @@ The tasks below represent the logical sequence of work remaining for production 
 - [x] **Web Bottom Tabs**: Fixed full-page refresh back to Home caused by custom `tabBarButton` `href` handling on React Native Web.
 - [x] **Real-Time SignalR WebSockets**: Order tracking (`OrderStatusHub`), Ride telemetry (`RideTrackingHub`), and Chat (`ChatHub`).
 - [x] **Database Schema Alignment**: 28 PostgreSQL tables in Supabase with foreign key indexes and status check constraints.
+- [x] **Multi-User Real End-to-End Verification**: 58/58 scenarios passing across 9 distinct accounts (2 customers, 2 restaurant owners, 2 drivers, 2 marketplace sellers, 1 admin). Strict zero data leakage confirmed across all matrices (`scripts/multi_user_e2e_test.js`).
 
 ---
 
 ## 📝 Last Session Handoff
 
 - **Date**: September 25, 2026
-- **Status**: Local web run healthy (`localhost:8081` + API `:5000` via Supabase pooler). Fixed (1) OTP/DB by switching to pooler + localhost API URLs; (2) bottom-tab full page refresh on web by replacing custom `TouchableOpacity` `tabBarButton` with `tabBarButtonTestID`; (3) Saved Addresses set-default/update no longer risk wiping `latitude`/`longitude` — SetDefault uses column-scoped `ExecuteUpdate`, Update only overwrites coords when both values are present, frontend omits null coords and shows pin on cards. AddressTests 2/2 passed; live API set-default/update coord-preservation PASS.
-- **Next Agent Action**: Confirm Rides/Food/Bazaar tabs + Saved Addresses set-default in browser after hard refresh. Then MAP-02 or finish Android SDK/`npx expo run:android` if native Mapbox needed.
+- **Status**: **58/58 MULTI-USER E2E PASS — ZERO DATA LEAKAGE.** All verification suites green.
+- **Fixes Applied This Session**:
+  1. **Driver Isolation (403 vs 404)**: Fixed `DriverController.StartRide()` — changed single-query filter (`r.Id == id && r.DriverId == driver.Id`) to two-step lookup: find ride by ID first, then return `Forbid()` (403) if `ride.DriverId != driver.Id`. Previously returned 404 when a different driver tried to start another driver's ride.
+  2. **Driver Ride History Route**: Added `[HttpGet("rides/history")]` alias to `GetHistory()` in `DriverController.cs` so `/api/driver/rides/history` works (in addition to `/api/driver/history`). The frontend and test were calling the `rides/history` path.
+- **Next Agent Action / Production Rollout Checklist**:
+  1. Inject production merchant keys for Easebuzz (`PAYMENT_KEY`, `PAYMENT_SECRET`, `PAYMENT_ENV=prod`).
+  2. Verify production DLT SMS template approvals with Punjab Gov gateway.
+  3. Configure Apple/FCM push notification credentials for production (PROD-03).
+  4. Trigger mobile production store builds (`eas build --platform all --profile production`).
+  5. Set up Docker + Nginx production deployment (OPS-01).
+
