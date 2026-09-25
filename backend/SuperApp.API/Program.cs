@@ -141,10 +141,11 @@ else
     builder.Services.AddScoped<IStorageService, LocalStorageService>();
 }
 
-// 2. OTP / SMS Provider (Mock in development; PunjabGov / Live SMS in production)
+// 2. OTP / SMS Provider (Mock in development/testing; PunjabGov / Live SMS in production)
+var otpTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
 var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") 
     ?? builder.Configuration["Providers:Otp"] 
-    ?? "PunjabGov";
+    ?? (otpTestMode ? "Mock" : "PunjabGov");
 
 builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
 {
@@ -154,7 +155,7 @@ builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSms
 builder.Services.AddScoped<MockOtpService>();
 builder.Services.AddScoped<PunjabGovOtpService>();
 
-if (string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
+if (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddScoped<IOtpService, MockOtpService>();
 }
@@ -265,25 +266,59 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// --- CORS ---
+// --- CORS (Compatible with Web SignalR credentials & Mobile) ---
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(_ => true)
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
 var app = builder.Build();
 
-// Ensure InMemory database schema and seed data are populated on startup
-if (string.Equals(dbProvider, "InMemory", StringComparison.OrdinalIgnoreCase))
+// Ensure database schema and seed data are populated on startup
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
+    if (string.Equals(dbProvider, "InMemory", StringComparison.OrdinalIgnoreCase))
+    {
+        db.Database.EnsureCreated();
+    }
+    else
+    {
+        try
+        {
+            const string createOffersSql = @"
+CREATE TABLE IF NOT EXISTS marketplace_offers (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    listing_id BIGINT NOT NULL,
+    buyer_id BIGINT NOT NULL,
+    seller_id BIGINT NOT NULL,
+    offered_price DECIMAL(18,2) NOT NULL,
+    message VARCHAR(500) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    updated_at TIMESTAMPTZ NULL,
+    CONSTRAINT fk_marketplace_offers_listing FOREIGN KEY (listing_id) REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_marketplace_offers_buyer FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_marketplace_offers_seller FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_marketplace_offers_status CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'))
+);
+CREATE INDEX IF NOT EXISTS idx_marketplace_offers_listing ON marketplace_offers (listing_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_offers_buyer ON marketplace_offers (buyer_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_offers_seller ON marketplace_offers (seller_id);
+";
+            db.Database.ExecuteSqlRaw(createOffersSql);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Schema Check] marketplace_offers: {ex.Message}");
+        }
+    }
 }
 
 // --- Middleware Pipeline ---

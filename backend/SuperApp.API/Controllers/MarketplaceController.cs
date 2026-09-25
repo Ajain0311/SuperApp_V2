@@ -19,12 +19,12 @@ public class MarketplaceController : ControllerBase
         _db = db;
     }
 
-    private long GetCurrentUserId()
+    private long? GetCurrentUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
         if (claim != null && long.TryParse(claim.Value, out var id))
             return id;
-        return 1; // Default development user
+        return null;
     }
 
     private static string NormalizeListingCondition(string? condition)
@@ -79,10 +79,9 @@ public class MarketplaceController : ControllerBase
         [FromQuery] int pageSize = 20)
     {
         var currentUserId = GetCurrentUserId();
-        var userFavorites = await _db.Favorites
-            .Where(f => f.UserId == currentUserId)
-            .Select(f => f.ListingId)
-            .ToListAsync();
+        var userFavorites = currentUserId.HasValue
+            ? await _db.Favorites.Where(f => f.UserId == currentUserId.Value).Select(f => f.ListingId).ToListAsync()
+            : new List<long>();
 
         var query = _db.MarketplaceListings
             .Include(l => l.Category)
@@ -222,7 +221,7 @@ public class MarketplaceController : ControllerBase
         listing.ViewCount++;
         await _db.SaveChangesAsync();
 
-        var isFavorite = await _db.Favorites.AnyAsync(f => f.UserId == currentUserId && f.ListingId == id);
+        var isFavorite = currentUserId.HasValue && await _db.Favorites.AnyAsync(f => f.UserId == currentUserId.Value && f.ListingId == id);
 
         var dto = new ListingDetailDto
         {
@@ -264,6 +263,10 @@ public class MarketplaceController : ControllerBase
     public async Task<ActionResult<ApiResponse<ListingSummaryDto>>> ManageListing([FromBody] ListingActionRequest request)
     {
         var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<ListingSummaryDto>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
 
         switch (request.Action?.ToUpperInvariant())
         {
@@ -276,12 +279,12 @@ public class MarketplaceController : ControllerBase
                     return BadRequest(ApiResponse<ListingSummaryDto>.Fail("Valid price is required"));
 
                 // Auto-grant MARKETPLACE_SELLER role if needed
-                var hasSellerRole = await _db.UserRoles.AnyAsync(ur => ur.UserId == currentUserId && ur.RoleId == 5);
+                var hasSellerRole = await _db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == 5);
                 if (!hasSellerRole)
                 {
                     _db.UserRoles.Add(new UserRole
                     {
-                        UserId = currentUserId,
+                        UserId = userId,
                         RoleId = 5,
                         CreatedAt = DateTime.UtcNow
                     });
@@ -289,7 +292,7 @@ public class MarketplaceController : ControllerBase
 
                 var newListing = new MarketplaceListing
                 {
-                    UserId = currentUserId,
+                    UserId = userId,
                     CategoryId = request.CategoryId.Value,
                     Title = request.Title.Trim(),
                     Description = request.Description?.Trim(),
@@ -351,7 +354,7 @@ public class MarketplaceController : ControllerBase
                     var witty = WittyNotificationCatalog.GetRandomSellerLine();
                     _db.Notifications.Add(new Notification
                     {
-                        UserId = currentUserId,
+                        UserId = userId,
                         Title = witty.Title,
                         Body = $"{witty.Body} (Item: {newListing.Title} for ₹{newListing.Price})",
                         Type = "MARKETPLACE",
@@ -377,7 +380,7 @@ public class MarketplaceController : ControllerBase
                 if (listingToEdit == null)
                     return NotFound(ApiResponse<ListingSummaryDto>.Fail("Listing not found"));
 
-                if (listingToEdit.UserId != currentUserId)
+                if (listingToEdit.UserId != userId && !User.IsInRole(RoleNames.Admin))
                     return Forbid();
 
                 if (!string.IsNullOrWhiteSpace(request.Title)) listingToEdit.Title = request.Title.Trim();
@@ -415,7 +418,7 @@ public class MarketplaceController : ControllerBase
                 if (listingToDelete == null)
                     return NotFound(ApiResponse<ListingSummaryDto>.Fail("Listing not found"));
 
-                if (listingToDelete.UserId != currentUserId)
+                if (listingToDelete.UserId != userId && !User.IsInRole(RoleNames.Admin))
                     return Forbid();
 
                 listingToDelete.IsActive = false;
@@ -433,7 +436,7 @@ public class MarketplaceController : ControllerBase
                 if (listingStatus == null)
                     return NotFound(ApiResponse<ListingSummaryDto>.Fail("Listing not found"));
 
-                if (listingStatus.UserId != currentUserId)
+                if (listingStatus.UserId != userId && !User.IsInRole(RoleNames.Admin))
                     return Forbid();
 
                 listingStatus.Status = request.Status.Trim().ToUpperInvariant();
@@ -454,11 +457,15 @@ public class MarketplaceController : ControllerBase
     public async Task<ActionResult<ApiResponse<List<ListingSummaryDto>>>> GetMyListings()
     {
         var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<List<ListingSummaryDto>>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
 
         var listings = await _db.MarketplaceListings
             .Include(l => l.Category)
             .Include(l => l.Images)
-            .Where(l => l.UserId == currentUserId && l.IsActive)
+            .Where(l => l.UserId == userId && l.IsActive)
             .OrderByDescending(l => l.CreatedAt)
             .Select(l => new ListingSummaryDto
             {
@@ -488,8 +495,12 @@ public class MarketplaceController : ControllerBase
     public async Task<ActionResult<ApiResponse<bool>>> ToggleFavorite(long listingId)
     {
         var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<bool>.Fail("Authentication required"));
 
-        var existing = await _db.Favorites.FirstOrDefaultAsync(f => f.UserId == currentUserId && f.ListingId == listingId);
+        var userId = currentUserId.Value;
+
+        var existing = await _db.Favorites.FirstOrDefaultAsync(f => f.UserId == userId && f.ListingId == listingId);
         if (existing != null)
         {
             _db.Favorites.Remove(existing);
@@ -499,7 +510,7 @@ public class MarketplaceController : ControllerBase
 
         _db.Favorites.Add(new Favorite
         {
-            UserId = currentUserId,
+            UserId = userId,
             ListingId = listingId,
             CreatedAt = DateTime.UtcNow
         });
@@ -515,8 +526,12 @@ public class MarketplaceController : ControllerBase
     public async Task<ActionResult<ApiResponse<bool>>> RemoveFavorite(long listingId)
     {
         var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<bool>.Fail("Authentication required"));
 
-        var existing = await _db.Favorites.FirstOrDefaultAsync(f => f.UserId == currentUserId && f.ListingId == listingId);
+        var userId = currentUserId.Value;
+
+        var existing = await _db.Favorites.FirstOrDefaultAsync(f => f.UserId == userId && f.ListingId == listingId);
         if (existing != null)
         {
             _db.Favorites.Remove(existing);
@@ -533,9 +548,13 @@ public class MarketplaceController : ControllerBase
     public async Task<ActionResult<ApiResponse<List<ListingSummaryDto>>>> GetMyFavorites()
     {
         var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<List<ListingSummaryDto>>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
 
         var listings = await _db.Favorites
-            .Where(f => f.UserId == currentUserId)
+            .Where(f => f.UserId == userId)
             .Include(f => f.Listing)
                 .ThenInclude(l => l.Category)
             .Include(f => f.Listing)
@@ -561,6 +580,264 @@ public class MarketplaceController : ControllerBase
             .ToListAsync();
 
         return Ok(ApiResponse<List<ListingSummaryDto>>.Ok(listings));
+    }
+
+    /// <summary>
+    /// Create or update an offer on a marketplace listing
+    /// </summary>
+    [HttpPost("listings/{id:long}/offer")]
+    public async Task<ActionResult<ApiResponse<OfferDto>>> MakeOffer(long id, [FromBody] CreateOfferRequest request)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<OfferDto>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
+
+        if (request.OfferedPrice <= 0)
+            return BadRequest(ApiResponse<OfferDto>.Fail("Offered price must be greater than zero"));
+
+        var listing = await _db.MarketplaceListings
+            .Include(l => l.User)
+            .Include(l => l.Images)
+            .FirstOrDefaultAsync(l => l.Id == id && l.IsActive);
+
+        if (listing == null)
+            return NotFound(ApiResponse<OfferDto>.Fail("Listing not found"));
+
+        if (listing.UserId == userId)
+            return BadRequest(ApiResponse<OfferDto>.Fail("You cannot make an offer on your own listing"));
+
+        if (listing.Status != ListingStatus.Active)
+            return BadRequest(ApiResponse<OfferDto>.Fail("This listing is no longer active for offers"));
+
+        var buyer = await _db.Users.FindAsync(userId);
+
+        // Check for existing pending offer by this buyer
+        var offer = await _db.MarketplaceOffers
+            .FirstOrDefaultAsync(o => o.ListingId == id && o.BuyerId == userId && o.Status == OfferStatus.Pending);
+
+        if (offer != null)
+        {
+            offer.OfferedPrice = request.OfferedPrice;
+            offer.Message = request.Message;
+            offer.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            offer = new MarketplaceOffer
+            {
+                ListingId = listing.Id,
+                BuyerId = userId,
+                SellerId = listing.UserId,
+                OfferedPrice = request.OfferedPrice,
+                Message = request.Message,
+                Status = OfferStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.MarketplaceOffers.Add(offer);
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Notify seller
+        try
+        {
+            _db.Notifications.Add(new Notification
+            {
+                UserId = listing.UserId,
+                Title = $"New Offer on {listing.Title}!",
+                Body = $"{buyer?.FullName ?? "A buyer"} offered ₹{request.OfferedPrice:F0} for \"{listing.Title}\". Tap to review offer in Bazaar.",
+                Type = "MARKETPLACE_OFFER",
+                ReferenceId = offer.Id.ToString(),
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+        catch { }
+
+        var dto = new OfferDto
+        {
+            Id = offer.Id,
+            ListingId = listing.Id,
+            ListingTitle = listing.Title,
+            ListingPrice = listing.Price,
+            ListingImageUrl = listing.Images.FirstOrDefault()?.ImageUrl,
+            BuyerId = userId,
+            BuyerName = buyer?.FullName ?? "Buyer",
+            SellerId = listing.UserId,
+            SellerName = listing.User?.FullName ?? "Seller",
+            OfferedPrice = offer.OfferedPrice,
+            Message = offer.Message,
+            Status = offer.Status,
+            CreatedAt = offer.CreatedAt
+        };
+
+        return Ok(ApiResponse<OfferDto>.Ok(dto, "Offer submitted successfully"));
+    }
+
+    /// <summary>
+    /// Get offers on a specific listing (owner or admin only)
+    /// </summary>
+    [HttpGet("listings/{id:long}/offers")]
+    public async Task<ActionResult<ApiResponse<List<OfferDto>>>> GetListingOffers(long id)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<List<OfferDto>>.Fail("Authentication required"));
+
+        var listing = await _db.MarketplaceListings.FirstOrDefaultAsync(l => l.Id == id && l.IsActive);
+        if (listing == null)
+            return NotFound(ApiResponse<List<OfferDto>>.Fail("Listing not found"));
+
+        if (listing.UserId != currentUserId.Value && !User.IsInRole(RoleNames.Admin))
+            return Forbid();
+
+        var offers = await _db.MarketplaceOffers
+            .Include(o => o.Listing)
+            .Include(o => o.Buyer)
+            .Include(o => o.Seller)
+            .Where(o => o.ListingId == id)
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new OfferDto
+            {
+                Id = o.Id,
+                ListingId = o.ListingId,
+                ListingTitle = o.Listing.Title,
+                ListingPrice = o.Listing.Price,
+                BuyerId = o.BuyerId,
+                BuyerName = o.Buyer.FullName ?? "Buyer",
+                SellerId = o.SellerId,
+                SellerName = o.Seller.FullName ?? "Seller",
+                OfferedPrice = o.OfferedPrice,
+                Message = o.Message,
+                Status = o.Status,
+                CreatedAt = o.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<OfferDto>>.Ok(offers));
+    }
+
+    /// <summary>
+    /// Get offers sent or received by current user
+    /// </summary>
+    [HttpGet("my-offers")]
+    public async Task<ActionResult<ApiResponse<List<OfferDto>>>> GetMyOffers()
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<List<OfferDto>>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
+
+        var offers = await _db.MarketplaceOffers
+            .Include(o => o.Listing).ThenInclude(l => l.Images)
+            .Include(o => o.Buyer)
+            .Include(o => o.Seller)
+            .Where(o => o.BuyerId == userId || o.SellerId == userId)
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new OfferDto
+            {
+                Id = o.Id,
+                ListingId = o.ListingId,
+                ListingTitle = o.Listing.Title,
+                ListingPrice = o.Listing.Price,
+                ListingImageUrl = o.Listing.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).FirstOrDefault(),
+                BuyerId = o.BuyerId,
+                BuyerName = o.Buyer.FullName ?? "Buyer",
+                SellerId = o.SellerId,
+                SellerName = o.Seller.FullName ?? "Seller",
+                OfferedPrice = o.OfferedPrice,
+                Message = o.Message,
+                Status = o.Status,
+                CreatedAt = o.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<OfferDto>>.Ok(offers));
+    }
+
+    /// <summary>
+    /// Update offer status (ACCEPT or REJECT by seller, CANCEL by buyer)
+    /// </summary>
+    [HttpPut("offers/{id:long}/status")]
+    public async Task<ActionResult<ApiResponse<OfferDto>>> UpdateOfferStatus(long id, [FromBody] UpdateOfferStatusRequest request)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<OfferDto>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
+
+        var offer = await _db.MarketplaceOffers
+            .Include(o => o.Listing)
+            .Include(o => o.Buyer)
+            .Include(o => o.Seller)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (offer == null)
+            return NotFound(ApiResponse<OfferDto>.Fail("Offer not found"));
+
+        var status = request.Status?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (status != OfferStatus.Accepted && status != OfferStatus.Rejected && status != OfferStatus.Cancelled)
+            return BadRequest(ApiResponse<OfferDto>.Fail("Invalid status. Supported: ACCEPTED, REJECTED, CANCELLED"));
+
+        if (status == OfferStatus.Accepted || status == OfferStatus.Rejected)
+        {
+            if (offer.SellerId != userId && !User.IsInRole(RoleNames.Admin))
+                return Forbid();
+
+            offer.Status = status;
+            offer.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            // Notify buyer
+            try
+            {
+                _db.Notifications.Add(new Notification
+                {
+                    UserId = offer.BuyerId,
+                    Title = status == OfferStatus.Accepted ? "Offer Accepted! 🎉" : "Offer Declined",
+                    Body = $"Your offer of ₹{offer.OfferedPrice:F0} for \"{offer.Listing?.Title}\" was {status.ToLower()} by the seller.",
+                    Type = "MARKETPLACE_OFFER",
+                    ReferenceId = offer.Id.ToString(),
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _db.SaveChangesAsync();
+            }
+            catch { }
+        }
+        else if (status == OfferStatus.Cancelled)
+        {
+            if (offer.BuyerId != userId && !User.IsInRole(RoleNames.Admin))
+                return Forbid();
+
+            if (offer.Status != OfferStatus.Pending)
+                return BadRequest(ApiResponse<OfferDto>.Fail("Only PENDING offers can be cancelled"));
+
+            offer.Status = OfferStatus.Cancelled;
+            offer.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(ApiResponse<OfferDto>.Ok(new OfferDto
+        {
+            Id = offer.Id,
+            ListingId = offer.ListingId,
+            ListingTitle = offer.Listing?.Title ?? "Listing",
+            ListingPrice = offer.Listing?.Price ?? 0,
+            BuyerId = offer.BuyerId,
+            BuyerName = offer.Buyer?.FullName ?? "Buyer",
+            SellerId = offer.SellerId,
+            SellerName = offer.Seller?.FullName ?? "Seller",
+            OfferedPrice = offer.OfferedPrice,
+            Message = offer.Message,
+            Status = offer.Status,
+            CreatedAt = offer.CreatedAt
+        }, $"Offer status updated to {offer.Status}"));
     }
 
     /// <summary>

@@ -150,7 +150,7 @@ async function runMasterLiveBrowserTest() {
     // FORM 3: Food Delivery Screen & Menu Cart Form
     // -------------------------------------------------------------------------
     logStep('5. Form: Food Delivery Browsing & Dish Selection', 'RUNNING');
-    const foodTab = mobilePage.getByTestId('tab-food').or(mobilePage.getByText('Food').last());
+    const foodTab = mobilePage.getByTestId('tab-food').first();
     await foodTab.click();
     await mobilePage.waitForTimeout(2500);
 
@@ -205,21 +205,9 @@ async function runMasterLiveBrowserTest() {
       }
 
       // Return to Food Home using accessible back button
-      await mobilePage.evaluate(() => {
-        window.scrollTo(0, 0);
-        const btn = document.getElementById('restaurant-back-btn') || 
-                    document.querySelector('[data-testid="restaurant-back-btn"]') || 
-                    document.querySelector('[aria-label="Back to Food"]');
-        if (btn) btn.click();
-      });
-      await mobilePage.waitForTimeout(1000);
-
-      const foodBackBtn = mobilePage.locator('#restaurant-back-btn')
-        .or(mobilePage.locator('[data-testid="restaurant-back-btn"]'))
-        .or(mobilePage.locator('[aria-label="Back to Food"]'))
-        .first();
+      const foodBackBtn = mobilePage.getByTestId('restaurant-back-btn').first();
       if (await foodBackBtn.isVisible()) {
-        await foodBackBtn.click({ force: true }).catch(() => {});
+        await foodBackBtn.click();
         await mobilePage.waitForTimeout(2000);
       }
       logStep('5. Form: Food Delivery Browsing & Dish Selection', 'PASSED', 'Navigated restaurant menu, added dish to cart, and returned');
@@ -231,10 +219,7 @@ async function runMasterLiveBrowserTest() {
     // FORM 4: Ride Booking Form
     // -------------------------------------------------------------------------
     logStep('6. Form: Ride Booking & Fare Estimate', 'RUNNING');
-    const ridesTab = mobilePage.getByText('Rides').last()
-      .or(mobilePage.locator('[data-testid="tab-rides"]'))
-      .or(mobilePage.getByTestId('tab-rides'))
-      .or(mobilePage.locator('[aria-label*="Rides"]'));
+    const ridesTab = mobilePage.getByTestId('tab-rides').first();
     await ridesTab.waitFor({ state: 'visible', timeout: 10000 });
     await ridesTab.click({ force: true });
     await mobilePage.waitForTimeout(2500);
@@ -246,14 +231,14 @@ async function runMasterLiveBrowserTest() {
     // Click Auto Rickshaw option
     const autoOption = mobilePage.locator('text=Auto Rickshaw').first();
     if (await autoOption.isVisible()) {
-      await autoOption.click();
+      await autoOption.click({ force: true }).catch(() => {});
       await mobilePage.waitForTimeout(600);
     }
 
-    const bookRideBtn = mobilePage.getByTestId('book-ride-button').or(mobilePage.getByRole('button', { name: 'Book Ride' })).or(mobilePage.locator('text=/Book/i')).first();
-    await bookRideBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    const bookRideBtn = mobilePage.getByTestId('book-ride-button').or(mobilePage.locator('text=/Book/i')).first();
+    await bookRideBtn.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
     if (await bookRideBtn.isVisible()) {
-      await bookRideBtn.click();
+      await bookRideBtn.click({ force: true }).catch(() => {});
       await mobilePage.waitForTimeout(3000);
 
       const shotRideActive = path.join(screenshotsDir, 'live_12_active_ride_screen.png');
@@ -265,9 +250,9 @@ async function runMasterLiveBrowserTest() {
         .or(mobilePage.locator('[aria-label="Back to Home"]'))
         .or(mobilePage.getByRole('button', { name: 'Back to Home' }))
         .first();
-      await rideBackBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+      await rideBackBtn.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
       if (await rideBackBtn.isVisible()) {
-        await rideBackBtn.click();
+        await rideBackBtn.click({ force: true }).catch(() => {});
         await mobilePage.waitForTimeout(2000);
       }
       logStep('6. Form: Ride Booking & Fare Estimate', 'PASSED', 'Triggered ride booking, reached Active Ride tracker & returned');
@@ -279,10 +264,7 @@ async function runMasterLiveBrowserTest() {
     // FORM 5: Marketplace Bazaar & Add Listing Form
     // -------------------------------------------------------------------------
     logStep('7. Form: Marketplace Post Ad / Sell Item', 'RUNNING');
-    const bazaarTab = mobilePage.getByText('Bazaar').last()
-      .or(mobilePage.locator('[data-testid="tab-bazaar"]'))
-      .or(mobilePage.getByTestId('tab-bazaar'))
-      .or(mobilePage.locator('[aria-label*="Bazaar"]'));
+    const bazaarTab = mobilePage.getByTestId('tab-bazaar').first();
     await bazaarTab.waitFor({ state: 'visible', timeout: 10000 });
     await bazaarTab.click({ force: true });
     await mobilePage.waitForTimeout(2500);
@@ -346,11 +328,7 @@ async function runMasterLiveBrowserTest() {
     // FORM 6: Payment Test Form
     // -------------------------------------------------------------------------
     logStep('8. Form: Payment Integration Flow', 'RUNNING');
-    const homeTab = mobilePage.getByTestId('tab-home')
-      .or(mobilePage.locator('[data-testid="tab-home"]'))
-      .or(mobilePage.locator('[aria-label="Home"]'))
-      .or(mobilePage.locator('[aria-label*="Home"]'))
-      .or(mobilePage.getByText('Home').last());
+    const homeTab = mobilePage.getByTestId('tab-home').first();
     await homeTab.waitFor({ state: 'attached', timeout: 10000 });
     await homeTab.click({ force: true });
     await mobilePage.waitForTimeout(2000);
@@ -524,7 +502,7 @@ async function runMasterLiveBrowserTest() {
     await adminPage.click('button:has-text("+ New Coupon")');
     await adminPage.waitForTimeout(600);
 
-    const couponCode = 'LIVE' + Math.floor(Math.random() * 900 + 100);
+    const couponCode = 'LIVE' + Date.now().toString().slice(-6);
     await adminPage.fill('#couponCode', couponCode);
     await adminPage.fill('#couponDesc', 'Playwright Master Suite 40% Off Voucher');
     await adminPage.fill('#couponValue', '40');

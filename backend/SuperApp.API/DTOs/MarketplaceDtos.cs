@@ -71,3 +71,32 @@ public class ReportListingRequest
     public string Reason { get; set; } = string.Empty;
     public string? Details { get; set; }
 }
+
+public class CreateOfferRequest
+{
+    public decimal OfferedPrice { get; set; }
+    public string? Message { get; set; }
+}
+
+public class UpdateOfferStatusRequest
+{
+    public string Status { get; set; } = string.Empty; // ACCEPTED, REJECTED, CANCELLED
+}
+
+public class OfferDto
+{
+    public long Id { get; set; }
+    public long ListingId { get; set; }
+    public string ListingTitle { get; set; } = string.Empty;
+    public decimal ListingPrice { get; set; }
+    public string? ListingImageUrl { get; set; }
+    public long BuyerId { get; set; }
+    public string BuyerName { get; set; } = string.Empty;
+    public long SellerId { get; set; }
+    public string SellerName { get; set; } = string.Empty;
+    public decimal OfferedPrice { get; set; }
+    public string? Message { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+

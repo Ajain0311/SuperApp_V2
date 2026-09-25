@@ -42,7 +42,11 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     devOtp: initialDevOtp,
   } = route.params;
 
-  const [displayedOtp, setDisplayedOtp] = useState<string | undefined>(initialDevOtp);
+  const showTestOtp = process.env.EXPO_PUBLIC_SHOW_TEST_OTP !== 'false';
+  const defaultTestOtp = process.env.EXPO_PUBLIC_TEST_OTP || '123456';
+  const [displayedOtp, setDisplayedOtp] = useState<string | undefined>(
+    initialDevOtp || (showTestOtp ? defaultTestOtp : undefined)
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [timerSeconds, setTimerSeconds] = useState<number>(AppConstants.otpTimeoutSeconds);
@@ -218,6 +222,28 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                 </>
               )}
           </Text>
+
+          {/* Test OTP Card - Prominently displayed during dev/UAT testing, hidden in production */}
+          {displayedOtp && showTestOtp ? (
+            <View style={styles.testOtpCard}>
+              <View style={styles.testOtpHeader}>
+                <View style={styles.testOtpBadge}>
+                  <Ionicons name="flask-outline" size={14} color="#0F766E" style={{ marginRight: 4 }} />
+                  <Text style={styles.testOtpBadgeText}>TEST ONLY</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.autoFillBtn}
+                  onPress={() => handleAutoFill(displayedOtp)}
+                >
+                  <Text style={styles.autoFillBtnText}>Auto-Fill</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.testOtpCode}>TEST OTP: {displayedOtp}</Text>
+              <Text style={styles.testOtpHint}>
+                Deterministic test mode active for automated UAT. Tap Auto-Fill to populate.
+              </Text>
+            </View>
+          ) : null}
 
           {/* Prominent Inline Error Validation Banner */}
           {errorMessage ? (
@@ -431,10 +457,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   testOtpCode: {
-    fontSize: 30,
+    fontSize: 22,
     fontWeight: '900',
     color: '#0F766E',
-    letterSpacing: 8,
+    letterSpacing: 2,
     marginBottom: 4,
   },
   testOtpHint: {

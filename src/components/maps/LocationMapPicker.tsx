@@ -24,6 +24,7 @@ type Props = {
   initialAddress?: string;
   proximity?: { latitude: number; longitude: number };
   height?: number;
+  hideSearchInput?: boolean;
   onSelect: (place: SelectedMapPlace) => void;
 };
 
@@ -46,6 +47,7 @@ export const LocationMapPicker: React.FC<Props> = ({
   initialAddress,
   proximity,
   height = 220,
+  hideSearchInput = false,
   onSelect,
 }) => {
   const [query, setQuery] = useState(initialAddress || '');
@@ -159,44 +161,48 @@ export const LocationMapPicker: React.FC<Props> = ({
         </Text>
       ) : null}
 
-      <View style={styles.searchRow}>
-        <MaterialIcons name="search" size={18} color={colors.textTertiary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search area, landmark, address..."
-          placeholderTextColor={colors.textTertiary}
-          value={query}
-          onChangeText={setQuery}
-          autoCorrect={false}
-          autoCapitalize="words"
-        />
-        {searching ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-      </View>
+      {!hideSearchInput && (
+        <>
+          <View style={styles.searchRow}>
+            <MaterialIcons name="search" size={18} color={colors.textTertiary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search area, landmark, address..."
+              placeholderTextColor={colors.textTertiary}
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+              autoCapitalize="words"
+            />
+            {searching ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+          </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {suggestions.length > 0 ? (
-        <View style={styles.suggestionBox}>
-          <FlatList
-            keyboardShouldPersistTaps="handled"
-            data={suggestions}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.suggestionRow} onPress={() => onSuggestionPress(item)}>
-                <MaterialIcons name="place" size={16} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.suggestionTitle} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.suggestionSub} numberOfLines={2}>
-                    {item.address}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      ) : null}
+          {suggestions.length > 0 ? (
+            <View style={styles.suggestionBox}>
+              <FlatList
+                keyboardShouldPersistTaps="handled"
+                data={suggestions}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity style={styles.suggestionRow} onPress={() => onSuggestionPress(item)}>
+                    <MaterialIcons name="place" size={16} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.suggestionTitle} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.suggestionSub} numberOfLines={2}>
+                        {item.address}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          ) : null}
+        </>
+      )}
 
       {canUseNativeMap && MapView && Camera && PointAnnotation && tokenReady ? (
         <View style={[styles.mapBox, { height }]}>

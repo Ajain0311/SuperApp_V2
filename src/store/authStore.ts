@@ -5,6 +5,8 @@ import { apiClient, ApiError } from '../services/apiClient';
 import { ApiEndpoints } from '../constants/api';
 import { signalRService } from '../services/signalr';
 import { useRoleStore } from './roleStore';
+import { useCartStore } from './cartStore';
+import { useMarketplaceStore } from './marketplaceStore';
 
 interface AuthState {
   user: User | null;
@@ -240,6 +242,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Ignore hub disconnect errors so logout always completes.
     }
     await useRoleStore.getState().resetRoles();
+    useCartStore.getState().clearCart();
+    useMarketplaceStore.getState().resetMarketplace();
     set({ user: null, token: null, isAuthenticated: false, error: null, isFallbackSession: false });
   },
 

@@ -35,6 +35,7 @@ public class AppDbContext : DbContext
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<UserDeviceToken> UserDeviceTokens => Set<UserDeviceToken>();
+    public DbSet<MarketplaceOffer> MarketplaceOffers => Set<MarketplaceOffer>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -368,6 +369,26 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+        
+        // MarketplaceOffer
+        modelBuilder.Entity<MarketplaceOffer>(entity =>
+        {
+            entity.HasIndex(e => e.ListingId);
+            entity.HasIndex(e => e.BuyerId);
+            entity.HasIndex(e => e.SellerId);
+            entity.HasOne(e => e.Listing)
+                .WithMany()
+                .HasForeignKey(e => e.ListingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Buyer)
+                .WithMany()
+                .HasForeignKey(e => e.BuyerId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.Seller)
+                .WithMany()
+                .HasForeignKey(e => e.SellerId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
         
         // Seed Roles

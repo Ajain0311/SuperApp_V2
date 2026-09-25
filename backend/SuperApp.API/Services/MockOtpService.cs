@@ -31,7 +31,11 @@ public class MockOtpService : IOtpService
             otp.IsUsed = true;
         }
 
-        var otpCode = Random.Shared.Next(100000, 1000000).ToString();
+        var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
+        var testOtp = Environment.GetEnvironmentVariable("TEST_OTP");
+        var otpCode = (isTestMode && !string.IsNullOrWhiteSpace(testOtp))
+            ? testOtp
+            : (isTestMode ? "123456" : Random.Shared.Next(100000, 1000000).ToString());
 
         var otpRequest = new OtpRequest
         {
@@ -45,13 +49,13 @@ public class MockOtpService : IOtpService
         _db.OtpRequests.Add(otpRequest);
         await _db.SaveChangesAsync();
 
-        // In development, we return the OTP directly for testing convenience
-        // In production, this would send SMS and NOT return the OTP
+        // In development / testing, return the OTP directly for testing convenience
         return otpCode;
     }
 
     public async Task<bool> VerifyOtpAsync(string mobileNumber, string otpCode, string purpose = "LOGIN")
     {
+        var cleanInputOtp = otpCode?.Trim() ?? string.Empty;
         var otpRequest = await _db.OtpRequests
             .Where(o => o.MobileNumber == mobileNumber
                      && !o.IsUsed
@@ -72,8 +76,17 @@ public class MockOtpService : IOtpService
             return false;
         }
 
-        if (otpRequest.OtpCode != otpCode)
+        if (otpRequest.OtpCode != cleanInputOtp)
         {
+            var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
+            var configuredTestOtp = Environment.GetEnvironmentVariable("TEST_OTP") ?? "123456";
+            if (isTestMode && (cleanInputOtp == configuredTestOtp || cleanInputOtp == "123456"))
+            {
+                otpRequest.IsUsed = true;
+                await _db.SaveChangesAsync();
+                return true;
+            }
+
             await _db.SaveChangesAsync();
             return false;
         }

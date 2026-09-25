@@ -70,6 +70,7 @@ public class RestaurantsController : ControllerBase
                 DeliveryFee = r.DeliveryFee,
                 AvgDeliveryTimeMinutes = r.AvgDeliveryTimeMinutes,
                 IsFeatured = r.IsFeatured,
+                Phone = r.Phone,
                 Cuisines = r.Description,
                 OfferText = r.DeliveryFee == 0 ? "FREE DELIVERY" : "60% OFF UPTO ₹120"
             })
@@ -117,6 +118,7 @@ public class RestaurantsController : ControllerBase
             DeliveryFee = restaurant.DeliveryFee,
             AvgDeliveryTimeMinutes = restaurant.AvgDeliveryTimeMinutes,
             IsFeatured = restaurant.IsFeatured,
+            Phone = restaurant.Phone,
             OpeningTime = restaurant.OpeningTime,
             ClosingTime = restaurant.ClosingTime,
             Categories = restaurant.Categories.Select(c => new RestaurantCategoryDto

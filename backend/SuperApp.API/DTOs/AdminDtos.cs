@@ -41,6 +41,7 @@ public class AdminUserActionRequest
     public long UserId { get; set; }
     public bool? IsActive { get; set; }
     public string? RoleName { get; set; }
+    public long? RestaurantId { get; set; }
 }
 
 public class AdminRestaurantActionRequest

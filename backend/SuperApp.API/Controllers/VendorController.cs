@@ -24,6 +24,28 @@ public class VendorController : ControllerBase
         _orderHub = orderHub;
     }
 
+    private async Task<List<long>> GetAuthorizedRestaurantIdsAsync()
+    {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+        if (claim == null || !long.TryParse(claim.Value, out var userId))
+            return new List<long>();
+
+        var userRestaurantIds = await _db.RestaurantUsers
+            .Where(ru => ru.UserId == userId && ru.IsActive)
+            .Select(ru => ru.RestaurantId)
+            .ToListAsync();
+
+        if (userRestaurantIds.Any())
+            return userRestaurantIds;
+
+        if (User.IsInRole(RoleNames.Admin))
+        {
+            return await _db.Restaurants.Where(r => r.IsActive).Select(r => r.Id).ToListAsync();
+        }
+
+        return new List<long>();
+    }
+
     private async Task<Restaurant?> GetAuthorizedRestaurantAsync()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -175,18 +197,25 @@ public class VendorController : ControllerBase
     }
 
     /// <summary>
-    /// Get kitchen orders for the vendor
+    /// Get kitchen orders for the vendor (strictly isolated to owner's authorized restaurants)
     /// </summary>
     [HttpGet("orders")]
-    public async Task<ActionResult<ApiResponse<List<FoodOrderDto>>>> GetVendorOrders([FromQuery] string? status)
+    public async Task<ActionResult<ApiResponse<List<FoodOrderDto>>>> GetVendorOrders([FromQuery] string? status, [FromQuery] long? restaurantId)
     {
-        var restaurant = await GetAuthorizedRestaurantAsync();
-        if (restaurant == null)
-            return NotFound(ApiResponse<List<FoodOrderDto>>.Fail("Restaurant not found"));
+        var authorizedRestaurantIds = await GetAuthorizedRestaurantIdsAsync();
+        if (!authorizedRestaurantIds.Any())
+            return Forbid();
+
+        if (restaurantId.HasValue && !authorizedRestaurantIds.Contains(restaurantId.Value))
+            return Forbid();
+
+        var targetIds = restaurantId.HasValue ? new List<long> { restaurantId.Value } : authorizedRestaurantIds;
 
         var query = _db.FoodOrders
             .Include(o => o.Items)
-            .Where(o => o.RestaurantId == restaurant.Id)
+            .Include(o => o.Restaurant)
+            .Include(o => o.Address)
+            .Where(o => targetIds.Contains(o.RestaurantId))
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -196,13 +225,15 @@ public class VendorController : ControllerBase
 
         var orders = await query
             .OrderByDescending(o => o.CreatedAt)
-            .Take(50)
+            .Take(100)
             .Select(o => new FoodOrderDto
             {
                 Id = o.Id,
                 OrderNumber = o.OrderNumber,
                 RestaurantId = o.RestaurantId,
-                RestaurantName = restaurant.Name,
+                RestaurantName = o.Restaurant.Name,
+                RestaurantPhone = o.Restaurant.Phone,
+                DeliveryAddress = o.Address != null ? $"{o.Address.AddressLine1}, {o.Address.City}" : null,
                 Status = o.Status,
                 SubTotal = o.SubTotal,
                 DiscountAmount = o.DiscountAmount,
@@ -239,13 +270,16 @@ public class VendorController : ControllerBase
     [HttpPut("orders/{id:long}/status")]
     public async Task<ActionResult<ApiResponse>> UpdateOrderStatus(long id, [FromBody] UpdateOrderStatusRequest request)
     {
-        var restaurant = await GetAuthorizedRestaurantAsync();
-        if (restaurant == null)
-            return NotFound(ApiResponse.Fail("Restaurant not found or unauthorized"));
+        var authorizedRestaurantIds = await GetAuthorizedRestaurantIdsAsync();
+        if (!authorizedRestaurantIds.Any())
+            return Forbid();
 
-        var order = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id && o.RestaurantId == restaurant.Id);
+        var order = await _db.FoodOrders.Include(o => o.Restaurant).FirstOrDefaultAsync(o => o.Id == id);
         if (order == null)
-            return NotFound(ApiResponse.Fail("Order not found for this restaurant"));
+            return NotFound(ApiResponse.Fail("Order not found"));
+
+        if (!authorizedRestaurantIds.Contains(order.RestaurantId))
+            return Forbid();
 
         var currentStatus = order.Status.Trim().ToUpperInvariant();
         var targetStatus = request.Status?.Trim().ToUpperInvariant() ?? string.Empty;
@@ -282,6 +316,17 @@ public class VendorController : ControllerBase
         }
 
         order.Status = targetStatus;
+
+        // Requirement 3.B: COD status transition on delivery
+        if (string.Equals(targetStatus, OrderStatus.Delivered, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(order.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(order.PaymentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+            {
+                order.PaymentStatus = "PAID";
+            }
+        }
+
         order.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -296,7 +341,7 @@ public class VendorController : ControllerBase
         });
 
         // Broadcast to restaurant kitchen group to sync across all kitchen staff screens
-        await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("OrderAcceptedByOther", new
+        await _orderHub.Clients.Group($"restaurant-{order.RestaurantId}").SendAsync("OrderAcceptedByOther", new
         {
             orderId = order.Id,
             status = targetStatus,
@@ -316,7 +361,7 @@ public class VendorController : ControllerBase
             };
             string notifBody = targetStatus switch
             {
-                "ACCEPTED" => $"{restaurant.Name} ne aapka order accept kar liya hai! Masale bhun rahe hain! 😋",
+                "ACCEPTED" => $"{order.Restaurant?.Name ?? "Restaurant"} ne aapka order accept kar liya hai! Masale bhun rahe hain! 😋",
                 "PREPARING" => "Aapka khana ban raha hai, khushbu mast aa rahi hai! Bas thodi der aur!",
                 "READY" => "Garma-garam khana dispatch ke liye ready hai!",
                 "PICKED_UP" => "Rider aapke order ke sath nikal chuka hai. Bas 5-10 minute!",

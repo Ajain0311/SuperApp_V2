@@ -464,6 +464,27 @@ CREATE TABLE IF NOT EXISTS favorites (
 
 CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites (user_id);
 
+-- 22a. Marketplace Offers
+CREATE TABLE IF NOT EXISTS marketplace_offers (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    listing_id BIGINT NOT NULL,
+    buyer_id BIGINT NOT NULL,
+    seller_id BIGINT NOT NULL,
+    offered_price DECIMAL(18,2) NOT NULL,
+    message VARCHAR(500) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    updated_at TIMESTAMPTZ NULL,
+    CONSTRAINT fk_marketplace_offers_listing FOREIGN KEY (listing_id) REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_marketplace_offers_buyer FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_marketplace_offers_seller FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_marketplace_offers_status CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'CANCELLED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_marketplace_offers_listing ON marketplace_offers (listing_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_offers_buyer ON marketplace_offers (buyer_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_offers_seller ON marketplace_offers (seller_id);
+
 -- ------------------------------------------------------------------------------
 -- 05. DOMAIN: NOTIFICATIONS & DEVICE PUSH TOKENS
 -- ------------------------------------------------------------------------------

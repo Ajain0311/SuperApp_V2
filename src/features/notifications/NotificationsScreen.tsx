@@ -77,7 +77,7 @@ const NOTIFICATIONS: NotificationItem[] = [
 
 export const NotificationsScreen: React.FC = () => {
   const navigation = useNavigation();
-  const [notifications, setNotifications] = useState<NotificationItem[]>(NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
 
@@ -109,9 +109,13 @@ export const NotificationsScreen: React.FC = () => {
             isUnread: !n.IsRead,
           }));
           setNotifications(mapped);
+        } else {
+          setNotifications([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setNotifications([]);
+      });
   }, []);
 
   const handleTestOrderNotification = async () => {
@@ -337,6 +341,15 @@ export const NotificationsScreen: React.FC = () => {
         data={notifications}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderDevTester}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="notifications-none" size={52} color={colors.textTertiary} />
+            <Text style={styles.emptyTitle}>No Notifications Yet</Text>
+            <Text style={styles.emptySubtitle}>
+              You're all caught up! Order updates, ride alerts, and bazaar offers will appear here.
+            </Text>
+          </View>
+        }
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <View
@@ -487,5 +500,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: colors.textPrimary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    color: colors.textPrimary,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

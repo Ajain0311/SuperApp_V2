@@ -6,12 +6,14 @@ using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using SuperApp.API.Hubs;
 using SuperApp.API.Services;
 
 namespace SuperApp.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class FoodOrdersController : ControllerBase
@@ -25,12 +27,12 @@ public class FoodOrdersController : ControllerBase
         _orderHub = orderHub;
     }
 
-    private long GetCurrentUserId()
+    private long? GetCurrentUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
         if (claim != null && long.TryParse(claim.Value, out var id))
             return id;
-        return 1; // Default development user
+        return null;
     }
 
     /// <summary>
@@ -47,6 +49,17 @@ public class FoodOrdersController : ControllerBase
             return NotFound(ApiResponse<FoodOrderDto>.Fail("Restaurant not found or inactive"));
 
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<FoodOrderDto>.Fail("Authentication required"));
+
+        var paymentMethod = (request.PaymentMethod ?? "COD").Trim().ToUpperInvariant();
+        if (paymentMethod == "CASH") paymentMethod = "COD";
+        if (paymentMethod != "COD" && paymentMethod != "ONLINE")
+        {
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Invalid payment method. Supported methods: COD, ONLINE"));
+        }
+
+        var initialPaymentStatus = paymentMethod == "ONLINE" ? "PENDING_PAYMENT" : "PENDING";
         var orderItems = new List<FoodOrderItem>();
         decimal subTotal = 0;
 
@@ -141,7 +154,7 @@ public class FoodOrdersController : ControllerBase
         var order = new FoodOrder
         {
             OrderNumber = orderNumber,
-            UserId = userId,
+            UserId = userId.Value,
             RestaurantId = restaurant.Id,
             AddressId = request.AddressId,
             Status = OrderStatus.Pending,
@@ -152,8 +165,8 @@ public class FoodOrdersController : ControllerBase
             DeliveryFee = deliveryFee,
             TaxAmount = taxAmount,
             GrandTotal = grandTotal,
-            PaymentMethod = request.PaymentMethod,
-            PaymentStatus = "PENDING",
+            PaymentMethod = paymentMethod,
+            PaymentStatus = initialPaymentStatus,
             Notes = request.Notes,
             EstimatedDeliveryMinutes = restaurant.AvgDeliveryTimeMinutes,
             CreatedAt = DateTime.UtcNow,
@@ -169,7 +182,7 @@ public class FoodOrdersController : ControllerBase
             var witty = WittyNotificationCatalog.GetRandomLateNightLine();
             _db.Notifications.Add(new Notification
             {
-                UserId = userId,
+                UserId = userId.Value,
                 Title = witty.Title,
                 Body = $"{witty.Body} (Order #{order.OrderNumber} placed at {restaurant.Name})",
                 Type = "FOOD_ORDER",
@@ -181,7 +194,13 @@ public class FoodOrdersController : ControllerBase
         }
         catch { }
 
-        var orderDto = MapToOrderDto(order, restaurant.Name, restaurant.ImageUrl);
+        Address? deliveryAddress = null;
+        if (request.AddressId.HasValue)
+        {
+            deliveryAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
+        }
+
+        var orderDto = MapToOrderDto(order, restaurant, deliveryAddress);
 
         // Real-time notification to all active restaurant kitchen staff
         await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
@@ -190,39 +209,62 @@ public class FoodOrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Get food order history for the current user
+    /// Get food order history for the current user (strictly user-isolated)
     /// </summary>
     [HttpGet]
+    [HttpGet("my-orders")]
     public async Task<ActionResult<ApiResponse<List<FoodOrderDto>>>> GetMyOrders()
     {
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<List<FoodOrderDto>>.Fail("Authentication required"));
+
         var orders = await _db.FoodOrders
             .Include(o => o.Restaurant)
+            .Include(o => o.Address)
             .Include(o => o.Items)
-            .Where(o => o.UserId == userId)
+            .Where(o => o.UserId == userId.Value)
             .OrderByDescending(o => o.CreatedAt)
-            .Take(30)
+            .Take(50)
             .ToListAsync();
 
-        var dtos = orders.Select(o => MapToOrderDto(o, o.Restaurant.Name, o.Restaurant.ImageUrl)).ToList();
+        var dtos = orders.Select(o => MapToOrderDto(o, o.Restaurant, o.Address)).ToList();
         return Ok(ApiResponse<List<FoodOrderDto>>.Ok(dtos));
     }
 
     /// <summary>
-    /// Get specific food order details
+    /// Get specific food order details with customer/owner/admin authorization
     /// </summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ApiResponse<FoodOrderDto>>> GetOrder(long id)
     {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<FoodOrderDto>.Fail("Authentication required"));
+
         var order = await _db.FoodOrders
             .Include(o => o.Restaurant)
+            .Include(o => o.Address)
+            .Include(o => o.User)
             .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Id == id);
 
         if (order == null)
             return NotFound(ApiResponse<FoodOrderDto>.Fail("Order not found"));
 
-        return Ok(ApiResponse<FoodOrderDto>.Ok(MapToOrderDto(order, order.Restaurant.Name, order.Restaurant.ImageUrl)));
+        bool isAuthorized = order.UserId == userId.Value || User.IsInRole(RoleNames.Admin);
+        if (!isAuthorized)
+        {
+            var isRestaurantOwner = await _db.RestaurantUsers
+                .AnyAsync(ru => ru.UserId == userId.Value && ru.RestaurantId == order.RestaurantId && ru.IsActive);
+            if (isRestaurantOwner)
+                isAuthorized = true;
+        }
+
+        if (!isAuthorized)
+            return Forbid();
+
+        return Ok(ApiResponse<FoodOrderDto>.Ok(MapToOrderDto(order, order.Restaurant, order.Address, order.User)));
     }
 
     /// <summary>
@@ -231,9 +273,16 @@ public class FoodOrdersController : ControllerBase
     [HttpPost("{id:long}/cancel")]
     public async Task<ActionResult<ApiResponse>> CancelOrder(long id)
     {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
         var order = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id);
         if (order == null)
             return NotFound(ApiResponse.Fail("Order not found"));
+
+        if (order.UserId != userId.Value && !User.IsInRole(RoleNames.Admin))
+            return Forbid();
 
         if (order.Status != OrderStatus.Pending && order.Status != OrderStatus.Accepted)
             return BadRequest(ApiResponse.Fail("Order cannot be cancelled once it is being prepared or delivered"));
@@ -245,15 +294,29 @@ public class FoodOrdersController : ControllerBase
         return Ok(ApiResponse.Ok("Order cancelled successfully"));
     }
 
-    private static FoodOrderDto MapToOrderDto(FoodOrder o, string restaurantName, string? restaurantImage)
+    private static FoodOrderDto MapToOrderDto(FoodOrder o, Restaurant restaurant, Address? address = null, User? user = null)
     {
+        var restPhone = !string.IsNullOrWhiteSpace(restaurant?.Phone) 
+            ? restaurant.Phone 
+            : "+91 98450 12345";
+        var restAddr = !string.IsNullOrWhiteSpace(restaurant?.AddressLine) 
+            ? $"{restaurant.AddressLine}, {restaurant.City}" 
+            : restaurant?.City ?? "Central Delhi";
+        var deliveryAddr = address != null 
+            ? $"{address.AddressLine1}, {address.City} ({address.PinCode})" 
+            : null;
+
         return new FoodOrderDto
         {
             Id = o.Id,
             OrderNumber = o.OrderNumber,
             RestaurantId = o.RestaurantId,
-            RestaurantName = restaurantName,
-            RestaurantImageUrl = restaurantImage,
+            RestaurantName = restaurant?.Name ?? "Restaurant",
+            RestaurantImageUrl = restaurant?.ImageUrl,
+            RestaurantPhone = restPhone,
+            RestaurantAddress = restAddr,
+            DeliveryAddress = deliveryAddr,
+            CustomerPhone = user?.MobileNumber,
             Status = o.Status,
             SubTotal = o.SubTotal,
             DiscountAmount = o.DiscountAmount,
@@ -264,7 +327,7 @@ public class FoodOrdersController : ControllerBase
             PaymentMethod = o.PaymentMethod,
             PaymentStatus = o.PaymentStatus,
             Notes = o.Notes,
-            EstimatedDeliveryMinutes = o.EstimatedDeliveryMinutes,
+            EstimatedDeliveryMinutes = o.EstimatedDeliveryMinutes ?? (restaurant?.AvgDeliveryTimeMinutes ?? 25),
             CreatedAt = o.CreatedAt,
             Items = o.Items.Select(i => new FoodOrderItemDto
             {

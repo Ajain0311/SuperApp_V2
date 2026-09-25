@@ -19,6 +19,7 @@ public class RestaurantSummaryDto
     public decimal DeliveryFee { get; set; }
     public int AvgDeliveryTimeMinutes { get; set; }
     public bool IsFeatured { get; set; }
+    public string? Phone { get; set; }
     public string? Cuisines { get; set; }
     public string? OfferText { get; set; }
 }
@@ -106,6 +107,10 @@ public class FoodOrderDto
     public long RestaurantId { get; set; }
     public string RestaurantName { get; set; } = string.Empty;
     public string? RestaurantImageUrl { get; set; }
+    public string? RestaurantPhone { get; set; }
+    public string? RestaurantAddress { get; set; }
+    public string? DeliveryAddress { get; set; }
+    public string? CustomerPhone { get; set; }
     public string Status { get; set; } = string.Empty;
     public decimal SubTotal { get; set; }
     public decimal DiscountAmount { get; set; }

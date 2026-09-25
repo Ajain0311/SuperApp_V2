@@ -183,7 +183,8 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       let addressId: number | null = null;
       try {
         const addrRes = await apiClient.get<any>(ApiEndpoints.common.addresses);
-        const items = Array.isArray(addrRes?.data) ? addrRes.data : [];
+        const raw = addrRes.data?.data || addrRes.data;
+        const items = Array.isArray(raw) ? raw : [];
         const def = items.find((a: any) => a.isDefault) || items[0];
         if (def?.id) addressId = def.id;
       } catch {
@@ -204,17 +205,18 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       };
       const res = await apiClient.post<any>(ApiEndpoints.food.orders, payload);
       const data = res.data?.data || res.data;
-      const orderId = data?.orderNumber || `FO-${Math.floor(1000 + Math.random() * 9000)}`;
-      const orderNumericId = data?.id;
+      if (!data || !data.id) {
+        throw new Error(data?.message || 'Order could not be confirmed by the server.');
+      }
+      const orderId = data.orderNumber || `FO-${data.id}`;
+      const orderNumericId = data.id;
       clearCart();
       setIsCartVisible(false);
       navigation.navigate('FoodOrderTracking', { orderId, orderNumericId });
-    } catch (err) {
-      // Graceful offline fallback
-      const fallbackId = `FO-${Math.floor(1000 + Math.random() * 9000)}`;
-      clearCart();
-      setIsCartVisible(false);
-      navigation.navigate('FoodOrderTracking', { orderId: fallbackId });
+    } catch (err: any) {
+      console.error('[PlaceOrder Error]', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to place order. Please try again.';
+      Alert.alert('Order Placement Failed', errMsg);
     } finally {
       setIsPlacingOrder(false);
     }
@@ -266,6 +268,10 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       <View style={styles.appBar}>
         <TouchableOpacity
           onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+              return;
+            }
             navigation.navigate('MainTabs', { screen: 'Food' });
           }}
           style={styles.backButton}

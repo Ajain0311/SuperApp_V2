@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace SuperApp.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class RidesController : ControllerBase
@@ -17,20 +19,26 @@ public class RidesController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IHubContext<RideTrackingHub> _rideHub;
     private readonly IMapService _mapService;
+    private readonly INotificationService? _notificationService;
 
-    public RidesController(AppDbContext db, IHubContext<RideTrackingHub> rideHub, IMapService mapService)
+    public RidesController(
+        AppDbContext db,
+        IHubContext<RideTrackingHub> rideHub,
+        IMapService mapService,
+        INotificationService? notificationService = null)
     {
         _db = db;
         _rideHub = rideHub;
         _mapService = mapService;
+        _notificationService = notificationService;
     }
 
-    private long GetCurrentUserId()
+    private long? GetCurrentUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
         if (claim != null && long.TryParse(claim.Value, out var id))
             return id;
-        return 1; // Default dev user
+        return null;
     }
 
     /// <summary>
@@ -40,8 +48,11 @@ public class RidesController : ControllerBase
     public async Task<ActionResult<ApiResponse<List<RideDto>>>> GetMyRides()
     {
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<List<RideDto>>.Fail("Authentication required"));
+
         var rides = await _db.Rides
-            .Where(r => r.UserId == userId)
+            .Where(r => r.UserId == userId.Value)
             .OrderByDescending(r => r.CreatedAt)
             .Take(50)
             .ToListAsync();
@@ -69,6 +80,7 @@ public class RidesController : ControllerBase
     /// <summary>
     /// Calculate distance, ETA, and fare estimate across vehicle tiers (BIKE, AUTO, CAB)
     /// </summary>
+    [AllowAnonymous]
     [HttpPost("estimate")]
     public async Task<ActionResult<ApiResponse<RideEstimateResponse>>> GetEstimate([FromBody] RideEstimateRequest request)
     {
@@ -135,6 +147,9 @@ public class RidesController : ControllerBase
     public async Task<ActionResult<ApiResponse<RideDto>>> BookRide([FromBody] BookRideRequest request)
     {
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<RideDto>.Fail("Authentication required"));
+
         var random = new Random();
 
         // Generate 4-digit ride OTP
@@ -158,7 +173,7 @@ public class RidesController : ControllerBase
         var ride = new Ride
         {
             RideNumber = rideNumber,
-            UserId = userId,
+            UserId = userId.Value,
             VehicleType = request.VehicleType.ToUpper(),
             PickupAddress = request.PickupAddress,
             PickupLatitude = request.PickupLatitude,
@@ -177,6 +192,16 @@ public class RidesController : ControllerBase
 
         _db.Rides.Add(ride);
         await _db.SaveChangesAsync();
+
+        if (_notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                userId.Value,
+                "Ride Requested 🚖",
+                $"Your {ride.VehicleType} ride {ride.RideNumber} has been requested. Looking for nearby drivers...",
+                "RIDE",
+                ride.Id.ToString());
+        }
 
         // Broadcast to all drivers in drivers-pool
         await _rideHub.Clients.Group("drivers-pool").SendAsync("RideRequested", new
@@ -228,23 +253,44 @@ public class RidesController : ControllerBase
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ApiResponse<RideDto>>> GetRide(long id)
     {
-        var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == id);
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<RideDto>.Fail("Authentication required"));
+
+        var ride = await _db.Rides
+            .Include(r => r.Driver)
+                .ThenInclude(d => d!.User)
+            .FirstOrDefaultAsync(r => r.Id == id);
         if (ride == null)
             return NotFound(ApiResponse<RideDto>.Fail("Ride not found"));
 
-        var driverSummary = new DriverSummaryDto
+        var isRider = ride.UserId == userId.Value;
+        var isAssignedDriver = ride.Driver != null && ride.Driver.UserId == userId.Value;
+        var isAdmin = User.IsInRole(RoleNames.Admin);
+
+        if (!isRider && !isAssignedDriver && !isAdmin)
         {
-            Id = 1,
-            FullName = "Amit Singh",
-            Phone = "+91 98765 01928",
-            Rating = 4.9m,
-            TotalRides = 1240,
-            VehicleModel = "Hero Splendor Plus (Black)",
-            RegistrationNumber = "DL 04 AB 9821",
-            VehicleColor = "Black",
-            CurrentLatitude = ride.PickupLatitude + 0.001m,
-            CurrentLongitude = ride.PickupLongitude + 0.001m
-        };
+            return Forbid();
+        }
+
+        DriverSummaryDto? driverSummary = null;
+        if (ride.Driver != null)
+        {
+            var vehicle = await _db.Vehicles.FirstOrDefaultAsync(v => v.DriverId == ride.Driver.Id && v.IsActive);
+            driverSummary = new DriverSummaryDto
+            {
+                Id = ride.Driver.Id,
+                FullName = ride.Driver.User?.FullName ?? "Driver",
+                Phone = ride.Driver.User?.MobileNumber ?? string.Empty,
+                Rating = ride.Driver.Rating,
+                TotalRides = ride.Driver.TotalRides,
+                VehicleModel = vehicle != null ? $"{vehicle.Make} {vehicle.Model}" : "Vehicle",
+                RegistrationNumber = vehicle?.RegistrationNumber ?? string.Empty,
+                VehicleColor = vehicle?.Color ?? string.Empty,
+                CurrentLatitude = ride.Driver.CurrentLatitude,
+                CurrentLongitude = ride.Driver.CurrentLongitude
+            };
+        }
 
         return Ok(ApiResponse<RideDto>.Ok(new RideDto
         {
@@ -271,9 +317,18 @@ public class RidesController : ControllerBase
     [HttpPost("{id:long}/start")]
     public async Task<ActionResult<ApiResponse>> StartRide(long id, [FromBody] VerifyRideOtpRequest request)
     {
-        var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == id);
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
+        var ride = await _db.Rides.Include(r => r.Driver).FirstOrDefaultAsync(r => r.Id == id);
         if (ride == null)
             return NotFound(ApiResponse.Fail("Ride not found"));
+
+        var isDriver = ride.Driver != null && ride.Driver.UserId == userId.Value;
+        var isAdmin = User.IsInRole(RoleNames.Admin);
+        if (!isDriver && !isAdmin)
+            return Forbid();
 
         if (ride.OtpCode != request.OtpCode)
             return BadRequest(ApiResponse.Fail("Invalid ride OTP code"));
@@ -290,6 +345,16 @@ public class RidesController : ControllerBase
             startedAt = ride.StartedAt
         });
 
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Ride Started! 🚗💨",
+                $"Your ride {ride.RideNumber} has started. Have a safe journey!",
+                "RIDE",
+                ride.Id.ToString());
+        }
+
         return Ok(ApiResponse.Ok("Ride started successfully"));
     }
 
@@ -299,9 +364,18 @@ public class RidesController : ControllerBase
     [HttpPost("{id:long}/complete")]
     public async Task<ActionResult<ApiResponse>> CompleteRide(long id)
     {
-        var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == id);
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
+        var ride = await _db.Rides.Include(r => r.Driver).FirstOrDefaultAsync(r => r.Id == id);
         if (ride == null)
             return NotFound(ApiResponse.Fail("Ride not found"));
+
+        var isDriver = ride.Driver != null && ride.Driver.UserId == userId.Value;
+        var isAdmin = User.IsInRole(RoleNames.Admin);
+        if (!isDriver && !isAdmin)
+            return Forbid();
 
         ride.Status = RideStatus.Completed;
         ride.ActualFare = ride.EstimatedFare;
@@ -318,6 +392,25 @@ public class RidesController : ControllerBase
             completedAt = ride.CompletedAt
         });
 
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Ride Completed! 🎉",
+                $"You have arrived at your destination. Final fare: ₹{ride.ActualFare}.",
+                "RIDE",
+                ride.Id.ToString());
+        }
+        if (ride.Driver != null && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.Driver.UserId,
+                "Ride Completed! 💰",
+                $"Ride {ride.RideNumber} completed. Fare ₹{ride.ActualFare} recorded.",
+                "RIDE",
+                ride.Id.ToString());
+        }
+
         return Ok(ApiResponse.Ok("Ride completed successfully"));
     }
 
@@ -327,9 +420,19 @@ public class RidesController : ControllerBase
     [HttpPost("{id:long}/cancel")]
     public async Task<ActionResult<ApiResponse>> CancelRide(long id, [FromBody] CancelRideRequest? request)
     {
-        var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == id);
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
+        var ride = await _db.Rides.Include(r => r.Driver).FirstOrDefaultAsync(r => r.Id == id);
         if (ride == null)
             return NotFound(ApiResponse.Fail("Ride not found"));
+
+        var isRider = ride.UserId == userId.Value;
+        var isDriver = ride.Driver != null && ride.Driver.UserId == userId.Value;
+        var isAdmin = User.IsInRole(RoleNames.Admin);
+        if (!isRider && !isDriver && !isAdmin)
+            return Forbid();
 
         if (ride.Status == RideStatus.Started || ride.Status == RideStatus.Completed)
             return BadRequest(ApiResponse.Fail("Active or completed rides cannot be cancelled"));
@@ -337,7 +440,7 @@ public class RidesController : ControllerBase
         var previousStatus = ride.Status;
         ride.Status = RideStatus.Cancelled;
         ride.CancelledAt = DateTime.UtcNow;
-        ride.CancellationReason = request?.Reason ?? "Cancelled by user";
+        ride.CancellationReason = request?.Reason ?? (isRider ? "Cancelled by passenger" : "Cancelled by driver");
         ride.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -356,6 +459,26 @@ public class RidesController : ControllerBase
                 rideId = ride.Id,
                 status = ride.Status
             });
+        }
+
+        // Send notifications
+        if (ride.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.UserId,
+                "Ride Cancelled ❌",
+                $"Ride {ride.RideNumber} was cancelled. Reason: {ride.CancellationReason}",
+                "RIDE",
+                ride.Id.ToString());
+        }
+        if (ride.Driver != null && isRider && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                ride.Driver.UserId,
+                "Ride Cancelled by Rider ❌",
+                $"Passenger cancelled ride {ride.RideNumber}.",
+                "RIDE",
+                ride.Id.ToString());
         }
 
         return Ok(ApiResponse.Ok("Ride cancelled successfully"));

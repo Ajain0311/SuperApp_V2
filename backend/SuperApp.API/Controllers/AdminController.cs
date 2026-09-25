@@ -7,7 +7,7 @@ using SuperApp.API.Models;
 
 namespace SuperApp.API.Controllers;
 
-[AllowAnonymous]
+[Authorize(Roles = RoleNames.Admin)]
 [ApiController]
 [Route("api/[controller]")]
 public class AdminController : ControllerBase
@@ -35,26 +35,48 @@ public class AdminController : ControllerBase
         var foodSales = await _db.FoodOrders.Where(o => o.Status == OrderStatus.Delivered).SumAsync(o => (decimal?)o.GrandTotal) ?? 0;
         var rideFares = await _db.Rides.Where(r => r.Status == RideStatus.Completed).SumAsync(r => (decimal?)r.ActualFare) ?? 0;
 
-        // Fallbacks for initial live dashboard visualization
-        if (totalUsers == 0) totalUsers = 1248;
-        if (activeDrivers == 0) activeDrivers = 64;
-        if (totalRestaurants == 0) totalRestaurants = 32;
-        if (totalFoodOrders == 0) totalFoodOrders = 412;
-        if (totalRides == 0) totalRides = 295;
-        if (activeListings == 0) activeListings = 88;
-        if (foodSales == 0) foodSales = 184500m;
-        if (rideFares == 0) rideFares = 76200m;
-
         decimal platformCommission = Math.Round(foodSales * 0.15m + rideFares * 0.20m, 2);
 
-        var recentActivities = new List<RecentActivityDto>
+        var recentActivities = new List<RecentActivityDto>();
+
+        var recentFoodOrders = await _db.FoodOrders
+            .Include(o => o.Restaurant)
+            .OrderByDescending(o => o.CreatedAt)
+            .Take(5)
+            .ToListAsync();
+
+        foreach (var fo in recentFoodOrders)
         {
-            new RecentActivityDto { Id = "ACT-101", Module = "FOOD", Description = "Food order #FO-8921 delivered from Meghana Foods", Amount = 485, Status = "COMPLETED", Timestamp = DateTime.UtcNow.AddMinutes(-5) },
-            new RecentActivityDto { Id = "ACT-102", Module = "RIDE", Description = "Bike ride completed by Driver Rajesh Kumar (KA-05-MQ-9821)", Amount = 45, Status = "COMPLETED", Timestamp = DateTime.UtcNow.AddMinutes(-12) },
-            new RecentActivityDto { Id = "ACT-103", Module = "MARKETPLACE", Description = "New listing posted: iPhone 14 Pro Max in Koramangala", Amount = 68000, Status = "ACTIVE", Timestamp = DateTime.UtcNow.AddMinutes(-24) },
-            new RecentActivityDto { Id = "ACT-104", Module = "USER", Description = "New customer registered via OTP +91 98451 99887", Amount = null, Status = "VERIFIED", Timestamp = DateTime.UtcNow.AddMinutes(-35) },
-            new RecentActivityDto { Id = "ACT-105", Module = "FOOD", Description = "Food order #FO-8922 placed at Haldiram's", Amount = 320, Status = "PREPARING", Timestamp = DateTime.UtcNow.AddMinutes(-42) },
-        };
+            recentActivities.Add(new RecentActivityDto
+            {
+                Id = $"FO-{fo.Id}",
+                Module = "FOOD",
+                Description = $"Food order #{fo.OrderNumber} ({fo.Restaurant?.Name ?? "Restaurant"})",
+                Amount = fo.GrandTotal,
+                Status = fo.Status,
+                Timestamp = fo.CreatedAt
+            });
+        }
+
+        var recentRides = await _db.Rides
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(5)
+            .ToListAsync();
+
+        foreach (var r in recentRides)
+        {
+            recentActivities.Add(new RecentActivityDto
+            {
+                Id = $"RD-{r.Id}",
+                Module = "RIDE",
+                Description = $"{r.VehicleType} ride {r.RideNumber}",
+                Amount = r.ActualFare ?? r.EstimatedFare,
+                Status = r.Status,
+                Timestamp = r.CreatedAt
+            });
+        }
+
+        recentActivities = recentActivities.OrderByDescending(a => a.Timestamp).Take(10).ToList();
 
         var result = new AdminDashboardDto
         {
@@ -168,23 +190,30 @@ public class AdminController : ControllerBase
                     return BadRequest(ApiResponse.Fail($"Role '{request.RoleName}' does not exist"));
 
                 var existingRole = user.UserRoles.FirstOrDefault(ur => ur.RoleId == role.Id);
-                if (existingRole != null)
+                if (string.Equals(request.Action, "REMOVE_ROLE", StringComparison.OrdinalIgnoreCase))
                 {
-                    _db.UserRoles.Remove(existingRole);
-                    if (role.Name == RoleNames.RestaurantOwner)
+                    if (existingRole != null)
                     {
-                        var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
-                        if (restMapping != null)
+                        _db.UserRoles.Remove(existingRole);
+                        if (role.Name == RoleNames.RestaurantOwner)
                         {
-                            restMapping.IsActive = false;
+                            var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
+                            if (restMapping != null)
+                            {
+                                restMapping.IsActive = false;
+                            }
                         }
+                        await _db.SaveChangesAsync();
+                        return Ok(ApiResponse.Ok($"Removed role {role.Name} from user #{user.Id}"));
                     }
-                    await _db.SaveChangesAsync();
-                    return Ok(ApiResponse.Ok($"Removed role {role.Name} from user #{user.Id}"));
+                    return Ok(ApiResponse.Ok($"User #{user.Id} does not have role {role.Name}"));
                 }
                 else
                 {
-                    _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id, CreatedAt = DateTime.UtcNow });
+                    if (existingRole == null)
+                    {
+                        _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id, CreatedAt = DateTime.UtcNow });
+                    }
                     
                     // Provision Driver profile & vehicle if assigning DRIVER
                     if (role.Name == RoleNames.Driver)
@@ -223,24 +252,30 @@ public class AdminController : ControllerBase
                     // Provision RestaurantUser mapping if assigning RESTAURANT_OWNER
                     if (role.Name == RoleNames.RestaurantOwner)
                     {
-                        var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
-                        if (restMapping == null)
+                        var targetRestId = request.RestaurantId;
+                        if (!targetRestId.HasValue || targetRestId.Value <= 0)
                         {
-                            var firstRest = await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive);
-                            if (firstRest != null)
+                            targetRestId = await _db.Restaurants.Where(r => r.IsActive).Select(r => r.Id).FirstOrDefaultAsync();
+                        }
+
+                        if (targetRestId.HasValue && targetRestId.Value > 0)
+                        {
+                            var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
+                            if (restMapping == null)
                             {
                                 _db.RestaurantUsers.Add(new RestaurantUser
                                 {
                                     UserId = user.Id,
-                                    RestaurantId = firstRest.Id,
+                                    RestaurantId = targetRestId.Value,
                                     IsActive = true,
                                     CreatedAt = DateTime.UtcNow
                                 });
                             }
-                        }
-                        else
-                        {
-                            restMapping.IsActive = true;
+                            else
+                            {
+                                restMapping.RestaurantId = targetRestId.Value;
+                                restMapping.IsActive = true;
+                            }
                         }
                     }
 
@@ -431,9 +466,25 @@ public class AdminController : ControllerBase
                 if (string.IsNullOrWhiteSpace(request.Code) || !request.DiscountValue.HasValue)
                     return BadRequest(ApiResponse<Coupon>.Fail("Code and DiscountValue are required"));
 
+                var codeUpper = request.Code.Trim().ToUpperInvariant();
+                var existingCoupon = await _db.Coupons.FirstOrDefaultAsync(c => c.Code == codeUpper);
+                if (existingCoupon != null)
+                {
+                    existingCoupon.Description = request.Description?.Trim() ?? existingCoupon.Description;
+                    existingCoupon.DiscountType = request.DiscountType ?? existingCoupon.DiscountType;
+                    existingCoupon.DiscountValue = request.DiscountValue.Value;
+                    existingCoupon.MinOrderAmount = request.MinOrderAmount ?? existingCoupon.MinOrderAmount;
+                    existingCoupon.MaxDiscount = request.MaxDiscount ?? existingCoupon.MaxDiscount;
+                    existingCoupon.ApplicableModule = request.ApplicableModule ?? existingCoupon.ApplicableModule;
+                    existingCoupon.IsActive = true;
+                    existingCoupon.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                    return Ok(ApiResponse<Coupon>.Ok(existingCoupon, "Coupon updated successfully"));
+                }
+
                 var coupon = new Coupon
                 {
-                    Code = request.Code.Trim().ToUpperInvariant(),
+                    Code = codeUpper,
                     Description = request.Description?.Trim(),
                     DiscountType = request.DiscountType ?? "PERCENTAGE",
                     DiscountValue = request.DiscountValue.Value,
@@ -888,5 +939,89 @@ public class AdminController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(ApiResponse.Ok($"Notification broadcasted to {targetUsers.Count} recipient(s)"));
+    }
+
+    /// <summary>
+    /// Clean up dummy test data and ensure phone numbers on real restaurants
+    /// </summary>
+    [HttpPost("cleanup-dummy-data")]
+    public async Task<ActionResult<ApiResponse>> CleanupDummyData()
+    {
+        // 1. Clean up test restaurants created during automated tests
+        var testRestaurants = await _db.Restaurants
+            .Where(r => r.Name.StartsWith("Playwright") || r.Name.StartsWith("DB Test"))
+            .ToListAsync();
+
+        if (testRestaurants.Any())
+        {
+            var testRestIds = testRestaurants.Select(r => r.Id).ToList();
+
+            var testItems = await _db.FoodItems.Where(f => testRestIds.Contains(f.RestaurantId)).ToListAsync();
+            _db.FoodItems.RemoveRange(testItems);
+
+            var testCats = await _db.RestaurantCategories.Where(c => testRestIds.Contains(c.RestaurantId)).ToListAsync();
+            _db.RestaurantCategories.RemoveRange(testCats);
+
+            var testOrders = await _db.FoodOrders.Where(o => testRestIds.Contains(o.RestaurantId)).ToListAsync();
+            _db.FoodOrders.RemoveRange(testOrders);
+
+            _db.Restaurants.RemoveRange(testRestaurants);
+            await _db.SaveChangesAsync();
+        }
+
+        // 2. Set realistic verified phone numbers & addresses for active real restaurants
+        var restaurants = await _db.Restaurants.Where(r => r.IsActive).ToListAsync();
+        foreach (var r in restaurants)
+        {
+            if (r.Name.Contains("Meghana", StringComparison.OrdinalIgnoreCase))
+            {
+                r.Phone = "+919845012345";
+                r.AddressLine = "5th Block, Koramangala";
+                r.City = "Bengaluru";
+            }
+            else if (r.Name.Contains("Haldiram", StringComparison.OrdinalIgnoreCase))
+            {
+                r.Phone = "+911141517777";
+                r.AddressLine = "Barakhamba Road, Connaught Place";
+                r.City = "New Delhi";
+            }
+            else if (r.Name.Contains("Burger King", StringComparison.OrdinalIgnoreCase))
+            {
+                r.Phone = "+919820054321";
+                r.AddressLine = "Sector 18 Market";
+                r.City = "Noida";
+            }
+            else if (r.Name.Contains("Dosa Plaza", StringComparison.OrdinalIgnoreCase))
+            {
+                r.Phone = "+919833067890";
+                r.AddressLine = "Indiranagar 100ft Road";
+                r.City = "Bengaluru";
+            }
+            else if (r.Name.Contains("Pizza Hub", StringComparison.OrdinalIgnoreCase))
+            {
+                r.Phone = "+919876511223";
+                r.AddressLine = "Chappan Dukan";
+                r.City = "Indore";
+            }
+            else if (r.Name.Contains("Roll Junction", StringComparison.OrdinalIgnoreCase))
+            {
+                r.Phone = "+919810088990";
+                r.AddressLine = "Hauz Khas Village";
+                r.City = "New Delhi";
+            }
+            else if (r.Name.Contains("Sweet Tooth", StringComparison.OrdinalIgnoreCase))
+            {
+                r.Phone = "+919899044556";
+                r.AddressLine = "Khan Market";
+                r.City = "New Delhi";
+            }
+            else if (string.IsNullOrWhiteSpace(r.Phone))
+            {
+                r.Phone = "+919876543210";
+            }
+        }
+        await _db.SaveChangesAsync();
+
+        return Ok(ApiResponse.Ok("Dummy test restaurants removed and real restaurant phone numbers updated successfully."));
     }
 }

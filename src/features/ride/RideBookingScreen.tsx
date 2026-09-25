@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -65,24 +66,29 @@ export const RideBookingScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [vehicles, setVehicles] = useState<VehicleOption[]>(VEHICLES);
-  const [routeMetrics, setRouteMetrics] = useState('16.4 km • ~34 mins • Moderate Traffic');
+  const [routeMetrics, setRouteMetrics] = useState<string | null>(null);
   const [isBooking, setIsBooking] = useState(false);
 
-  // Real Customer Device GPS State
-  const [pickupCoords, setPickupCoords] = useState({ latitude: 28.6304, longitude: 77.2177 });
-  const [pickupAddress, setPickupAddress] = useState('Connaught Place, Central Delhi');
-  const [dropoffCoords, setDropoffCoords] = useState({ latitude: 28.5562, longitude: 77.1000 });
-  const [dropoffAddress, setDropoffAddress] = useState('Terminal 3, IGI Airport (DEL)');
+  // Real Customer Device GPS State - initialized empty without hardcoded dummy locations
+  const [pickupCoords, setPickupCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [pickupAddress, setPickupAddress] = useState('Locating your position...');
+  const [dropoffCoords, setDropoffCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [dropoffAddress, setDropoffAddress] = useState('Tap map to set destination');
   const [activePoint, setActivePoint] = useState<'pickup' | 'dropoff'>('dropoff');
   const [isLocating, setIsLocating] = useState(false);
-  const [gpsStatus, setGpsStatus] = useState<'ONLINE' | 'LOCATING' | 'DENIED'>('ONLINE');
+  const [gpsStatus, setGpsStatus] = useState<'ONLINE' | 'LOCATING' | 'DENIED'>('LOCATING');
 
   const fetchEstimate = (
-    pickup: { latitude: number; longitude: number },
+    pickup: { latitude: number; longitude: number } | null,
     pickupLabel: string,
-    dropoff: { latitude: number; longitude: number },
+    dropoff: { latitude: number; longitude: number } | null,
     dropoffLabel: string
   ) => {
+    if (!pickup || !dropoff) {
+      setRouteMetrics(null);
+      return;
+    }
+
     apiClient
       .post<any>(ApiEndpoints.ride.estimate, {
         pickupLatitude: pickup.latitude,
@@ -137,10 +143,13 @@ export const RideBookingScreen: React.FC = () => {
       setPickupCoords(newCoords);
       setPickupAddress(newAddress);
       setGpsStatus('ONLINE');
-      fetchEstimate(newCoords, newAddress, dropoffCoords, dropoffAddress);
+      if (dropoffCoords) {
+        fetchEstimate(newCoords, newAddress, dropoffCoords, dropoffAddress);
+      }
     } catch (error) {
       console.warn('[RideBookingScreen] Could not retrieve GPS:', error);
       setGpsStatus('DENIED');
+      setPickupAddress('Tap map to set pickup point');
     } finally {
       setIsLocating(false);
     }
@@ -150,28 +159,35 @@ export const RideBookingScreen: React.FC = () => {
     const coords = { latitude: place.latitude, longitude: place.longitude };
     if (activePoint === 'pickup') {
       setPickupCoords(coords);
-      setPickupAddress(place.address);
-      fetchEstimate(coords, place.address, dropoffCoords, dropoffAddress);
+      setPickupAddress(place.address || `${coords.latitude.toFixed(4)}°, ${coords.longitude.toFixed(4)}°`);
+      if (dropoffCoords) {
+        fetchEstimate(coords, place.address, dropoffCoords, dropoffAddress);
+      }
       return;
     }
     setDropoffCoords(coords);
-    setDropoffAddress(place.address);
-    fetchEstimate(pickupCoords, pickupAddress, coords, place.address);
+    setDropoffAddress(place.address || `${coords.latitude.toFixed(4)}°, ${coords.longitude.toFixed(4)}°`);
+    if (pickupCoords) {
+      fetchEstimate(pickupCoords, pickupAddress, coords, place.address);
+    }
   };
 
   useEffect(() => {
-    locationService.checkPermission().then((permission) => {
-      if (permission === 'granted') {
-        handleLocateMe();
-      } else {
-        fetchEstimate(pickupCoords, pickupAddress, dropoffCoords, dropoffAddress);
-      }
-    });
+    handleLocateMe();
   }, []);
 
   const selectedVehicle = vehicles[selectedIndex] || vehicles[0];
 
   const handleBookRide = async () => {
+    if (!pickupCoords) {
+      Alert.alert('Pickup Required', 'Please set your pickup location on the map.');
+      return;
+    }
+    if (!dropoffCoords) {
+      Alert.alert('Destination Required', 'Please tap on the map to set your destination.');
+      return;
+    }
+
     setIsBooking(true);
     try {
       const res = await apiClient.post<any>(ApiEndpoints.ride.book, {
@@ -185,17 +201,16 @@ export const RideBookingScreen: React.FC = () => {
         paymentMethod: 'CASH',
       });
       const data = res.data?.data || res.data;
-      const rideId = data?.rideNumber || 'RD-5021';
+      const rideId = data?.rideNumber || `RD-${data?.id || 'NEW'}`;
       const rideNumericId = data?.id;
       navigation.navigate('ActiveRide', {
         rideId,
         rideNumericId,
         rideData: data,
       });
-    } catch (err) {
-      navigation.navigate('ActiveRide', {
-        rideId: 'RD-5021',
-      });
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Unable to book ride. Please check connection and try again.';
+      Alert.alert('Booking Error', msg);
     } finally {
       setIsBooking(false);
     }
@@ -272,9 +287,11 @@ export const RideBookingScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
               <Text style={styles.locationValue} numberOfLines={2}>{pickupAddress}</Text>
-              <Text style={styles.coordsSubtitle}>
-                GPS: {pickupCoords.latitude.toFixed(4)}°, {pickupCoords.longitude.toFixed(4)}°
-              </Text>
+              {pickupCoords && (
+                <Text style={styles.coordsSubtitle}>
+                  GPS: {pickupCoords.latitude.toFixed(4)}°, {pickupCoords.longitude.toFixed(4)}°
+                </Text>
+              )}
             </View>
           </TouchableOpacity>
 
@@ -294,27 +311,88 @@ export const RideBookingScreen: React.FC = () => {
                 DESTINATION{activePoint === 'dropoff' ? ' · EDITING' : ''}
               </Text>
               <Text style={styles.locationValue} numberOfLines={2}>{dropoffAddress}</Text>
-              <Text style={styles.coordsSubtitle}>
-                {dropoffCoords.latitude.toFixed(4)}°, {dropoffCoords.longitude.toFixed(4)}°
-              </Text>
+              {dropoffCoords && (
+                <Text style={styles.coordsSubtitle}>
+                  {dropoffCoords.latitude.toFixed(4)}°, {dropoffCoords.longitude.toFixed(4)}°
+                </Text>
+              )}
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Route Metrics Badge */}
-        <View style={styles.metricsBadge}>
-          <MaterialIcons name="alt-route" size={16} color={colors.blue} />
-          <Text style={styles.metricsText}>{routeMetrics}</Text>
-        </View>
+        {/* Route Metrics / Guidance Badge */}
+        {routeMetrics ? (
+          <View style={styles.metricsBadge}>
+            <MaterialIcons name="alt-route" size={16} color={colors.blue} />
+            <Text style={styles.metricsText}>{routeMetrics}</Text>
+          </View>
+        ) : (
+          <View style={[styles.metricsBadge, { backgroundColor: 'rgba(255, 107, 0, 0.08)' }]}>
+            <MaterialIcons name="touch-app" size={16} color={colors.primary} />
+            <Text style={[styles.metricsText, { color: colors.textSecondary }]}>
+              {dropoffCoords
+                ? 'Calculating route & fares...'
+                : 'Select destination on the map below to view fares'}
+            </Text>
+          </View>
+        )}
 
+        {/* Map Front and Center - Direct Selection, No redundant search dropdown underneath */}
         <View style={styles.mapPickerCard}>
+          <View style={styles.mapToggleHeader}>
+            <TouchableOpacity
+              style={[
+                styles.mapToggleBtn,
+                activePoint === 'pickup' && styles.mapToggleBtnActivePickup,
+              ]}
+              onPress={() => setActivePoint('pickup')}
+            >
+              <MaterialIcons
+                name="place"
+                size={14}
+                color={activePoint === 'pickup' ? '#fff' : colors.secondary}
+              />
+              <Text
+                style={[
+                  styles.mapToggleText,
+                  activePoint === 'pickup' && styles.mapToggleTextActive,
+                ]}
+              >
+                Pin Pickup
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.mapToggleBtn,
+                activePoint === 'dropoff' && styles.mapToggleBtnActiveDropoff,
+              ]}
+              onPress={() => setActivePoint('dropoff')}
+            >
+              <MaterialIcons
+                name="navigation"
+                size={14}
+                color={activePoint === 'dropoff' ? '#fff' : colors.error}
+              />
+              <Text
+                style={[
+                  styles.mapToggleText,
+                  activePoint === 'dropoff' && styles.mapToggleTextActive,
+                ]}
+              >
+                Pin Destination
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <LocationMapPicker
             key={activePoint}
-            label={activePoint === 'pickup' ? 'Search / pin pickup' : 'Search / pin destination'}
-            initialCoordinate={activePoint === 'pickup' ? pickupCoords : dropoffCoords}
+            label={activePoint === 'pickup' ? 'Tap map to drop pickup pin' : 'Tap map to drop destination pin'}
+            initialCoordinate={activePoint === 'pickup' ? pickupCoords || undefined : dropoffCoords || undefined}
             initialAddress={activePoint === 'pickup' ? pickupAddress : dropoffAddress}
-            proximity={pickupCoords}
+            proximity={pickupCoords || undefined}
             height={220}
+            hideSearchInput={true}
             onSelect={handlePlaceSelect}
           />
         </View>
@@ -389,8 +467,11 @@ export const RideBookingScreen: React.FC = () => {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            style={[styles.bookButton, isBooking && { opacity: 0.7 }]}
-            disabled={isBooking}
+            style={[
+              styles.bookButton,
+              (isBooking || !dropoffCoords) && { opacity: 0.6 },
+            ]}
+            disabled={isBooking || !dropoffCoords}
             onPress={handleBookRide}
             testID="book-ride-button"
             accessibilityLabel="Book Ride"
@@ -398,6 +479,8 @@ export const RideBookingScreen: React.FC = () => {
             <Text style={styles.bookButtonText}>
               {isBooking
                 ? 'Booking Ride...'
+                : !dropoffCoords
+                ? 'Select Destination on Map'
                 : `Book ${selectedVehicle.name} • ₹${selectedVehicle.fare.toFixed(0)}`}
             </Text>
           </TouchableOpacity>
@@ -552,6 +635,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.md,
+  },
+  mapToggleHeader: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  mapToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapToggleBtnActivePickup: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  mapToggleBtnActiveDropoff: {
+    backgroundColor: colors.error,
+    borderColor: colors.error,
+  },
+  mapToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  mapToggleTextActive: {
+    color: '#fff',
   },
   sectionHeader: {
     fontSize: 11,

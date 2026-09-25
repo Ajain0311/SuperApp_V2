@@ -63,7 +63,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer ref={navigationRef} theme={CustomDarkTheme}>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={CustomDarkTheme}
+        linking={{ enabled: false, prefixes: [] }}
+      >
         <StatusBar style="light" />
         <RootNavigator />
       </NavigationContainer>

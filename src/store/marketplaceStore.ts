@@ -8,10 +8,11 @@ interface MarketplaceState {
   toggleFavorite: (id: number) => boolean;
   isFavorite: (id: number) => boolean;
   addListing: (listing: ListingSummary) => void;
+  resetMarketplace: () => void;
 }
 
 export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
-  favorites: [102], // Pre-favorited item matching Flutter initial state
+  favorites: [],
   customListings: [],
 
   toggleFavorite: (id: number) => {
@@ -35,4 +36,9 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
       customListings: [listing, ...state.customListings],
     }));
   },
+
+  resetMarketplace: () => {
+    set({ favorites: [], customListings: [] });
+  },
 }));
+

@@ -26,78 +26,23 @@ export const ActivityScreen: React.FC = () => {
   const initialTab = route.params?.initialTab ?? 0;
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  const initialFoodOrders = [
-    {
-      id: '#FO-1002',
-      restaurant: 'Meghana Foods (Special Biryani)',
-      items: '1x Meghana Special Chicken Biryani, 1x Boondi Raita',
-      total: '₹375',
-      status: 'DELIVERED',
-      date: 'Today, 8:15 PM',
-    },
-    {
-      id: '#FO-0984',
-      restaurant: "Haldiram's Sweets & Thali",
-      items: '2x Special Thali, 1x Gulab Jamun',
-      total: '₹520',
-      status: 'DELIVERED',
-      date: 'Yesterday, 1:30 PM',
-    },
-  ];
-
-  const rides = [
-    {
-      id: '#RD-5021',
-      vehicle: 'Rapido Bike (DL 04 AB 9821)',
-      route: 'Connaught Place ➔ Terminal 3, IGI Airport',
-      distance: '16.4 km • ~34 mins',
-      fare: '₹45',
-      status: 'COMPLETED',
-      date: 'Today, 6:45 PM',
-    },
-    {
-      id: '#RD-4890',
-      vehicle: 'Auto Rickshaw (DL 1R 4410)',
-      route: 'Cyber City ➔ Sector 29 Market',
-      distance: '4.2 km • ~12 mins',
-      fare: '₹65',
-      status: 'COMPLETED',
-      date: '14 Sep 2026',
-    },
-  ];
-
-  const initialListings = [
-    {
-      id: '1',
-      title: 'iPhone 15 Pro Max 256GB - Natural Titanium',
-      price: '₹94,000',
-      views: '124 views',
-      status: 'ACTIVE',
-      date: 'Listed 2 hours ago',
-    },
-    {
-      id: '2',
-      title: 'MacBook Pro 14" M3 (16GB, 512GB)',
-      price: '₹1,32,000',
-      views: '310 views',
-      status: 'SOLD',
-      date: 'Listed 3 days ago',
-    },
-  ];
-
-  const [foodOrders, setFoodOrders] = useState(initialFoodOrders);
-  const [ridesList, setRidesList] = useState(rides);
-  const [listings, setListings] = useState(initialListings);
+  const [foodOrders, setFoodOrders] = useState<any[]>([]);
+  const [ridesList, setRidesList] = useState<any[]>([]);
+  const [listings, setListings] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    setIsLoading(true);
     // Fetch user food orders
-    apiClient
+    const fetchOrders = apiClient
       .get<any>(ApiEndpoints.food.orders)
       .then((res) => {
         const data = res.data?.data || res.data;
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const mapped = data.map((o: any) => ({
             id: `#${o.orderNumber || `FO-${o.id}`}`,
+            rawId: o.id,
+            orderNumber: o.orderNumber,
             restaurant: o.restaurantName || 'Restaurant',
             items: o.items?.map((i: any) => `${i.quantity}x ${i.itemName}`).join(', ') || 'Items ordered',
             total: `₹${o.grandTotal || 0}`,
@@ -105,19 +50,24 @@ export const ActivityScreen: React.FC = () => {
             date: o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'Recent',
           }));
           setFoodOrders(mapped);
+        } else {
+          setFoodOrders([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setFoodOrders([]);
+      });
 
     // Fetch user rides history
-    apiClient
+    const fetchRides = apiClient
       .get<any>(ApiEndpoints.ride.myRides)
       .then((res) => {
         const data = res.data?.data || res.data;
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const mapped = data.map((r: any) => ({
             id: `#${r.rideNumber || `RD-${r.id}`}`,
-            vehicle: `${r.vehicleType || 'Ride'} (${r.driver?.registrationNumber || 'DL 04 AB 9821'})`,
+            rawId: r.id,
+            vehicle: `${r.vehicleType || 'Ride'} (${r.driver?.registrationNumber || 'Standard'})`,
             route: `${r.pickupAddress || 'Pickup'} ➔ ${r.dropoffAddress || 'Dropoff'}`,
             distance: `${r.distanceKm || 0} km`,
             fare: `₹${r.actualFare || r.estimatedFare || 0}`,
@@ -125,16 +75,20 @@ export const ActivityScreen: React.FC = () => {
             date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
           }));
           setRidesList(mapped);
+        } else {
+          setRidesList([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setRidesList([]);
+      });
 
     // Fetch user marketplace listings
-    apiClient
+    const fetchListings = apiClient
       .get<any>(ApiEndpoints.marketplace.myListings)
       .then((res) => {
         const data = res.data?.data || res.data;
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const mapped = data.map((l: any) => ({
             id: String(l.id),
             title: l.title,
@@ -144,9 +98,17 @@ export const ActivityScreen: React.FC = () => {
             date: l.createdAt ? new Date(l.createdAt).toLocaleDateString() : 'Recent',
           }));
           setListings(mapped);
+        } else {
+          setListings([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setListings([]);
+      });
+
+    Promise.allSettled([fetchOrders, fetchRides, fetchListings]).finally(() => {
+      setIsLoading(false);
+    });
   }, []);
 
   return (
@@ -187,8 +149,34 @@ export const ActivityScreen: React.FC = () => {
             data={foodOrders}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              !isLoading ? (
+                <View style={styles.emptyContainer}>
+                  <MaterialIcons name="fastfood" size={56} color={colors.textTertiary} />
+                  <Text style={styles.emptyTitle}>No Food Orders Yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Craving something tasty? Explore verified restaurants and place your order!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Food' })}
+                  >
+                    <Text style={styles.emptyButtonText}>Order Food Now</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null
+            }
             renderItem={({ item }) => (
-              <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  (navigation as any).navigate('FoodOrderTracking', {
+                    orderId: item.orderNumber || item.id.replace('#', ''),
+                    orderNumericId: item.rawId,
+                  });
+                }}
+              >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle}>{item.restaurant}</Text>
                   <StatusBadge status={item.status} />
@@ -198,7 +186,10 @@ export const ActivityScreen: React.FC = () => {
                   <Text style={styles.cardDate}>{item.date}</Text>
                   <Text style={styles.cardAmount}>{item.total}</Text>
                 </View>
-              </View>
+                <View style={styles.cardActionRow}>
+                  <Text style={styles.cardActionText}>Live Tracking & Restaurant Phone →</Text>
+                </View>
+              </TouchableOpacity>
             )}
           />
         )}
@@ -208,8 +199,34 @@ export const ActivityScreen: React.FC = () => {
             data={ridesList}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              !isLoading ? (
+                <View style={styles.emptyContainer}>
+                  <MaterialIcons name="directions-car" size={56} color={colors.textTertiary} />
+                  <Text style={styles.emptyTitle}>No Rides Yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Need to go somewhere? Book bike, auto, or cab with instant OTP security!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Rides' })}
+                  >
+                    <Text style={styles.emptyButtonText}>Book a Ride</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null
+            }
             renderItem={({ item }) => (
-              <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  (navigation as any).navigate('ActiveRide', {
+                    rideId: item.id.replace('#', ''),
+                    rideNumericId: item.rawId,
+                  });
+                }}
+              >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle}>{item.vehicle}</Text>
                   <StatusBadge status={item.status} />
@@ -220,7 +237,7 @@ export const ActivityScreen: React.FC = () => {
                   <Text style={styles.cardDate}>{item.date}</Text>
                   <Text style={styles.cardAmount}>{item.fare}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             )}
           />
         )}
@@ -230,8 +247,33 @@ export const ActivityScreen: React.FC = () => {
             data={listings}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              !isLoading ? (
+                <View style={styles.emptyContainer}>
+                  <MaterialIcons name="storefront" size={56} color={colors.textTertiary} />
+                  <Text style={styles.emptyTitle}>No Listings Yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Sell your unused electronics, gadgets, and essentials to nearby buyers!
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Bazaar' })}
+                  >
+                    <Text style={styles.emptyButtonText}>Sell in Bazaar</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null
+            }
             renderItem={({ item }) => (
-              <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.8}
+                onPress={() => {
+                  (navigation as any).navigate('ListingDetail', {
+                    listingId: String(item.id),
+                  });
+                }}
+              >
                 <View style={styles.cardHeader}>
                   <Text numberOfLines={1} style={[styles.cardTitle, { flex: 1, marginRight: 8 }]}>
                     {item.title}
@@ -243,7 +285,7 @@ export const ActivityScreen: React.FC = () => {
                   <Text style={styles.cardDate}>{item.date}</Text>
                   <Text style={styles.cardViews}>{item.views}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             )}
           />
         )}
@@ -353,5 +395,47 @@ const styles = StyleSheet.create({
   cardViews: {
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  cardActionRow: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  cardActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    color: colors.textPrimary,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    ...typography.bodyMedium,
+    color: colors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyButton: {
+    marginTop: 20,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

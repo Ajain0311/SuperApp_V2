@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
@@ -8,6 +9,7 @@ using SuperApp.API.Services;
 
 namespace SuperApp.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class NotificationsController : ControllerBase
@@ -19,12 +21,12 @@ public class NotificationsController : ControllerBase
         _db = db;
     }
 
-    private long GetCurrentUserId()
+    private long? GetCurrentUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
         if (claim != null && long.TryParse(claim.Value, out var id))
             return id;
-        return 1;
+        return null;
     }
 
     /// <summary>
@@ -34,59 +36,14 @@ public class NotificationsController : ControllerBase
     public async Task<ActionResult<ApiResponse<List<Notification>>>> GetNotifications()
     {
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<List<Notification>>.Fail("Authentication required"));
+
         var notifications = await _db.Notifications
-            .Where(n => n.UserId == userId)
+            .Where(n => n.UserId == userId.Value)
             .OrderByDescending(n => n.CreatedAt)
             .Take(50)
             .ToListAsync();
-
-        if (!notifications.Any())
-        {
-            // Seed initial witty Zomato-style notifications for instant delight
-            var initialSeed = new List<Notification>
-            {
-                new Notification
-                {
-                    UserId = userId,
-                    Title = "Raat ko biwi wo de ya na de... 🍕😋",
-                    Body = "Par hum khana dene zaroor aayenge! Garma-garam pizza order karo, dil khush ho jayega!",
-                    Type = "FOOD_ORDER",
-                    IsRead = false,
-                    CreatedAt = DateTime.UtcNow.AddMinutes(-5)
-                },
-                new Notification
-                {
-                    UserId = userId,
-                    Title = "Bhookh lagi hai kya? 🌙🍔",
-                    Body = "Kitchen band ho chuka hai, par humara dil aur delivery dono 24/7 khule hain!",
-                    Type = "FOOD_ORDER",
-                    IsRead = false,
-                    CreatedAt = DateTime.UtcNow.AddMinutes(-25)
-                },
-                new Notification
-                {
-                    UserId = userId,
-                    Title = "Ghar baith ke kya karoge? 🚖✨",
-                    Body = "Chalo ghoomne! Gaadi darwaze pe khadi hai, seatbelt baandho!",
-                    Type = "RIDE",
-                    IsRead = true,
-                    CreatedAt = DateTime.UtcNow.AddHours(-2)
-                },
-                new Notification
-                {
-                    UserId = userId,
-                    Title = "Dhamaka! 🎉 Bazaar me naya ad live!",
-                    Body = "Puraani cheezon ko kaho bye-bye, jeb me aayegi nayi kamai! 💰📦",
-                    Type = "MARKETPLACE",
-                    IsRead = true,
-                    CreatedAt = DateTime.UtcNow.AddHours(-6)
-                }
-            };
-
-            _db.Notifications.AddRange(initialSeed);
-            await _db.SaveChangesAsync();
-            notifications = initialSeed;
-        }
 
         return Ok(ApiResponse<List<Notification>>.Ok(notifications));
     }
@@ -98,6 +55,9 @@ public class NotificationsController : ControllerBase
     public async Task<ActionResult<ApiResponse<Notification>>> TriggerWittyAlert([FromQuery] string? type)
     {
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<Notification>.Fail("Authentication required"));
+
         var (title, body) = type?.ToUpperInvariant() switch
         {
             "RIDE" => WittyNotificationCatalog.GetRandomRideLine(),
@@ -107,7 +67,7 @@ public class NotificationsController : ControllerBase
 
         var notification = new Notification
         {
-            UserId = userId,
+            UserId = userId.Value,
             Title = title,
             Body = body,
             Type = type?.ToUpperInvariant() ?? "FOOD_ORDER",
@@ -128,7 +88,10 @@ public class NotificationsController : ControllerBase
     public async Task<ActionResult<ApiResponse>> MarkAsRead(long id)
     {
         var userId = GetCurrentUserId();
-        var notif = await _db.Notifications.FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId);
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
+        var notif = await _db.Notifications.FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId.Value);
         if (notif != null)
         {
             notif.IsRead = true;
@@ -145,7 +108,10 @@ public class NotificationsController : ControllerBase
     public async Task<ActionResult<ApiResponse>> MarkAllAsRead()
     {
         var userId = GetCurrentUserId();
-        var unread = await _db.Notifications.Where(n => n.UserId == userId && !n.IsRead).ToListAsync();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
+        var unread = await _db.Notifications.Where(n => n.UserId == userId.Value && !n.IsRead).ToListAsync();
         foreach (var n in unread)
         {
             n.IsRead = true;
@@ -167,14 +133,17 @@ public class NotificationsController : ControllerBase
         }
 
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
         var existing = await _db.UserDeviceTokens
-            .FirstOrDefaultAsync(t => t.UserId == userId && t.DeviceToken == request.Token);
+            .FirstOrDefaultAsync(t => t.UserId == userId.Value && t.DeviceToken == request.Token);
 
         if (existing == null)
         {
             _db.UserDeviceTokens.Add(new UserDeviceToken
             {
-                UserId = userId,
+                UserId = userId.Value,
                 DeviceToken = request.Token,
                 Platform = request.Platform ?? "expo",
                 DeviceType = request.DeviceType,
@@ -194,4 +163,5 @@ public class NotificationsController : ControllerBase
         return Ok(ApiResponse.Ok("Device token registered successfully"));
     }
 }
+
 
