@@ -40,6 +40,16 @@
 
 The tasks below represent the logical sequence of work remaining for production rollout. AI agents must pick from the highest-priority open task:
 
+### Phase 0.5: Mapbox Maps & Place Search (In Progress / Shipping)
+- [x] **MAP-01: Mapbox client + Dev Client foundation**
+  - Install `@rnmapbox/maps` + `expo-dev-client`; configure `app.json` plugins + Android/iOS application ids.
+  - `mapboxService` Geocoding search/reverse; shared `LocationMapPicker` (native map + web search fallback).
+  - Wire Ride booking editable pickup/dropoff search; Saved Addresses lat/lng + search.
+  - Backend `MapboxMapService` + `NetTopologySuite` package; `RidesController` uses `IMapService` (Mapbox when `MAP_PROVIDER=Mapbox`).
+  - **Note**: Requires Dev Client rebuild (`npx expo prebuild` / `run:android`). Expo Go cannot load Mapbox native SDK. Tokens only in `.env`.
+- [ ] **MAP-02: Live ride tracking map on ActiveRideScreen** (follow-up)
+- [ ] **MAP-03: PostGIS / EF NetTopologySuite geography columns** (optional follow-up)
+
 ### Phase 1: Production Gateway & Secret Provisioning (Current Focus)
 - [ ] **PROD-01: Production SMS Gateway Activation**
   - Verify live Punjab State e-Governance DLT SMS Gateway (`https://eapi.punjab.gov.in/smapi/sms`) with actual non-mock teleco delivery.
@@ -101,5 +111,5 @@ The tasks below represent the logical sequence of work remaining for production 
 ## 📝 Last Session Handoff
 
 - **Date**: September 25, 2026
-- **Status**: Removed external india-pincode API from Saved Addresses (manual City / State / PIN). `git pull origin main` was already up to date. Verification: `npx tsc --noEmit` clean, Jest 73/73, `dotnet test` 67/67. Live UAT blocked by Supabase/Npgsql connectivity (env), not by this change. `npx expo-doctor` still reports unrelated patch version mismatches.
-- **Next Agent Action**: Continue **Phase 1: Production Gateway & Secret Provisioning**. Optionally fix Expo patch bumps and restore DB connectivity for live UAT.
+- **Status**: Mapbox rides + address search shipped on `main`. Verification: `tsc` clean, Jest 73/73, backend 66/66 offline (+ live Supabase schema test flaky then pass). Tokens stay in gitignored `.env` only. Native MapView needs Dev Client rebuild.
+- **Next Agent Action**: `npx expo prebuild` + `npx expo run:android` for device Mapbox smoke; then MAP-02 live ActiveRide map or Phase 1 production gateways.

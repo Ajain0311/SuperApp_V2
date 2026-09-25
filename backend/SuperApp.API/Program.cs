@@ -189,11 +189,24 @@ else
     builder.Services.AddScoped<IPaymentService>(sp => sp.GetRequiredService<MockPaymentService>());
 }
 
-// 4. Map & Location Provider (Mock in development; Google Maps/Mapbox in production)
-var mapProvider = Environment.GetEnvironmentVariable("MAP_PROVIDER") 
-    ?? builder.Configuration["Providers:Map"] 
+// 4. Map & Location Provider (Mock default; Mapbox when MAP_PROVIDER=Mapbox + token)
+var mapProvider = Environment.GetEnvironmentVariable("MAP_PROVIDER")
+    ?? builder.Configuration["Providers:Map"]
     ?? "Mock";
-builder.Services.AddScoped<IMapService, MockMapService>();
+var mapboxToken = Environment.GetEnvironmentVariable("MAPBOX_ACCESS_TOKEN")
+    ?? builder.Configuration["Mapbox:AccessToken"]
+    ?? string.Empty;
+builder.Services.AddHttpClient<MapboxMapService>();
+var useMapbox = string.Equals(mapProvider, "Mapbox", StringComparison.OrdinalIgnoreCase)
+    && !string.IsNullOrWhiteSpace(mapboxToken);
+if (useMapbox)
+{
+    builder.Services.AddScoped<IMapService>(sp => sp.GetRequiredService<MapboxMapService>());
+}
+else
+{
+    builder.Services.AddScoped<IMapService, MockMapService>();
+}
 
 // 5. Notification Provider (Mock in development; Firebase FCM in production)
 var notificationProvider = Environment.GetEnvironmentVariable("NOTIFICATION_PROVIDER") 

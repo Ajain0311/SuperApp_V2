@@ -125,13 +125,22 @@ dotnet run --project backend/SuperApp.API/SuperApp.API.csproj --launch-profile h
 - API will start listening on: `http://localhost:5000`
 - Swagger UI (in Dev): `http://localhost:5000/swagger`
 
-### 5.2 Step 2: Launch Frontend (Expo Web)
+### 5.2 Step 2: Launch Frontend (Expo)
 In terminal 2, start Expo:
 ```bash
 npx expo start --clear
 ```
-- Press `w` to launch the app directly in your browser at `http://localhost:8081`.
-- Alternatively, download **Expo Go** on your physical iOS/Android phone and scan the displayed QR code.
+- Press `w` for web at `http://localhost:8081` (Mapbox place **search** works; native MapView is mobile-only).
+- **Mapbox native maps require a Dev Client build** (Expo Go cannot load `@rnmapbox/maps`):
+```bash
+# .env must include:
+# EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=pk....
+# MAPBOX_ACCESS_TOKEN=pk....
+# MAP_PROVIDER=Mapbox
+npx expo prebuild
+npx expo run:android
+# or: npx expo run:ios
+```
 
 ---
 

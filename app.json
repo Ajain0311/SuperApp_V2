@@ -8,11 +8,13 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.superapp.v2",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "SuperApp uses your location to set pickup points for rides and recommend nearby restaurants and stores."
       }
     },
     "android": {
+      "package": "com.superapp.v2",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -44,7 +46,9 @@
           "icon": "./assets/icon.png",
           "color": "#1976D2"
         }
-      ]
+      ],
+      "expo-dev-client",
+      "@rnmapbox/maps"
     ]
   }
 }

@@ -17,7 +17,7 @@ A fundamental engineering constraint of SuperApp V2 is **Zero Operational Overhe
 
 | Architectural Dimension | Traditional Enterprise Solution | SuperApp V2 Zero-Cost Solution |
 |---|---|---|
-| **Map & Geocoding APIs** | Google Maps Platform / Mapbox ($5–$10 per 1,000 requests) | Built-in Haversine spherical math calculation engine. Address forms use manual city / state / PIN entry (no external geocoding or postal APIs). |
+| **Map & Geocoding APIs** | Google Maps Platform (always paid) | **Mapbox** maps + Geocoding/Directions via `@rnmapbox/maps` (Expo Dev Client) and optional `MapboxMapService` when `MAP_PROVIDER=Mapbox`. Default remains Haversine `MockMapService` with no network. |
 | **Message Broker / Queue** | RabbitMQ / Apache Kafka / Redis PubSub | ASP.NET Core in-memory SignalR WebSockets with typed group channels (`order-{id}`, `drivers-pool`, `ride-{id}`). |
 | **Background Job Scheduler** | Hangfire / Quartz.NET with Redis storage | ASP.NET Core native `IHostedService` / `BackgroundService` with cancellation tokens. |
 | **SMS Gateway** | Twilio / AWS SNS / MessageBird ($0.05/SMS) | Direct integration with **Punjab State e-Governance DLT SMS Gateway** (`https://eapi.punjab.gov.in/smapi/sms`) with dev-mode secure fallbacks. |
@@ -221,9 +221,12 @@ sequenceDiagram
 
 ---
 
-## 7. Address Entry (Manual)
+## 7. Maps, Address Search & Ride Geo
 
-Saved address forms collect house/street, optional landmark, city, state, and 6-digit PIN as plain text fields. There is no client or server postal lookup API, so city and state are entered manually by the user.
+- **Client**: `LocationMapPicker` + `mapboxService` (Mapbox Geocoding autocomplete). Native map canvas requires Expo Dev Client (`expo-dev-client` + `@rnmapbox/maps`) — not Expo Go. Web falls back to search suggestions only.
+- **Saved Addresses**: Manual city/state/PIN fields remain; Mapbox search/pin optionally fills address text and persists `latitude`/`longitude` (columns already on `addresses`).
+- **Rides**: Pickup/dropoff are searchable; estimate/book use `IMapService` (`MapboxMapService` or `MockMapService`).
+- **Tokens**: `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` (client) and `MAPBOX_ACCESS_TOKEN` (server) in gitignored `.env` only.
 
 ---
 

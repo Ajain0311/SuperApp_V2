@@ -78,6 +78,25 @@ jest.mock('expo-notifications', () => {
   };
 });
 
+jest.mock('@rnmapbox/maps', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const MockMapView = ({ children, ...props }: any) => React.createElement(View, props, children);
+  const MockCamera = React.forwardRef((props: any, _ref: any) => React.createElement(View, props));
+  const MockPointAnnotation = ({ children, ...props }: any) =>
+    React.createElement(View, props, children);
+  return {
+    __esModule: true,
+    default: {
+      setAccessToken: jest.fn(),
+      StyleURL: { Street: 'mapbox://styles/mapbox/streets-v12' },
+    },
+    MapView: MockMapView,
+    Camera: MockCamera,
+    PointAnnotation: MockPointAnnotation,
+  };
+});
+
 jest.mock('expo-location', () => {
   return {
     PermissionStatus: {

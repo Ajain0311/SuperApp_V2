@@ -20,6 +20,8 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { apiClient, ApiError } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
+import { SelectedMapPlace } from '../../services/mapboxService';
 
 type SavedAddress = {
   id: number;
@@ -30,6 +32,8 @@ type SavedAddress = {
   state: string;
   pinCode: string;
   isDefault: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 const LABELS = ['Home', 'Work', 'Other'];
@@ -42,6 +46,8 @@ const emptyForm = {
   state: '',
   pinCode: '',
   isDefault: false,
+  latitude: undefined as number | undefined,
+  longitude: undefined as number | undefined,
 };
 
 export const SavedAddressesScreen: React.FC = () => {
@@ -92,8 +98,22 @@ export const SavedAddressesScreen: React.FC = () => {
       state: item.state,
       pinCode: item.pinCode,
       isDefault: item.isDefault,
+      latitude: item.latitude ?? undefined,
+      longitude: item.longitude ?? undefined,
     });
     setModalOpen(true);
+  };
+
+  const handlePlaceSelect = (place: SelectedMapPlace) => {
+    setForm((f) => ({
+      ...f,
+      addressLine1: place.address || f.addressLine1,
+      city: place.city || f.city,
+      state: place.state || f.state,
+      pinCode: place.pinCode && /^\d{6}$/.test(place.pinCode) ? place.pinCode : f.pinCode,
+      latitude: place.latitude,
+      longitude: place.longitude,
+    }));
   };
 
   const handleSave = async () => {
@@ -115,6 +135,8 @@ export const SavedAddressesScreen: React.FC = () => {
         state: form.state.trim(),
         pinCode: form.pinCode.trim(),
         isDefault: form.isDefault,
+        latitude: form.latitude,
+        longitude: form.longitude,
       };
       if (editingId) {
         await apiClient.put(ApiEndpoints.common.address(editingId), body);
@@ -232,6 +254,17 @@ export const SavedAddressesScreen: React.FC = () => {
                   </TouchableOpacity>
                 ))}
               </View>
+              <LocationMapPicker
+                label="Search on Mapbox"
+                initialCoordinate={
+                  form.latitude != null && form.longitude != null
+                    ? { latitude: form.latitude, longitude: form.longitude }
+                    : undefined
+                }
+                initialAddress={form.addressLine1}
+                height={200}
+                onSelect={handlePlaceSelect}
+              />
               <TextInput
                 style={styles.input}
                 placeholder="House / street"

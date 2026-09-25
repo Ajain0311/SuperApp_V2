@@ -18,6 +18,8 @@ import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { locationService } from '../../services/locationService';
+import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
+import { SelectedMapPlace } from '../../services/mapboxService';
 
 interface VehicleOption {
   type: string;
@@ -69,18 +71,26 @@ export const RideBookingScreen: React.FC = () => {
   // Real Customer Device GPS State
   const [pickupCoords, setPickupCoords] = useState({ latitude: 28.6304, longitude: 77.2177 });
   const [pickupAddress, setPickupAddress] = useState('Connaught Place, Central Delhi');
+  const [dropoffCoords, setDropoffCoords] = useState({ latitude: 28.5562, longitude: 77.1000 });
+  const [dropoffAddress, setDropoffAddress] = useState('Terminal 3, IGI Airport (DEL)');
+  const [activePoint, setActivePoint] = useState<'pickup' | 'dropoff'>('dropoff');
   const [isLocating, setIsLocating] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<'ONLINE' | 'LOCATING' | 'DENIED'>('ONLINE');
 
-  const fetchEstimate = (coords: { latitude: number; longitude: number }, address: string) => {
+  const fetchEstimate = (
+    pickup: { latitude: number; longitude: number },
+    pickupLabel: string,
+    dropoff: { latitude: number; longitude: number },
+    dropoffLabel: string
+  ) => {
     apiClient
       .post<any>(ApiEndpoints.ride.estimate, {
-        pickupLatitude: coords.latitude,
-        pickupLongitude: coords.longitude,
-        pickupAddress: address,
-        dropoffLatitude: 28.5562,
-        dropoffLongitude: 77.1000,
-        dropoffAddress: 'Terminal 3, IGI Airport (DEL)',
+        pickupLatitude: pickup.latitude,
+        pickupLongitude: pickup.longitude,
+        pickupAddress: pickupLabel,
+        dropoffLatitude: dropoff.latitude,
+        dropoffLongitude: dropoff.longitude,
+        dropoffAddress: dropoffLabel,
       })
       .then((res) => {
         const data = res.data?.data || res.data;
@@ -127,7 +137,7 @@ export const RideBookingScreen: React.FC = () => {
       setPickupCoords(newCoords);
       setPickupAddress(newAddress);
       setGpsStatus('ONLINE');
-      fetchEstimate(newCoords, newAddress);
+      fetchEstimate(newCoords, newAddress, dropoffCoords, dropoffAddress);
     } catch (error) {
       console.warn('[RideBookingScreen] Could not retrieve GPS:', error);
       setGpsStatus('DENIED');
@@ -136,12 +146,25 @@ export const RideBookingScreen: React.FC = () => {
     }
   };
 
+  const handlePlaceSelect = (place: SelectedMapPlace) => {
+    const coords = { latitude: place.latitude, longitude: place.longitude };
+    if (activePoint === 'pickup') {
+      setPickupCoords(coords);
+      setPickupAddress(place.address);
+      fetchEstimate(coords, place.address, dropoffCoords, dropoffAddress);
+      return;
+    }
+    setDropoffCoords(coords);
+    setDropoffAddress(place.address);
+    fetchEstimate(pickupCoords, pickupAddress, coords, place.address);
+  };
+
   useEffect(() => {
     locationService.checkPermission().then((permission) => {
       if (permission === 'granted') {
         handleLocateMe();
       } else {
-        fetchEstimate(pickupCoords, pickupAddress);
+        fetchEstimate(pickupCoords, pickupAddress, dropoffCoords, dropoffAddress);
       }
     });
   }, []);
@@ -156,9 +179,9 @@ export const RideBookingScreen: React.FC = () => {
         pickupAddress,
         pickupLatitude: pickupCoords.latitude,
         pickupLongitude: pickupCoords.longitude,
-        dropoffAddress: 'Terminal 3, IGI Airport (DEL)',
-        dropoffLatitude: 28.5562,
-        dropoffLongitude: 77.1000,
+        dropoffAddress,
+        dropoffLatitude: dropoffCoords.latitude,
+        dropoffLongitude: dropoffCoords.longitude,
         paymentMethod: 'CASH',
       });
       const data = res.data?.data || res.data;
@@ -220,11 +243,17 @@ export const RideBookingScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Pickup / Dropoff Card */}
         <View style={styles.card}>
-          <View style={styles.locationRow}>
+          <TouchableOpacity
+            style={styles.locationRow}
+            activeOpacity={0.85}
+            onPress={() => setActivePoint('pickup')}
+          >
             <View style={[styles.dot, { backgroundColor: colors.secondary }]} />
             <View style={styles.locationTextGroup}>
               <View style={styles.pickupHeaderRow}>
-                <Text style={styles.locationLabel}>PICKUP LOCATION</Text>
+                <Text style={styles.locationLabel}>
+                  PICKUP LOCATION{activePoint === 'pickup' ? ' · EDITING' : ''}
+                </Text>
                 <TouchableOpacity
                   onPress={handleLocateMe}
                   disabled={isLocating}
@@ -240,20 +269,29 @@ export const RideBookingScreen: React.FC = () => {
                 GPS: {pickupCoords.latitude.toFixed(4)}°, {pickupCoords.longitude.toFixed(4)}°
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.dividerRow}>
             <View style={styles.dividerLineVertical} />
             <View style={styles.dividerHorizontal} />
           </View>
 
-          <View style={styles.locationRow}>
+          <TouchableOpacity
+            style={styles.locationRow}
+            activeOpacity={0.85}
+            onPress={() => setActivePoint('dropoff')}
+          >
             <View style={[styles.dot, { backgroundColor: colors.error }]} />
             <View style={styles.locationTextGroup}>
-              <Text style={styles.locationLabel}>DESTINATION</Text>
-              <Text style={styles.locationValue}>Terminal 3, IGI Airport (DEL)</Text>
+              <Text style={styles.locationLabel}>
+                DESTINATION{activePoint === 'dropoff' ? ' · EDITING' : ''}
+              </Text>
+              <Text style={styles.locationValue} numberOfLines={2}>{dropoffAddress}</Text>
+              <Text style={styles.coordsSubtitle}>
+                {dropoffCoords.latitude.toFixed(4)}°, {dropoffCoords.longitude.toFixed(4)}°
+              </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Route Metrics Badge */}
@@ -262,23 +300,16 @@ export const RideBookingScreen: React.FC = () => {
           <Text style={styles.metricsText}>{routeMetrics}</Text>
         </View>
 
-        {/* Mock Map Visualizer */}
-        <View style={styles.mapVisualizer}>
-          {/* Pickup Marker */}
-          <View style={styles.pickupMarker}>
-            <View style={[styles.markerCircle, { backgroundColor: colors.secondary }]}>
-              <MaterialIcons name="my-location" size={14} color="#FFFFFF" />
-            </View>
-            <Text style={styles.markerText}>Pickup</Text>
-          </View>
-
-          {/* Destination Marker */}
-          <View style={styles.destMarker}>
-            <View style={[styles.markerCircle, { backgroundColor: colors.error }]}>
-              <MaterialIcons name="location-on" size={16} color="#FFFFFF" />
-            </View>
-            <Text style={styles.markerText}>Airport T3</Text>
-          </View>
+        <View style={styles.mapPickerCard}>
+          <LocationMapPicker
+            key={activePoint}
+            label={activePoint === 'pickup' ? 'Search / pin pickup' : 'Search / pin destination'}
+            initialCoordinate={activePoint === 'pickup' ? pickupCoords : dropoffCoords}
+            initialAddress={activePoint === 'pickup' ? pickupAddress : dropoffAddress}
+            proximity={pickupCoords}
+            height={220}
+            onSelect={handlePlaceSelect}
+          />
         </View>
 
         {/* Available Vehicles Section Header */}
@@ -507,39 +538,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '600',
   },
-  mapVisualizer: {
-    height: 140,
-    backgroundColor: '#161B2E',
+  mapPickerCard: {
+    marginTop: spacing.md,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    marginTop: spacing.md,
-    position: 'relative',
-    justifyContent: 'space-between',
-  },
-  pickupMarker: {
-    position: 'absolute',
-    top: 24,
-    left: 36,
-    alignItems: 'center',
-  },
-  destMarker: {
-    position: 'absolute',
-    bottom: 24,
-    right: 48,
-    alignItems: 'center',
-  },
-  markerCircle: {
-    padding: 6,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  markerText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 4,
+    padding: spacing.md,
   },
   sectionHeader: {
     fontSize: 11,

@@ -94,4 +94,13 @@ export class AppEnvironment {
     }
     return !this.isProduction;
   }
+
+  /** Mapbox public access token (pk.*) for maps + geocoding search */
+  static get mapboxAccessToken(): string {
+    return (process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '').trim();
+  }
+
+  static get hasMapboxToken(): boolean {
+    return this.mapboxAccessToken.length > 0;
+  }
 }

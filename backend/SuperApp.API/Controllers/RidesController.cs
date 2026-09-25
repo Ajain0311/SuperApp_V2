@@ -5,6 +5,7 @@ using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 using SuperApp.API.Hubs;
+using SuperApp.API.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace SuperApp.API.Controllers;
@@ -15,11 +16,13 @@ public class RidesController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<RideTrackingHub> _rideHub;
+    private readonly IMapService _mapService;
 
-    public RidesController(AppDbContext db, IHubContext<RideTrackingHub> rideHub)
+    public RidesController(AppDbContext db, IHubContext<RideTrackingHub> rideHub, IMapService mapService)
     {
         _db = db;
         _rideHub = rideHub;
+        _mapService = mapService;
     }
 
     private long GetCurrentUserId()
@@ -67,15 +70,20 @@ public class RidesController : ControllerBase
     /// Calculate distance, ETA, and fare estimate across vehicle tiers (BIKE, AUTO, CAB)
     /// </summary>
     [HttpPost("estimate")]
-    public ActionResult<ApiResponse<RideEstimateResponse>> GetEstimate([FromBody] RideEstimateRequest request)
+    public async Task<ActionResult<ApiResponse<RideEstimateResponse>>> GetEstimate([FromBody] RideEstimateRequest request)
     {
-        // Calculate mock distance based on coordinates (Haversine approximation or fixed 16.4 km default)
-        decimal distanceKm = 16.4m;
-        int estimatedMinutes = 34;
+        var route = await _mapService.EstimateRouteAsync(
+            request.PickupLatitude,
+            request.PickupLongitude,
+            request.DropoffLatitude,
+            request.DropoffLongitude);
 
-        var bikeFare = Math.Round(20.0m + (distanceKm * 1.5m), 0); // ~₹45
-        var autoFare = Math.Round(25.0m + (distanceKm * 2.5m), 0); // ~₹65
-        var cabFare = Math.Round(45.0m + (distanceKm * 5.0m), 0);  // ~₹125
+        var distanceKm = (decimal)route.DistanceKm;
+        var estimatedMinutes = route.EstimatedDurationMinutes;
+
+        var bikeFare = Math.Round(20.0m + (distanceKm * 1.5m), 0);
+        var autoFare = Math.Round(25.0m + (distanceKm * 2.5m), 0);
+        var cabFare = Math.Round(45.0m + (distanceKm * 5.0m), 0);
 
         var options = new List<VehicleEstimateDto>
         {
@@ -133,12 +141,18 @@ public class RidesController : ControllerBase
         var rideOtp = random.Next(1000, 9999).ToString();
         var rideNumber = $"RD-{random.Next(1000, 9999)}";
 
-        // Calculate fare
+        var route = await _mapService.EstimateRouteAsync(
+            request.PickupLatitude,
+            request.PickupLongitude,
+            request.DropoffLatitude,
+            request.DropoffLongitude);
+        var distanceKm = (decimal)route.DistanceKm;
+
         decimal estimatedFare = request.VehicleType.ToUpper() switch
         {
-            VehicleTypes.Auto => 65.00m,
-            VehicleTypes.Cab => 125.00m,
-            _ => 45.00m
+            VehicleTypes.Auto => Math.Round(25.0m + (distanceKm * 2.5m), 0),
+            VehicleTypes.Cab => Math.Round(45.0m + (distanceKm * 5.0m), 0),
+            _ => Math.Round(20.0m + (distanceKm * 1.5m), 0)
         };
 
         var ride = new Ride
@@ -152,7 +166,7 @@ public class RidesController : ControllerBase
             DropoffAddress = request.DropoffAddress,
             DropoffLatitude = request.DropoffLatitude,
             DropoffLongitude = request.DropoffLongitude,
-            DistanceKm = 16.4m,
+            DistanceKm = distanceKm,
             EstimatedFare = estimatedFare,
             Status = RideStatus.Requested, // Set to REQUESTED for driver dispatch
             OtpCode = rideOtp,
