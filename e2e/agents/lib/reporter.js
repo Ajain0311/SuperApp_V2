@@ -56,6 +56,12 @@ export function toMarkdown(report) {
   const { meta, summary, agents, results, matrix } = report;
   const failures = results.filter((r) => r.status === 'FAIL' || r.status === 'ERROR');
   const missing = results.filter((r) => r.status === 'NOT_IMPLEMENTED');
+  const seconds = Math.max(1, meta.durationMs || 1) / 1000;
+  summary.requestsPerSecond = Math.round((summary.totalRequests / seconds) * 10) / 10;
+  summary.statusDistribution = {};
+  for (const row of results) {
+    if (typeof row.actual === 'number') summary.statusDistribution[row.actual] = (summary.statusDistribution[row.actual] || 0) + 1;
+  }
   const slow = [...results].filter((r) => r.latencyMs).sort((a, b) => b.latencyMs - a.latencyMs).slice(0, 5);
   const suites = [...new Set(results.map((r) => r.suite))];
 
@@ -73,6 +79,10 @@ export function toMarkdown(report) {
   lines.push(`- Agents: ${agents.length}`);
   lines.push(`- Concurrency: ${meta.concurrency}`);
   lines.push(`- Duration: ${meta.durationMs} ms`);
+  lines.push(`- Requests/sec: ${summary.requestsPerSecond}`);
+  lines.push(`- HTTP statuses: ${JSON.stringify(summary.statusDistribution || {})}`);
+  lines.push(`- DB checks: ${meta.dbChecks ?? 'n/a'} mismatches ${meta.dbMismatches ?? 'n/a'} orphans ${meta.dbOrphans ?? 'n/a'}`);
+  lines.push('- Label: concurrent integration/volume test, not a formal load test');
   lines.push('');
   lines.push('## 2. Agent Summary');
   lines.push('');

@@ -59,9 +59,18 @@ function parseArgs(argv) {
     else if (key === '--think-time') out.thinkTimeMs = Number(take());
     else if (key === '--ramp-up') out.rampUpMs = Number(take());
     else if (key === '--cleanup') out.cleanup = true;
+    else if (key === '--no-db') out.noDb = true;
+    else if (key === '--run-id') out.runId = take();
     else if (key === '--help') out.help = true;
     else if (next && key.startsWith('--')) throw new Error(`Unknown argument ${key}`);
   }
+  if (!argv.includes('--customers') && process.env.AGENT_CUSTOMERS) out.customers = Number(process.env.AGENT_CUSTOMERS);
+  if (!argv.includes('--restaurant-owners') && process.env.AGENT_OWNERS) out.restaurantOwners = Number(process.env.AGENT_OWNERS);
+  if (!argv.includes('--captains') && process.env.AGENT_CAPTAINS) out.captains = Number(process.env.AGENT_CAPTAINS);
+  if (!argv.includes('--sellers') && process.env.AGENT_SELLERS) out.sellers = Number(process.env.AGENT_SELLERS);
+  if (!argv.includes('--concurrency') && process.env.AGENT_CONCURRENCY) out.concurrency = Number(process.env.AGENT_CONCURRENCY);
+  if (!argv.includes('--run-id') && process.env.RUN_ID) out.runId = process.env.RUN_ID;
+  if (process.env.AGENT_NO_DB === 'true') out.noDb = true;
   return out;
 }
 
@@ -155,7 +164,7 @@ export async function main(argv = process.argv.slice(2)) {
   const config = loadConfig();
   const baseUrl = args.baseUrl || config.baseUrl;
   const log = createLogger();
-  const runId = createRunId();
+  const runId = args.runId || createRunId();
   const stamp = Date.now();
   const common = { baseUrl, timeoutMs: args.timeout, retries: args.retries };
   const agents = [];
@@ -200,7 +209,7 @@ export async function main(argv = process.argv.slice(2)) {
     record: bindRecorder(results, null),
   };
   await provision(ctx);
-  ctx.db = await openVerifier();
+  ctx.db = args.noDb ? { ok: false, reason: 'DB verification disabled with --no-db' } : await openVerifier();
   ctx.dbStats = { verified: 0, mismatch: 0, orphan: 0 };
   ctx.concurrencyStats = [];
   const dataFlows = ['food-order', 'restaurant-isolation', 'ride', 'marketplace'];

@@ -8,6 +8,19 @@ One HTTP framework for concurrent CUSTOMER, RESTAURANT_OWNER, DRIVER, MARKETPLAC
 
 Routes match the ASP.NET controllers: `/api/FoodOrders`, `/api/vendor/orders`, `/api/driver/rides/{id}/accept`, `/api/marketplace/listings`, `/api/admin/*`, `/api/auth/*`.
 
+## Volume
+
+`npm run test:agents:volume` is a concurrent integration test, not a formal load test. Counts are flags, not hard-coded:
+
+```bash
+npm run test:agents:volume -- --customers 200 --restaurant-owners 20 --captains 40 --sellers 40 --concurrency 20
+npm run test:agents:volume -- --customers 500 --restaurant-owners 50 --captains 100 --sellers 100 --concurrency 50 --cleanup
+```
+
+Also: `--run-id`, `--no-db`, `--cleanup`. Environment overrides when the flag is omitted: `AGENT_CUSTOMERS`, `AGENT_OWNERS`, `AGENT_CAPTAINS`, `AGENT_SELLERS`, `AGENT_CONCURRENCY`, `RUN_ID`, `AGENT_NO_DB=true`.
+
+OTP provider is not changed by the runner. PunjabGov stays PunjabGov. A development API still accepts the documented test code when it is not Production. Do not point this at production.
+
 ## When to run what
 
 The Expo frontend is never required. These commands talk to the API, or to nothing.
@@ -19,7 +32,7 @@ The Expo frontend is never required. These commands talk to the API, or to nothi
 
 Self-test only checks the framework (config, agents, assertions, reports, concurrency). It does not open a port.
 
-Live test logs real agents into the API. Set `ADMIN_PASSWORD`. If `.env` has `OTP_PROVIDER=PunjabGov`, start the API with `OTP_PROVIDER=Mock` so `send-otp` returns `devOtp`. Do not start Expo.
+Live test logs real agents into the API. Set `ADMIN_PASSWORD`. Do not change `OTP_PROVIDER` or set `OTP_TEST_MODE`. On Development, PunjabGov still accepts the probe code `123456` when `devOtp` is hidden. Do not start Expo.
 
 ## Configuration
 
@@ -35,7 +48,7 @@ Environment variables override the file:
 
 If `devOtp` is missing, the runner tries `TEST_OTP` or one development probe of `123456`. PunjabGov accepts that code when the API is not Production. A rejected probe is `BLOCKED` (real SMS or production). Downstream orders, rides, and listings are not called for that agent, so a missing JWT does not become a pile of 401 failures.
 
-When `OTP_PROVIDER=PunjabGov`, the API hides `devOtp`. Citizen login then needs a real OTP or a temporary switch to the mock OTP provider. The framework records that as a failed or blocked login. It does not invent a pass.
+When `OTP_PROVIDER=PunjabGov`, the API hides `devOtp`. The runner does not switch the OTP provider. A rejected probe is a failed or blocked login. It does not invent a pass.
 
 ## How to run
 

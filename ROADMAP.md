@@ -114,7 +114,8 @@ The tasks below represent the logical sequence of work remaining for production 
 ## 📝 Last Session Handoff
 
 - **Date**: September 29, 2026
-- **Status**: Live API checks now go through `e2e/agents/runner.js`. Old one-off UAT scripts were removed. Jest unit tests stay.
+- **Status**: Agent suite adds conditional race claims (vendor status and driver accept return 409 to the loser), COD lifecycle DB checks, and volume CLI flags. OTP provider is not switched by the runner. 200/500-agent runs were not executed.
+- **Previous**: Live API checks go through `e2e/agents/runner.js`. Old one-off UAT scripts were removed. Jest unit tests stay.
 - **Previous**: Backend listen port moved from 5000 to 80.
 - **Previous**: **58/58 MULTI-USER E2E PASS — ZERO DATA LEAKAGE.** All verification suites green.
 - **Fixes Applied This Session**:

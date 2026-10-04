@@ -315,7 +315,16 @@ public class VendorController : ControllerBase
             return BadRequest(ApiResponse.Fail($"Invalid status transition from '{currentStatus}' to '{targetStatus}'"));
         }
 
+        var claimed = await _db.FoodOrders
+            .Where(o => o.Id == order.Id && o.Status == currentStatus)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.Status, targetStatus)
+                .SetProperty(o => o.UpdatedAt, DateTime.UtcNow));
+        if (claimed == 0)
+            return Conflict(ApiResponse.Fail($"Order #{order.OrderNumber} was updated by another request."));
+
         order.Status = targetStatus;
+        _db.Entry(order).Property(o => o.Status).IsModified = false;
 
         // Requirement 3.B: COD status transition on delivery
         if (string.Equals(targetStatus, OrderStatus.Delivered, StringComparison.OrdinalIgnoreCase))

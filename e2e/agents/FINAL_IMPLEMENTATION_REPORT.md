@@ -1,5 +1,23 @@
 # Multi-agent live test — fix report
 
+## Race and lifecycle run (2026-09-29, later)
+
+OTP provider was not changed. Counts stay CLI flags: `--customers`, `--restaurant-owners`, `--captains`, `--sellers`, `--concurrency`, `--run-id`, `--cleanup`, `--no-db`.
+
+| Command | Result |
+| --- | --- |
+| `npm run test:agents:self` | 14/14 pass |
+| `npm run test:agents:food` | PASS 31, FAIL 0, NOT_IMPLEMENTED 2 |
+| `npm run test:agents:isolation` | PASS 56, FAIL 0, NOT_IMPLEMENTED 2 |
+| `npm run test:agents` | `run-mumyi6l1` PASS 90, FAIL 0, NOT_IMPLEMENTED 2 |
+| volume 20/5/10/10 concurrency 8 `--cleanup` | `run-mumyjkc8` PASS 346, FAIL 0, NOT_IMPLEMENTED 2 |
+
+`run-mumyjkc8` is the report in `reports/latest.json`. Cleanup removed that run's rows. Races: one of two order accepts is 200 and the other 409; one of two captains gets the ride and the other gets 409. DB rows matched. Duplicate order and ride numbers: 0.
+
+NOT_IMPLEMENTED, and not failures: captain food-delivery (no such API) and online food payment (`mock-complete` does not settle a food order). COD delivery sets `payment_status` to PAID and that row was verified.
+
+A first race run returned 200 and 200 for both accepts. The API now claims the row with a conditional update, so the loser gets 409. 200 and 500 agent runs were not executed in this pass. The flags support them. This is still a concurrent integration test, not a formal load test.
+
 ## High-volume database run (2026-09-29)
 
 Scaled mutations live in `e2e/agents/lib/volume.js`. Postgres checks live in `e2e/agents/lib/db-verifier.js` and read the connection string from the environment or `.env`. The verifier does not print the password. `--cleanup` deletes only rows whose notes, title, address, or pickup contain the run id.
