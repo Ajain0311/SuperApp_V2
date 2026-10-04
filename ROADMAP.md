@@ -113,8 +113,9 @@ The tasks below represent the logical sequence of work remaining for production 
 
 ## 📝 Last Session Handoff
 
-- **Date**: September 25, 2026
-- **Status**: **58/58 MULTI-USER E2E PASS — ZERO DATA LEAKAGE.** All verification suites green.
+- **Date**: September 28, 2026
+- **Status**: Backend listen port moved from 5000 to 80 (`launchSettings`, client defaults, UAT/e2e base URLs).
+- **Previous**: **58/58 MULTI-USER E2E PASS — ZERO DATA LEAKAGE.** All verification suites green.
 - **Fixes Applied This Session**:
   1. **Driver Isolation (403 vs 404)**: Fixed `DriverController.StartRide()` — changed single-query filter (`r.Id == id && r.DriverId == driver.Id`) to two-step lookup: find ride by ID first, then return `Forbid()` (403) if `ride.DriverId != driver.Id`. Previously returned 404 when a different driver tried to start another driver's ride.
   2. **Driver Ride History Route**: Added `[HttpGet("rides/history")]` alias to `GetHistory()` in `DriverController.cs` so `/api/driver/rides/history` works (in addition to `/api/driver/history`). The frontend and test were calling the `rides/history` path.

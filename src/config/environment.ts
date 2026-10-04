@@ -42,9 +42,9 @@ export class AppEnvironment {
 
     // 3. Dev fallbacks (Android emulator maps localhost to 10.0.2.2)
     if (Platform.OS === 'android') {
-      return 'http://10.0.2.2:5000/api';
+      return 'http://10.0.2.2:80/api';
     }
-    return 'http://localhost:5000/api';
+    return 'http://localhost:80/api';
   }
 
   /**

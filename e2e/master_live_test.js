@@ -48,13 +48,13 @@ async function runMasterLiveBrowserTest() {
   const mobilePage = await mobileContext.newPage();
 
   mobilePage.on('request', (req) => {
-    if (req.url().includes(':5000') || req.url().includes('/api/')) {
+    if (req.url().includes(':80') || req.url().includes('/api/')) {
       req._reqStart = Date.now();
     }
   });
 
   mobilePage.on('response', (res) => {
-    if (res.url().includes(':5000') || res.url().includes('/api/')) {
+    if (res.url().includes(':80') || res.url().includes('/api/')) {
       const dur = res.request()._reqStart ? Date.now() - res.request()._reqStart : 0;
       recordApi(res.request().method(), res.url(), res.status(), dur);
     }
@@ -431,13 +431,13 @@ async function runMasterLiveBrowserTest() {
   const adminPage = await adminContext.newPage();
 
   adminPage.on('request', (req) => {
-    if (req.url().includes(':5000') || req.url().includes('/api/')) {
+    if (req.url().includes(':80') || req.url().includes('/api/')) {
       req._reqStart = Date.now();
     }
   });
 
   adminPage.on('response', (res) => {
-    if (res.url().includes(':5000') || res.url().includes('/api/')) {
+    if (res.url().includes(':80') || res.url().includes('/api/')) {
       const dur = res.request()._reqStart ? Date.now() - res.request()._reqStart : 0;
       recordApi(res.request().method(), res.url(), res.status(), dur);
     }
@@ -451,8 +451,8 @@ async function runMasterLiveBrowserTest() {
   });
 
   try {
-    logStep('9. Open Web Admin Portal', 'RUNNING', 'http://localhost:5000/admin/index.html');
-    await adminPage.goto('http://localhost:5000/admin/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    logStep('9. Open Web Admin Portal', 'RUNNING', 'http://localhost:80/admin/index.html');
+    await adminPage.goto('http://localhost:80/admin/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await adminPage.waitForTimeout(2000);
 
     const shotAdmin1 = path.join(screenshotsDir, 'live_16_admin_dashboard.png');

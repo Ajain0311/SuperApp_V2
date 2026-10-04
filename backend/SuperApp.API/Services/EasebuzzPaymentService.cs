@@ -43,7 +43,7 @@ public class EasebuzzPaymentService : IPaymentService
         _dashboardBase = isProd ? "https://dashboard.easebuzz.in/" : "https://testdashboard.easebuzz.in/";
         _returnUrl = Environment.GetEnvironmentVariable("PAYMENT_RETURN_URL")
             ?? configuration["Payment:ReturnUrl"]
-            ?? "http://localhost:5000/api/payments/easebuzz-return";
+            ?? "http://localhost:80/api/payments/easebuzz-return";
     }
 
     public async Task<PaymentOrderResult> CreatePaymentOrderAsync(

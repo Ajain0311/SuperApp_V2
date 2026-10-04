@@ -1,7 +1,7 @@
 // SuperApp Full Real End-to-End UAT Test Runner
-// Connects directly to ASP.NET Core 10 Web API on http://localhost:5000 and Supabase PostgreSQL
+// Connects directly to ASP.NET Core 10 Web API on http://localhost:80 and Supabase PostgreSQL
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = 'http://localhost:80';
 
 const results = [];
 

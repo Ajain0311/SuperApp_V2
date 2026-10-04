@@ -5,7 +5,7 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
-      "applicationUrl": "http://0.0.0.0:5000",
+      "applicationUrl": "http://0.0.0.0:80",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DATABASE_PROVIDER": "Postgres",
@@ -13,14 +13,14 @@
         "PAYMENT_KEY": "",
         "PAYMENT_SECRET": "",
         "PAYMENT_ENV": "test",
-        "PAYMENT_RETURN_URL": "http://localhost:5000/api/payments/easebuzz-return"
+        "PAYMENT_RETURN_URL": "http://localhost:80/api/payments/easebuzz-return"
       }
     },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
-      "applicationUrl": "https://0.0.0.0:7017;http://0.0.0.0:5000",
+      "applicationUrl": "https://0.0.0.0:7017;http://0.0.0.0:80",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DATABASE_PROVIDER": "Postgres",
@@ -28,7 +28,7 @@
         "PAYMENT_KEY": "",
         "PAYMENT_SECRET": "",
         "PAYMENT_ENV": "test",
-        "PAYMENT_RETURN_URL": "http://localhost:5000/api/payments/easebuzz-return"
+        "PAYMENT_RETURN_URL": "http://localhost:80/api/payments/easebuzz-return"
       }
     }
   }

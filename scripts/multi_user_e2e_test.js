@@ -12,7 +12,7 @@
 // 9. Admin (9999999999, Admin@123)
 // ==============================================================================
 
-const BASE_URL = process.env.API_BASE_URL || 'http://localhost:5000';
+const BASE_URL = process.env.API_BASE_URL || 'http://localhost:80';
 const TEST_OTP = '123456';
 
 const results = [];

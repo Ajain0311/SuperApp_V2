@@ -205,7 +205,7 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
             (Visa 4012 0010 3714 1112, any future expiry, any CVV).
           </Text>
           <Text style={styles.help}>
-            Success/fail URLs hit http://localhost:5000/api/payments/easebuzz-return then this
+            Success/fail URLs hit http://localhost:80/api/payments/easebuzz-return then this
             screen verifies via Transaction API v2.1.
           </Text>
         </View>
