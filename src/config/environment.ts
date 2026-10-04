@@ -32,12 +32,9 @@ export class AppEnvironment {
       return explicitUrl.trim();
     }
 
-    // 2. Select default based on environment
-    if (this.isProduction) {
-      return 'https://api.superapp.com/api';
-    }
-    if (this.isStaging) {
-      return 'https://staging-api.superapp.com/api';
+    // 2. Select default based on environment (hosted production/staging domain)
+    if (this.isProduction || this.isStaging) {
+      return 'https://makemytree.duckdns.org/api';
     }
 
     // 3. Dev fallbacks (Android emulator maps localhost to 10.0.2.2)
@@ -88,6 +85,10 @@ export class AppEnvironment {
   }
 
   static get showTestOtp(): boolean {
+    // Strictly disable test OTP hint and autofill in real production
+    if (this.isProduction) {
+      return false;
+    }
     const show = process.env.EXPO_PUBLIC_SHOW_TEST_OTP;
     if (show !== undefined) {
       return show === 'true' || show === '1';

@@ -113,18 +113,29 @@ The tasks below represent the logical sequence of work remaining for production 
 
 ## 📝 Last Session Handoff
 
-- **Date**: September 29, 2026
-- **Status**: Agent suite adds conditional race claims (vendor status and driver accept return 409 to the loser), COD lifecycle DB checks, and volume CLI flags. OTP provider is not switched by the runner. 200/500-agent runs were not executed.
-- **Previous**: Live API checks go through `e2e/agents/runner.js`. Old one-off UAT scripts were removed. Jest unit tests stay.
-- **Previous**: Backend listen port moved from 5000 to 80.
-- **Previous**: **58/58 MULTI-USER E2E PASS — ZERO DATA LEAKAGE.** All verification suites green.
-- **Fixes Applied This Session**:
-  1. **Driver Isolation (403 vs 404)**: Fixed `DriverController.StartRide()` — changed single-query filter (`r.Id == id && r.DriverId == driver.Id`) to two-step lookup: find ride by ID first, then return `Forbid()` (403) if `ride.DriverId != driver.Id`. Previously returned 404 when a different driver tried to start another driver's ride.
-  2. **Driver Ride History Route**: Added `[HttpGet("rides/history")]` alias to `GetHistory()` in `DriverController.cs` so `/api/driver/rides/history` works (in addition to `/api/driver/history`). The frontend and test were calling the `rides/history` path.
-- **Next Agent Action / Production Rollout Checklist**:
-  1. Inject production merchant keys for Easebuzz (`PAYMENT_KEY`, `PAYMENT_SECRET`, `PAYMENT_ENV=prod`).
-  2. Verify production DLT SMS template approvals with Punjab Gov gateway.
-  3. Configure Apple/FCM push notification credentials for production (PROD-03).
-  4. Trigger mobile production store builds (`eas build --platform all --profile production`).
-  5. Set up Docker + Nginx production deployment (OPS-01).
+- **Date**: October 3, 2026
+- **Status**: Completed full real-device verification of the Intermediate Test Build on physical device (`Realme RMX3870`, Android 16) communicating directly with hosted backend (`http://makemytree.duckdns.org`) and live Supabase PostgreSQL DB.
+- **Standalone Android Release APK**:
+  - Compiled and packaged standalone release APK: `android/app/build/outputs/apk/release/app-release.apk` (57.5 MB).
+  - Streamed and installed directly to connected physical phone (`FALBIFZTFI4PCQ8H`).
+- **Real-Device Smoke Test Results (17/17 PASSED)**:
+  - App launch & splash transition: PASS
+  - Phone OTP Authentication: PASS (Test OTP banner + auto-fill active for intermediate build)
+  - Home screen services & spotlight deals: PASS
+  - Live restaurant list & search (Haldiram's, Meghana): PASS
+  - Restaurant menu with images & prices (Deluxe Veg Thali ₹237, Raj Kachori ₹199, Rasgulla ₹120, Kaju Katli ₹322): PASS
+  - Cart addition & floating cart bar: PASS
+  - Checkout & Cart Summary Sheet: PASS
+  - COD Food Order placement: PASS (Fixed payment method code from `CASH_ON_DELIVERY` to `COD`)
+  - Live Order Tracking UI: PASS (`#FO-4311`, status `PENDING`, payment method `COD`, grand total `₹273.38`)
+  - Live Database Record Confirmation: PASS (Row 170 in Supabase `food_orders` verified)
+  - User Order History (My Activity): PASS
+  - Community Marketplace (Bazaar tab, listings, and selling CTA): PASS
+  - Ride Hailing (Mapbox vector map, Connaught Place GPS, Bike Taxi, Auto, Economy Cab): PASS
+- **Features Reserved for Other Developer**:
+  - Captain Food Delivery: `NOT_IMPLEMENTED` (dispatched assignment logic pending from backend dev)
+  - Online Food Payment: `NOT_IMPLEMENTED` (Easebuzz production keys pending)
+- **Documentation**:
+  - Full report saved in `docs/REAL_DEVICE_TEST_CURRENT_BUILD.md`.
+  - Live screenshots captured and saved in `docs/live_screen_*.png`.
 

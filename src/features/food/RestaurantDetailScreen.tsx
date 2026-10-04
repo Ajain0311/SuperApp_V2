@@ -200,7 +200,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         })),
         addressId,
         couponCode: couponCode || null,
-        paymentMethod: 'CASH_ON_DELIVERY',
+        paymentMethod: 'COD',
         deliveryInstructions: 'Leave at front door',
       };
       const res = await apiClient.post<any>(ApiEndpoints.food.orders, payload);

@@ -261,22 +261,37 @@ public class DriverController : ControllerBase
 
         var vehicle = driver.Vehicles.FirstOrDefault(v => v.IsActive);
 
-        var claimed = await _db.Rides
-            .Where(r => r.Id == ride.Id && r.DriverId == null && (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching))
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(r => r.DriverId, driver.Id)
-                .SetProperty(r => r.Status, RideStatus.Accepted)
-                .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
-        if (claimed == 0)
-            return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
+        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            if (ride.DriverId != null || (ride.Status != RideStatus.Requested && ride.Status != RideStatus.Searching))
+            {
+                return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
+            }
+            ride.DriverId = driver.Id;
+            ride.VehicleId = vehicle?.Id;
+            ride.Status = RideStatus.Accepted;
+            ride.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            var claimed = await _db.Rides
+                .Where(r => r.Id == ride.Id && r.DriverId == null && (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(r => r.DriverId, driver.Id)
+                    .SetProperty(r => r.Status, RideStatus.Accepted)
+                    .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
+            if (claimed == 0)
+                return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
 
-        ride.DriverId = driver.Id;
-        _db.Entry(ride).Property(r => r.DriverId).IsModified = false;
-        _db.Entry(ride).Property(r => r.Status).IsModified = false;
-        ride.VehicleId = vehicle?.Id;
-        ride.Status = RideStatus.Accepted;
-        ride.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+            ride.DriverId = driver.Id;
+            _db.Entry(ride).Property(r => r.DriverId).IsModified = false;
+            _db.Entry(ride).Property(r => r.Status).IsModified = false;
+            ride.VehicleId = vehicle?.Id;
+            ride.Status = RideStatus.Accepted;
+            ride.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
 
         var driverSummary = new DriverSummaryDto
         {
