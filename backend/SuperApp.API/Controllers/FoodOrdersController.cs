@@ -148,8 +148,7 @@ public class FoodOrdersController : ControllerBase
         var taxAmount = Math.Round((subTotal - couponDiscount) * 0.05m, 2); // 5% GST
         var grandTotal = Math.Max(0, subTotal - couponDiscount + deliveryFee + taxAmount);
 
-        var random = new Random();
-        var orderNumber = $"FO-{random.Next(1000, 9999)}";
+        var orderNumber = $"FO-{Guid.NewGuid().ToString("N")[..16]}";
 
         var order = new FoodOrder
         {

@@ -1,5 +1,20 @@
 # Multi-agent live test — fix report
 
+## High-volume database run (2026-09-29)
+
+Scaled mutations live in `e2e/agents/lib/volume.js`. Postgres checks live in `e2e/agents/lib/db-verifier.js` and read the connection string from the environment or `.env`. The verifier does not print the password. `--cleanup` deletes only rows whose notes, title, address, or pickup contain the run id.
+
+| Run | Agents | Result |
+| --- | --- | --- |
+| `run-mumxomyw` | 20 customers, 5 owners, 10 captains, 10 sellers | PASS 332, FAIL 0, cleanup PASS |
+| `run-mumxrcvq` | 50 customers, 10 owners, 20 captains, 20 sellers | PASS 703, FAIL 0, NOT_IMPLEMENTED 0 |
+
+`run-mumxrcvq` database: 197 row checks, 0 mismatches, 0 orphans. Concurrent inserts matched the database: 50 food orders, 20 rides, 20 listings. Cleanup left 0 of those rows. Expired JWT returned 401. Average latency 393 ms, median 408 ms. Duration 225 s. This is a concurrent integration test, not a formal load test.
+
+One earlier 20-customer run (`run-mumxj6z7`) had a single HTTP 500. Cause: `FO-{1000-9999}` collided on the unique order-number index under parallel inserts. Food and ride numbers are now a 19-character guid prefix. That was rerun green.
+
+Owners are mapped only to restaurants that already have a menu. The 50-customer run used the seeded menus (owners A–G were active in the log). Owners beyond that count are now recorded as BLOCKED instead of being skipped silently. That marker was added after `run-mumxrcvq`, so that run did not include the BLOCKED rows.
+
 Date: 2026-09-29. Framework was not rewritten. Backend business rules were not changed.
 
 ## 1. Root cause of the login failures

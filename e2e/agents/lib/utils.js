@@ -46,7 +46,7 @@ export async function mapPool(items, limit, worker) {
 export function redact(value) {
   if (value == null) return value;
   if (typeof value === 'string') {
-    if (value.length > 40 && value.includes('.')) return '[redacted]';
+    if (/^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\./.test(value)) return '[redacted]';
     return value;
   }
   if (Array.isArray(value)) return value.map(redact);

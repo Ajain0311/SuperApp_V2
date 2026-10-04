@@ -3,6 +3,7 @@ import { ownerActions } from '../agents/restaurant-owner.js';
 import { captainActions } from '../agents/captain.js';
 import { sellerActions } from '../agents/marketplace-seller.js';
 import { adminActions } from '../agents/admin.js';
+import { expiredTokenFromEnv } from './jwt-test.js';
 import { dataOf, expectHttp, listOf, runParallel } from './scenario-runner.js';
 
 export function blockIfLoggedOut(ctx, suite, scenario, agents) {
@@ -784,16 +785,30 @@ export async function runSecurity(ctx) {
     security: true,
     details: 'Token that is not signed by this API',
   }, invalid);
-  ctx.record(customer, {
-    suite: 'SECURITY',
-    scenario: 'expired-token',
-    endpoint: '/api/FoodOrders/my-orders',
-    method: 'GET',
-    expected: 401,
-    actual: 'NOT_IMPLEMENTED',
-    status: 'NOT_IMPLEMENTED',
-    details: 'Minting an expired JWT requires the server signing key, which this framework does not store',
-  });
+  const expired = expiredTokenFromEnv();
+  if (!expired) {
+    ctx.record(customer, {
+      suite: 'SECURITY',
+      scenario: 'expired-token',
+      endpoint: '/api/FoodOrders/my-orders',
+      method: 'GET',
+      expected: 401,
+      actual: 'NOT_IMPLEMENTED',
+      status: 'NOT_IMPLEMENTED',
+      details: 'JWT_SECRET is not in the environment. An expired token was not forged with a committed secret.',
+    });
+  } else {
+    const rejected = await customer.client.request('GET', '/api/FoodOrders/my-orders', undefined, { token: expired });
+    expectHttp(ctx.record, customer, {
+      suite: 'SECURITY',
+      scenario: 'expired-token',
+      endpoint: '/api/FoodOrders/my-orders',
+      method: 'GET',
+      expected: 401,
+      security: true,
+      details: 'Expired HS256 token signed with JWT_SECRET from the environment',
+    }, rejected);
+  }
   if (customer.login !== 'PASS') {
     ctx.record(customer, {
       suite: 'SECURITY',

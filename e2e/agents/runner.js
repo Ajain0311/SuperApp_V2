@@ -3,7 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAgent } from './lib/agent.js';
 import { loginAdmin, loginCitizen } from './lib/auth.js';
-import { FLOW_NAMES, cleanupRun } from './lib/flows.js';
+import { FLOW_NAMES } from './lib/flows.js';
+import { openVerifier } from './lib/db-verifier.js';
+import { cleanupRunData, runScaled } from './lib/volume.js';
 import { createLogger } from './lib/logger.js';
 import { buildReport, writeReports } from './lib/reporter.js';
 import { bindRecorder, listOf, runParallel } from './lib/scenario-runner.js';
@@ -198,11 +200,20 @@ export async function main(argv = process.argv.slice(2)) {
     record: bindRecorder(results, null),
   };
   await provision(ctx);
-  for (const name of flows) {
+  ctx.db = await openVerifier();
+  ctx.dbStats = { verified: 0, mismatch: 0, orphan: 0 };
+  ctx.concurrencyStats = [];
+  const dataFlows = ['food-order', 'restaurant-isolation', 'ride', 'marketplace'];
+  const selected = flows.filter((name) => dataFlows.includes(name));
+  for (const name of flows.filter((name) => !dataFlows.includes(name))) {
     log.info(`-- ${name}`);
     await FLOW_NAMES[name](ctx);
   }
-  await cleanupRun(ctx);
+  if (selected.length) {
+    log.info(`-- scaled ${selected.join(',')}`);
+    await runScaled(ctx, selected);
+  }
+  if (args.cleanup) await cleanupRunData(ctx);
   const report = buildReport({
     runId,
     startedAt: new Date(started).toISOString(),
@@ -215,6 +226,14 @@ export async function main(argv = process.argv.slice(2)) {
     cleanup: args.cleanup,
   }, agents, results, ctx.matrix);
   const written = writeReports(report, args.report);
+  const dbFile = path.join(args.report, 'latest-db-validation.json');
+  fs.writeFileSync(dbFile, JSON.stringify({
+    runId,
+    db: ctx.dbStats,
+    concurrency: ctx.concurrencyStats,
+    cleanup: ctx.cleanupReport || (args.cleanup ? null : 'not requested'),
+    matrix: ctx.matrix,
+  }, null, 2));
   log.info(`Report ${written.latest}`);
   log.info(`PASS ${report.summary.PASS} FAIL ${report.summary.FAIL} BLOCKED ${report.summary.BLOCKED} NOT_IMPLEMENTED ${report.summary.NOT_IMPLEMENTED}`);
   return report.summary.FAIL > 0 || report.summary.ERROR > 0 ? 1 : 0;

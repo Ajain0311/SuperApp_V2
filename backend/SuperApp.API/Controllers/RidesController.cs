@@ -154,7 +154,7 @@ public class RidesController : ControllerBase
 
         // Generate 4-digit ride OTP
         var rideOtp = random.Next(1000, 9999).ToString();
-        var rideNumber = $"RD-{random.Next(1000, 9999)}";
+        var rideNumber = $"RD-{Guid.NewGuid().ToString("N")[..16]}";
 
         var route = await _mapService.EstimateRouteAsync(
             request.PickupLatitude,
