@@ -18,20 +18,20 @@ Powered by an **ASP.NET Core 10** Web API with real-time **SignalR** WebSocket h
 
 ## 📚 Canonical Documentation
 
-Complete architecture, database, API, and deployment documentation is organized under the [`docs/`](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/) directory:
+Complete architecture, database, API, and deployment documentation is organized under the [`docs/`](docs/) directory:
 
-- [**Documentation Hub & Index**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/README.md)
-- [**System Architecture & Zero-Cost Design**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/ARCHITECTURE.md)
-- [**Database Specification & ER Model**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/DATABASE.md)
-- [**REST API & SignalR Reference**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/API.md)
-- [**Roles & Permissions Guide**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/ROLES_AND_PERMISSIONS.md)
-- [**Developer Onboarding & Local Setup**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/DEVELOPMENT_SETUP.md)
-- [**Production Setup & Deployment Manual**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/PRODUCTION_SETUP.md)
-- [**Automated Testing & QA Guide**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/TESTING.md)
-- [**UAT & Live Browser Test Results**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/UAT_RESULTS.md)
-- [**Production Release Checklist**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/RELEASE_CHECKLIST.md)
-- [**Project Changelog**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/docs/CHANGELOG.md)
-- [**Project Roadmap & Task Tracker**](file:///D:/FREELANCER/HTTP-EXPNAT-NET/ROADMAP.md)
+- [**Documentation Hub & Index**](docs/README.md)
+- [**System Architecture & Zero-Cost Design**](docs/ARCHITECTURE.md)
+- [**Database Specification & ER Model**](docs/DATABASE.md)
+- [**REST API & SignalR Reference**](docs/API.md)
+- [**Roles & Permissions Guide**](docs/ROLES_AND_PERMISSIONS.md)
+- [**Developer Onboarding & Local Setup**](docs/DEVELOPMENT_SETUP.md)
+- [**Production Setup & Deployment Manual**](docs/PRODUCTION_SETUP.md)
+- [**Automated Testing & QA Guide**](docs/TESTING.md)
+- [**UAT & Live Browser Test Results**](docs/UAT_RESULTS.md)
+- [**Production Release Checklist**](docs/RELEASE_CHECKLIST.md)
+- [**Project Changelog**](docs/CHANGELOG.md)
+- [**Project Roadmap & Task Tracker**](ROADMAP.md)
 
 ---
 
@@ -68,7 +68,7 @@ Complete architecture, database, API, and deployment documentation is organized 
 - **State Management**: Zustand 5.0.15
 - **Navigation**: React Navigation v7 (Native Stack + Dynamic Bottom Tabs)
 - **HTTP & Real-Time**: Axios + `@microsoft/signalr` 10.0 (with exponential reconnection)
-- **Backend API**: ASP.NET Core 10.0 (`SuperApp.API`) on `http://localhost:5000`
+- **Backend API**: ASP.NET Core 10.0 (`SuperApp.API`) hosted at `https://makemytree.duckdns.org` (Reverse-proxied via Nginx over TLS)
 - **Database**: PostgreSQL 15+ (28 relational tables, schema in `database/SuperApp_Supabase.sql`, migrations in `database/migrations/`)
 - **External Gateways**: Punjab State e-Governance DLT SMS Gateway, Easebuzz Payment Gateway
 
@@ -80,7 +80,7 @@ Complete architecture, database, API, and deployment documentation is organized 
 HTTP-EXPNAT-NET/
 ├── backend/
 │   ├── SuperApp.API/            # ASP.NET Core 10 Web API
-│   └── SuperApp.API.Tests/      # xUnit unit & integration test suite (67 tests)
+│   └── SuperApp.API.Tests/      # xUnit unit & integration test suite (75 tests)
 ├── database/
 │   ├── SuperApp_Supabase.sql    # Idempotent 28-table PostgreSQL schema
 │   └── migrations/              # Incremental database migrations
@@ -104,7 +104,7 @@ HTTP-EXPNAT-NET/
 ```bash
 dotnet run --project backend/SuperApp.API/SuperApp.API.csproj --launch-profile http
 ```
-- Listens on `http://localhost:80`
+- Listens locally on `http://127.0.0.1:5000` (or `http://localhost:80`)
 
 ### 2. Launch Frontend (Expo Web / Mobile)
 ```bash
@@ -117,7 +117,7 @@ npx expo start --clear
 ## 🧪 Verification & Testing Pipeline
 
 ```bash
-# 1. Backend Unit Tests (67 tests)
+# 1. Backend Unit Tests (75 tests)
 dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj --no-build
 
 # 2. Frontend Unit Tests (73 tests)
@@ -129,11 +129,11 @@ npx tsc --noEmit
 # 4. Expo Diagnostics (18/18 checks)
 npx expo-doctor
 
-# 5. Agent framework self-tests (no live API)
+# 5. Agent framework self-tests (14/14 tests)
 npm run test:agents:self
 
-# 6. Optional live multi-agent run (API must already be up; set ADMIN_PASSWORD)
-npm run test:agents:food
+# 6. Live multi-agent regression against hosted HTTPS API (90/90 pass)
+npm run test:agents:full -- --base-url https://makemytree.duckdns.org
 ```
 
 ---
