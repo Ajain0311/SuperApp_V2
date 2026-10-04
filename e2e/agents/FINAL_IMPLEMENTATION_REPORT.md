@@ -40,20 +40,20 @@ None.
 
 | Command | Result |
 | --- | --- |
-| `npm run test:agents:self` | 12/12 pass (original 7 plus 5) |
+| `npm run test:agents:self` | 12/12 pass |
 | `npm test -- --watchAll=false` | 13 suites, 73/73 pass |
-| `npm run test:agents` | run-mumwxk51: PASS 83, FAIL 0, BLOCKED 0, NOT_IMPLEMENTED 1 |
-| `npm run test:agents:full -- --customers 5 --restaurant-owners 2 --captains 3 --sellers 2` | run-mumwyrcd: PASS 92, FAIL 0, BLOCKED 0, NOT_IMPLEMENTED 1 |
+| `npm run test:agents` | run-mumx6fw9: PASS 88, FAIL 0, BLOCKED 0, NOT_IMPLEMENTED 1 |
+| `npm run test:agents:full -- --customers 5 --restaurant-owners 2 --captains 3 --sellers 2` | run-mumx7gos: PASS 97, FAIL 0, BLOCKED 0, NOT_IMPLEMENTED 1 |
 
 Live API was `http://localhost:80` with `OTP_PROVIDER=Mock` for that process and `ADMIN_PASSWORD` set in the shell only. Frontend was not started. `--cleanup` was not passed.
 
-### Larger run (`run-mumwyrcd`)
+### Larger run (`run-mumx7gos`)
 
 | Area | Total | PASS | FAIL | BLOCKED | NOT_IMPLEMENTED |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Full regression | 93 | 92 | 0 | 0 | 1 |
+| Full regression | 98 | 97 | 0 | 0 | 1 |
 
-Pass percentage is 100 of decided PASS+FAIL. Requests 93, failed requests 0, average 438 ms, median 409 ms, p95 1432 ms, p99 2047 ms.
+Pass percentage is 100 of decided PASS+FAIL. The only non-pass is expired-JWT, marked NOT_IMPLEMENTED because the signing key is not on the client. It is not a failure. Extra checks now cover both seller edit directions, cross-delete, own delete, and captain offline.
 
 ## 7. Remaining
 
@@ -66,4 +66,4 @@ Pass percentage is 100 of decided PASS+FAIL. Requests 93, failed requests 0, ave
 
 No new secrets were committed. `config.example.json` still has an empty password. Reports redact token, password, and OTP fields.
 
-Already in the tree, not printed here: `backend/SuperApp.API/appsettings.Production.json` contains a database password and JWT signing material. Root `.env` is gitignored and holds SMS and database settings. Those should be rotated if this repository was ever public. The bcrypt hash pasted in chat is not stored in the framework.
+`appsettings.Production.json` no longer contains a database password or JWT secret. Those values are placeholders. Set them with environment variables at deploy time. Root `.env` stays gitignored. The bcrypt hash pasted in chat is not stored in the framework. If the old production secret was ever pushed, rotate it in the host environment. The value is not repeated here.

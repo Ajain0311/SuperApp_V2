@@ -75,7 +75,8 @@ test('report markdown contains the required sections', () => {
   const md = toMarkdown(report);
   assert.match(md, /# SuperApp Live Multi-Agent Test Report/);
   assert.match(md, /## 5. Security Findings/);
-  assert.match(md, /## 9. Data Isolation Matrix/);
+  assert.match(md, /## 10. Data Isolation Matrix/);
+  assert.match(md, /## 7. Blocked scenarios/);
   assert.equal(report.results[0].request.token, '[redacted]');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agents-'));
   const written = writeReports(report, dir);

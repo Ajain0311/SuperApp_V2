@@ -505,6 +505,16 @@ export async function runRides(ctx) {
   }, done);
 
   const secondary = live[1];
+  const offline = await captainActions.toggleOnline(captains[captains.length - 1], false);
+  expectHttp(ctx.record, captains[captains.length - 1], {
+    suite: 'RIDE_CAPTAIN',
+    scenario: 'toggle-offline',
+    endpoint: '/api/driver/toggle-online',
+    method: 'POST',
+    expected: 200,
+    request: { isOnline: false },
+    details: 'A captain who is not driving the completed ride goes offline',
+  }, offline);
   const cancel = await captainActions.cancel(secondary.captain, secondary.ride.id);
   expectHttp(ctx.record, secondary.captain, {
     suite: 'RIDE_CAPTAIN',
@@ -586,7 +596,7 @@ export async function runMarketplace(ctx) {
     const edit = await sellerActions.edit(b.seller, a.listing.id, 'stolen');
     expectHttp(ctx.record, b.seller, {
       suite: 'DATA_ISOLATION',
-      scenario: 'seller-cannot-edit-other-listing',
+      scenario: 'seller-b-cannot-edit-a',
       endpoint: '/api/marketplace/listings',
       method: 'POST',
       expected: [403, 404],
@@ -594,6 +604,26 @@ export async function runMarketplace(ctx) {
       request: { action: 'EDIT', id: a.listing.id },
       details: 'EDIT returns Forbid when UserId does not match and caller is not admin',
     }, edit);
+    const editBack = await sellerActions.edit(a.seller, b.listing.id, 'stolen');
+    expectHttp(ctx.record, a.seller, {
+      suite: 'DATA_ISOLATION',
+      scenario: 'seller-a-cannot-edit-b',
+      endpoint: '/api/marketplace/listings',
+      method: 'POST',
+      expected: [403, 404],
+      security: true,
+      request: { action: 'EDIT', id: b.listing.id },
+      details: 'The other direction of listing ownership is also denied',
+    }, editBack);
+    const ownB = await sellerActions.edit(b.seller, b.listing.id, `${ctx.runId} seller-b`);
+    expectHttp(ctx.record, b.seller, {
+      suite: 'MARKETPLACE',
+      scenario: 'seller-b-updates-own-listing',
+      endpoint: '/api/marketplace/listings',
+      method: 'POST',
+      expected: 200,
+      details: 'Seller B edits the listing they created',
+    }, ownB);
     const renamed = await sellerActions.edit(a.seller, a.listing.id, `${ctx.runId} updated`);
     expectHttp(ctx.record, a.seller, {
       suite: 'MARKETPLACE',
@@ -623,6 +653,16 @@ export async function runMarketplace(ctx) {
         details: 'Report endpoint exists; 400 is acceptable if reason validation rejects TEST',
       }, report);
     }
+    const stealDelete = await sellerActions.remove(a.seller, b.listing.id);
+    expectHttp(ctx.record, a.seller, {
+      suite: 'DATA_ISOLATION',
+      scenario: 'seller-a-cannot-delete-b',
+      endpoint: '/api/marketplace/listings',
+      method: 'POST',
+      expected: [403, 404],
+      security: true,
+      details: 'DELETE returns Forbid for another seller',
+    }, stealDelete);
     const sold = await sellerActions.status(b.seller, b.listing.id, 'SOLD');
     expectHttp(ctx.record, b.seller, {
       suite: 'MARKETPLACE',
@@ -632,6 +672,15 @@ export async function runMarketplace(ctx) {
       expected: 200,
       details: 'STATUS action marks the listing sold',
     }, sold);
+    const removed = await sellerActions.remove(a.seller, a.listing.id);
+    expectHttp(ctx.record, a.seller, {
+      suite: 'MARKETPLACE',
+      scenario: 'delete-own-listing',
+      endpoint: '/api/marketplace/listings',
+      method: 'POST',
+      expected: 200,
+      details: 'DELETE sets the listing inactive and status REMOVED',
+    }, removed);
   }
   ctx.shared.listings = created;
 }

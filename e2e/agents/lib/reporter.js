@@ -94,7 +94,9 @@ export function toMarkdown(report) {
   lines.push(`- Total Requests: ${summary.totalRequests}`);
   lines.push(`- Failed Requests: ${summary.failedRequests}`);
   lines.push(`- Average Latency: ${summary.averageLatency} ms`);
+  lines.push(`- Median Latency: ${summary.medianLatency} ms`);
   lines.push(`- P95 Latency: ${summary.p95Latency} ms`);
+  lines.push(`- P99 Latency: ${summary.p99Latency} ms`);
   lines.push('');
   lines.push('## 4. Feature Summary');
   lines.push('');
@@ -133,12 +135,18 @@ export function toMarkdown(report) {
     lines.push(`  - Root-cause hint: ${r.hint || r.details}`);
     lines.push('');
   }
-  lines.push('## 7. Not Implemented Features');
+  lines.push('## 7. Blocked scenarios');
+  lines.push('');
+  const blocked = results.filter((r) => r.status === 'BLOCKED');
+  if (!blocked.length) lines.push('None.');
+  for (const r of blocked) lines.push(`- BLOCKED: ${r.agent} ${r.scenario} — ${r.details}`);
+  lines.push('');
+  lines.push('## 8. Not Implemented Features');
   lines.push('');
   if (!missing.length) lines.push('None.');
   for (const r of missing) lines.push(`- NOT_IMPLEMENTED: ${r.scenario} — ${r.details}`);
   lines.push('');
-  lines.push('## 8. Performance Snapshot');
+  lines.push('## 9. Performance Snapshot');
   lines.push('');
   lines.push(`- request count: ${summary.totalRequests}`);
   lines.push(`- average latency: ${summary.averageLatency} ms`);
@@ -149,7 +157,7 @@ export function toMarkdown(report) {
   lines.push('- slowest requests:');
   for (const r of slow) lines.push(`  - ${r.latencyMs} ms ${r.method} ${r.endpoint} (${r.scenario})`);
   lines.push('');
-  lines.push('## 9. Data Isolation Matrix');
+  lines.push('## 10. Data Isolation Matrix');
   lines.push('');
   if (!matrix?.length) lines.push('No isolation matrix rows.');
   else {
@@ -157,7 +165,7 @@ export function toMarkdown(report) {
     lines.push(mdTable(cols, matrix.map((row) => cols.map((c) => String(row[c])))));
   }
   lines.push('');
-  lines.push('## 10. Final Findings');
+  lines.push('## 11. Final Findings');
   lines.push('');
   if (!failures.length) {
     lines.push('No failing assertions were recorded in this run. This does not prove the product is free of defects outside the executed scenario.');
