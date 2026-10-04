@@ -16,6 +16,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test -- --watchAll=false
+      # Self-test only: no API process and no Expo app.
       - run: npm run test:agents:self
       - name: syntax-check agent runner
         run: node --check e2e/agents/runner.js

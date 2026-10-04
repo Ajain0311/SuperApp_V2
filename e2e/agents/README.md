@@ -8,15 +8,18 @@ One HTTP framework for concurrent CUSTOMER, RESTAURANT_OWNER, DRIVER, MARKETPLAC
 
 Routes match the ASP.NET controllers: `/api/FoodOrders`, `/api/vendor/orders`, `/api/driver/rides/{id}/accept`, `/api/marketplace/listings`, `/api/admin/*`, `/api/auth/*`.
 
-## Installation
+## When to run what
 
-From the repository root, after `npm install`:
+The Expo frontend is never required. These commands talk to the API, or to nothing.
 
-```bash
-npm run test:agents:self
-```
+| Mode | Backend | Frontend | Command |
+| --- | --- | --- | --- |
+| Self-test | off | off | `npm run test:agents:self` |
+| Live test | on (`http://localhost:80`) | off | `npm run test:agents` |
 
-Live runs need the API already listening, usually `http://localhost:80`.
+Self-test only checks the framework (config, agents, assertions, reports, concurrency). It does not open a port.
+
+Live test logs real agents into the API. Set `ADMIN_PASSWORD`. If `.env` has `OTP_PROVIDER=PunjabGov`, start the API with `OTP_PROVIDER=Mock` so `send-otp` returns `devOtp`. Do not start Expo.
 
 ## Configuration
 

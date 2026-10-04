@@ -79,14 +79,12 @@ npm test -- --watchAll=false
 
 ## 5. Multi-agent live API framework
 
-The old `scripts/execute_full_uat.js` and `e2e/master_live_test.js` runners were removed. Live API coverage is `e2e/agents/`. Self-tests do not call the API:
+The old `scripts/execute_full_uat.js` and `e2e/master_live_test.js` runners were removed. Frontend is not part of either command.
 
 ```bash
+# Backend off, frontend off
 npm run test:agents:self
-```
 
-A live run needs the API up and `ADMIN_PASSWORD` set. See `e2e/agents/README.md`.
-
-```bash
+# Backend on, frontend off, ADMIN_PASSWORD set
 npm run test:agents
 ```
