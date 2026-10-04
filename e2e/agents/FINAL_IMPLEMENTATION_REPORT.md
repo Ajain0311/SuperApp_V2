@@ -1,0 +1,69 @@
+# Multi-agent live test — fix report
+
+Date: 2026-09-29. Framework was not rewritten. Backend business rules were not changed.
+
+## 1. Root cause of the login failures
+
+`OTP_PROVIDER=PunjabGov` makes `POST /api/auth/send-otp` return `devOtp: null`. The runner treated a missing `devOtp` as a failed login **before** calling `verify-otp`, and recorded HTTP status `0`. Every later call then used no JWT and returned 401.
+
+The API already accepts a development OTP outside Production:
+
+- `OTP_TEST_MODE=true` selects `MockOtpService` and returns `devOtp`.
+- `PunjabGovOtpService.VerifyOtpAsync` accepts `TEST_OTP` or `123456` when `ASPNETCORE_ENVIRONMENT` is not Production.
+
+The runner now uses `devOtp`, then `TEST_OTP`, then one development probe of `123456`. If that probe is rejected, login is **BLOCKED** with send status, `devOtp available: false`, and the verify message. No JWT is invented. The password hash supplied for admin is not a login password. Admin login still needs `ADMIN_PASSWORD` (the app self-heals `Admin@123`).
+
+## 2. Marketplace `.some` crash
+
+`GET /api/marketplace/my-listings` returns `ApiResponse<List<ListingSummaryDto>>`. After a 401 the body is `{ success, message }`, which is not an array. `(dataOf(...) || []).some` threw because an object is truthy.
+
+`payload()` unwraps `data` / `Data`. `asList()` accepts a raw array, `items` / `Items`, or a nested list, and returns `null` for a non-list. Call sites no longer call `.some` on a non-array.
+
+## 3. Cascade handling
+
+If an agent is not `PASS`, food, ride, marketplace, and role-boundary checks record one **BLOCKED** row: "Agent authentication failed; authenticated scenario was not executed." They do not keep calling the API and recording 401 as functional failures. Token-less security checks still run.
+
+## 4. Framework changes
+
+- `lib/auth.js` — OTP choice and PASS / FAIL / BLOCKED classification. OTP values are not logged.
+- `lib/assertions.js` — `payload` and `asList`.
+- `lib/flows.js` — `blockIfLoggedOut`, list-safe reads.
+- `runner.js` — stores `authReason` and provisions drivers from `asList`.
+- `selftest/response-shape.test.js` — unwrap, marketplace shape, blocked login, no cascade.
+- `README.md`, `package.json` self-test file list.
+
+## 5. Backend changes
+
+None.
+
+## 6. Commands and results
+
+| Command | Result |
+| --- | --- |
+| `npm run test:agents:self` | 12/12 pass (original 7 plus 5) |
+| `npm test -- --watchAll=false` | 13 suites, 73/73 pass |
+| `npm run test:agents` | run-mumwxk51: PASS 83, FAIL 0, BLOCKED 0, NOT_IMPLEMENTED 1 |
+| `npm run test:agents:full -- --customers 5 --restaurant-owners 2 --captains 3 --sellers 2` | run-mumwyrcd: PASS 92, FAIL 0, BLOCKED 0, NOT_IMPLEMENTED 1 |
+
+Live API was `http://localhost:80` with `OTP_PROVIDER=Mock` for that process and `ADMIN_PASSWORD` set in the shell only. Frontend was not started. `--cleanup` was not passed.
+
+### Larger run (`run-mumwyrcd`)
+
+| Area | Total | PASS | FAIL | BLOCKED | NOT_IMPLEMENTED |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Full regression | 93 | 92 | 0 | 0 | 1 |
+
+Pass percentage is 100 of decided PASS+FAIL. Requests 93, failed requests 0, average 438 ms, median 409 ms, p95 1432 ms, p99 2047 ms.
+
+## 7. Remaining
+
+- **NOT_IMPLEMENTED:** expired JWT. The signing key is not available to the client.
+- **BLOCKED** when the API is Production or rejects the test OTP, and when `ADMIN_PASSWORD` is unset.
+- Customers C–E log in during the larger run but the food scenario still isolates A and B only.
+- Captain C goes online; the ride pair uses captains A and B.
+
+## 8. Security cleanup
+
+No new secrets were committed. `config.example.json` still has an empty password. Reports redact token, password, and OTP fields.
+
+Already in the tree, not printed here: `backend/SuperApp.API/appsettings.Production.json` contains a database password and JWT signing material. Root `.env` is gitignored and holds SMS and database settings. Those should be rotated if this repository was ever public. The bcrypt hash pasted in chat is not stored in the framework.

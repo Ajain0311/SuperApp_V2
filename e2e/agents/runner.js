@@ -6,7 +6,7 @@ import { loginAdmin, loginCitizen } from './lib/auth.js';
 import { FLOW_NAMES, cleanupRun } from './lib/flows.js';
 import { createLogger } from './lib/logger.js';
 import { buildReport, writeReports } from './lib/reporter.js';
-import { bindRecorder, runParallel } from './lib/scenario-runner.js';
+import { bindRecorder, listOf, runParallel } from './lib/scenario-runner.js';
 import { FRAMEWORK_VERSION, createRunId, letterLabel, mobileFor } from './lib/utils.js';
 import { adminActions } from './agents/admin.js';
 
@@ -78,40 +78,41 @@ function applyTemplate(value, vars) {
   return String(value).replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
 }
 
+function applyLogin(agent, result) {
+  agent.login = result.login || 'FAIL';
+  agent.authReason = result.reason || '';
+  agent.authMeta = {
+    sendStatus: result.send?.status ?? null,
+    verifyStatus: result.verify?.status ?? null,
+    devOtp: result.otpSource === 'devOtp',
+  };
+  if (result.ok) {
+    agent.setToken(result.verify.data.token);
+    agent.user = result.verify.data.user;
+  }
+}
+
 async function authenticate(agent, config) {
   const fallbackOtp = process.env.TEST_OTP || config.testOtp || '';
+  const allowDevProbe = !fallbackOtp;
   if (agent.role === 'ADMIN') {
     const password = process.env.ADMIN_PASSWORD || config.admin.password;
-    if (!password) {
-      agent.login = 'BLOCKED';
-      return;
-    }
     const result = await loginAdmin(agent.client, {
       mobile: agent.mobile,
       password,
       fallbackOtp,
+      allowDevProbe,
     });
-    if (result.ok) {
-      agent.setToken(result.verify.data.token);
-      agent.user = result.verify.data.user;
-      agent.login = 'PASS';
-    } else {
-      agent.login = 'FAIL';
-    }
+    applyLogin(agent, result);
     return;
   }
   const result = await loginCitizen(agent.client, {
     mobile: agent.mobile,
     fullName: agent.name,
     fallbackOtp,
+    allowDevProbe,
   });
-  if (result.ok) {
-    agent.setToken(result.verify.data.token);
-    agent.user = result.verify.data.user;
-    agent.login = 'PASS';
-  } else {
-    agent.login = 'FAIL';
-  }
+  applyLogin(agent, result);
 }
 
 async function provision(ctx) {
@@ -123,7 +124,7 @@ async function provision(ctx) {
     await adminActions.assignRole(admin, driver.user.id, 'DRIVER');
   }
   const fleet = await adminActions.drivers(admin);
-  const rows = fleet.data?.data || [];
+  const rows = listOf(fleet) || [];
   for (const driver of drivers) {
     const row = rows.find((item) => item.userId === driver.user.id);
     if (row?.id) {

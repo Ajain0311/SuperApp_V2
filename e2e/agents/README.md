@@ -30,7 +30,10 @@ Environment variables override the file:
 - `API_BASE_URL` or `--base-url`
 - `ADMIN_MOBILE` (default `9999999999`)
 - `ADMIN_PASSWORD` (required for admin and role provisioning; not stored in git)
-- `TEST_OTP` only when `send-otp` does not return `devOtp`
+- `TEST_OTP` (for example `123456`) when `send-otp` hides `devOtp`
+- `OTP_TEST_MODE=true` on the API process selects `MockOtpService` even if `OTP_PROVIDER=PunjabGov`
+
+If `devOtp` is missing, the runner tries `TEST_OTP` or one development probe of `123456`. PunjabGov accepts that code when the API is not Production. A rejected probe is `BLOCKED` (real SMS or production). Downstream orders, rides, and listings are not called for that agent, so a missing JWT does not become a pile of 401 failures.
 
 When `OTP_PROVIDER=PunjabGov`, the API hides `devOtp`. Citizen login then needs a real OTP or a temporary switch to the mock OTP provider. The framework records that as a failed or blocked login. It does not invent a pass.
 

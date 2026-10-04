@@ -3,7 +3,24 @@ import { ownerActions } from '../agents/restaurant-owner.js';
 import { captainActions } from '../agents/captain.js';
 import { sellerActions } from '../agents/marketplace-seller.js';
 import { adminActions } from '../agents/admin.js';
-import { dataOf, expectHttp, runParallel } from './scenario-runner.js';
+import { dataOf, expectHttp, listOf, runParallel } from './scenario-runner.js';
+
+export function blockIfLoggedOut(ctx, suite, scenario, agents) {
+  const missing = agents.filter((agent) => agent?.login !== 'PASS');
+  if (!missing.length) return false;
+  const sample = missing[0];
+  ctx.record(sample, {
+    suite,
+    scenario,
+    endpoint: '',
+    method: '',
+    expected: 'authenticated agent',
+    actual: missing.map((agent) => `${agent.id}:${agent.login}`).join(', '),
+    status: 'BLOCKED',
+    details: `Agent authentication failed; authenticated scenario was not executed. ${sample.authReason || ''}`.trim(),
+  });
+  return true;
+}
 
 function firstItem(detail) {
   const categories = detail?.categories || detail?.Categories || [];
@@ -17,7 +34,7 @@ function firstItem(detail) {
 
 async function restaurantsWithMenu(agent) {
   const list = await customerActions.listRestaurants(agent);
-  const items = dataOf(list)?.items || dataOf(list)?.Items || [];
+  const items = listOf(list) || [];
   const ready = [];
   for (const row of items) {
     const detailRes = await customerActions.restaurantDetail(agent, row.id);
@@ -37,9 +54,9 @@ export async function runAuth(ctx) {
       endpoint: '/api/auth/verify-otp',
       method: 'POST',
       expected: 200,
-      actual: agent.login === 'PASS' ? 200 : 0,
-      status: agent.login === 'PASS' ? 'PASS' : 'FAIL',
-      details: agent.login === 'PASS' ? 'JWT captured' : 'Login failed before scenario',
+      actual: agent.authMeta?.verifyStatus ?? agent.authMeta?.sendStatus ?? 0,
+      status: agent.login === 'PASS' ? 'PASS' : agent.login === 'BLOCKED' ? 'BLOCKED' : 'FAIL',
+      details: agent.login === 'PASS' ? 'JWT captured' : agent.authReason,
       latencyMs: 0,
     });
   });
@@ -51,9 +68,9 @@ export async function runAuth(ctx) {
       endpoint: '/api/auth/admin-login',
       method: 'POST',
       expected: 200,
-      actual: admin.login === 'PASS' ? 200 : 0,
-      status: admin.login === 'PASS' ? 'PASS' : 'BLOCKED',
-      details: admin.login === 'PASS' ? 'Admin JWT captured' : 'Admin login blocked. Set ADMIN_PASSWORD.',
+      actual: admin.authMeta?.verifyStatus ?? 0,
+      status: admin.login === 'PASS' ? 'PASS' : admin.login === 'FAIL' ? 'FAIL' : 'BLOCKED',
+      details: admin.login === 'PASS' ? 'Admin JWT captured' : admin.authReason,
       latencyMs: 0,
     });
   }
@@ -75,6 +92,7 @@ async function placePair(ctx) {
     });
     return null;
   }
+  if (blockIfLoggedOut(ctx, 'FOOD_ORDER', 'place-cod-order', [customers[0], customers[1], owners[0], owners[1]])) return null;
   const probe = customers[0];
   const { ready } = await restaurantsWithMenu(probe);
   if (ready.length < 2) {
@@ -161,7 +179,7 @@ export async function runFood(ctx) {
   await runParallel(orders, ctx.concurrency, ctx.thinkTimeMs, 0, async ({ customer, order }) => {
     if (!order?.id) return;
     const mine = await customerActions.myOrders(customer);
-    const list = dataOf(mine) || [];
+    const list = listOf(mine);
     const seen = Array.isArray(list) && list.some((row) => row.id === order.id);
     ctx.record(customer, {
       suite: 'FOOD_ORDER',
@@ -209,7 +227,8 @@ async function assertCustomerIsolation(ctx, orders) {
       hint: 'FoodOrdersController.GetOrder',
     }, res);
     const mine = await customerActions.myOrders(actor);
-    const leaked = (dataOf(mine) || []).some((row) => row.id === id);
+    const mineRows = listOf(mine);
+    const leaked = Array.isArray(mineRows) && mineRows.some((row) => row.id === id);
     ctx.record(actor, {
       suite: 'DATA_ISOLATION',
       scenario: `my-orders-hides-${label}`,
@@ -246,7 +265,7 @@ export async function runRestaurantIsolation(ctx) {
     const own = orders[index];
     const other = orders[1 - index];
     const list = await ownerActions.orders(owner, owner.resources.restaurantId);
-    const rows = dataOf(list) || [];
+    const rows = listOf(list) || [];
     const seesOwn = list.status === 200 && rows.some((row) => row.id === own.order?.id);
     const seesOther = rows.some((row) => row.id === other.order?.id);
     ctx.record(owner, {
@@ -344,6 +363,7 @@ export async function runRestaurantIsolation(ctx) {
 export async function runRides(ctx) {
   const customers = ctx.agents.filter((a) => a.role === 'CUSTOMER');
   const captains = ctx.agents.filter((a) => a.role === 'DRIVER');
+  if (blockIfLoggedOut(ctx, 'RIDE_CAPTAIN', 'book-ride', [...customers.slice(0, 2), ...captains.slice(0, 2)])) return;
   if (customers.length < 1 || captains.length < 2) {
     ctx.record(null, {
       suite: 'RIDE_CAPTAIN',
@@ -500,6 +520,7 @@ export async function runRides(ctx) {
 export async function runMarketplace(ctx) {
   const sellers = ctx.agents.filter((a) => a.role === 'MARKETPLACE_SELLER');
   const customers = ctx.agents.filter((a) => a.role === 'CUSTOMER');
+  if (blockIfLoggedOut(ctx, 'MARKETPLACE', 'create-listing', sellers.slice(0, 2))) return;
   if (sellers.length < 2) {
     ctx.record(null, {
       suite: 'MARKETPLACE',
@@ -512,7 +533,8 @@ export async function runMarketplace(ctx) {
     return;
   }
   const cats = await sellerActions.categories(sellers[0]);
-  const categoryId = (dataOf(cats) || [])[0]?.id;
+  const categories = listOf(cats);
+  const categoryId = categories?.[0]?.id;
   if (!categoryId) {
     expectHttp(ctx.record, sellers[0], {
       suite: 'MARKETPLACE',
@@ -544,7 +566,8 @@ export async function runMarketplace(ctx) {
     const listing = dataOf(res);
     if (listing?.id) seller.resources.listingIds.push(listing.id);
     const mine = await sellerActions.mine(seller);
-    const seen = (dataOf(mine) || []).some((row) => row.id === listing?.id);
+    const rows = listOf(mine);
+    const seen = Array.isArray(rows) && rows.some((row) => row.id === listing?.id);
     ctx.record(seller, {
       suite: 'MARKETPLACE',
       scenario: 'view-my-listing',
@@ -623,7 +646,7 @@ export async function runAdmin(ctx) {
       status: 'BLOCKED',
       expected: 'admin login',
       actual: admin?.login || 'missing',
-      details: 'Admin password or OTP was not available',
+      details: admin?.authReason || 'Admin password or OTP was not available',
     });
     return;
   }
@@ -660,7 +683,7 @@ export async function runAdmin(ctx) {
     expected: 200,
     details: 'BroadcastNotificationRequest uses message, not body',
   }, broadcast);
-  if (customer) {
+  if (customer?.login === 'PASS') {
     const denied = await customer.client.request('GET', '/api/admin/dashboard');
     expectHttp(ctx.record, customer, {
       suite: 'SECURITY',
@@ -722,6 +745,17 @@ export async function runSecurity(ctx) {
     status: 'NOT_IMPLEMENTED',
     details: 'Minting an expired JWT requires the server signing key, which this framework does not store',
   });
+  if (customer.login !== 'PASS') {
+    ctx.record(customer, {
+      suite: 'SECURITY',
+      scenario: 'role-boundary',
+      status: 'BLOCKED',
+      expected: 'authenticated customer',
+      actual: customer.login,
+      details: 'Agent authentication failed; authenticated scenario was not executed.',
+    });
+    return;
+  }
   const driverDenied = await customer.client.request('GET', '/api/driver/available-rides');
   expectHttp(ctx.record, customer, {
     suite: 'SECURITY',

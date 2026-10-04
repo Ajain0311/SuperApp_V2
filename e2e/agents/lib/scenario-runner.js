@@ -1,4 +1,4 @@
-import { payload } from './assertions.js';
+import { asList, payload } from './assertions.js';
 import { mapPool, sleep } from './utils.js';
 
 export function bindRecorder(results, agentsById) {
@@ -52,4 +52,8 @@ export async function runParallel(items, concurrency, thinkTimeMs, rampUpMs, wor
 
 export function dataOf(res) {
   return payload(res);
+}
+
+export function listOf(res) {
+  return asList(payload(res));
 }

@@ -3,9 +3,26 @@ export function statusMatches(actual, expected) {
   return actual === expected;
 }
 
+/** Unwrap ApiResponse.data / Data. Leaves raw arrays and plain objects alone. */
 export function payload(res) {
-  if (res?.data && typeof res.data === 'object' && 'data' in res.data) return res.data.data;
-  return res?.data;
+  const body = res?.data;
+  if (body == null || typeof body !== 'object') return body ?? null;
+  if (Array.isArray(body)) return body;
+  if (Object.prototype.hasOwnProperty.call(body, 'data')) return body.data;
+  if (Object.prototype.hasOwnProperty.call(body, 'Data')) return body.Data;
+  return body;
+}
+
+/** Lists from a raw array, ApiResponse list, or paged { items | Items }. */
+export function asList(value) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value.items)) return value.items;
+    if (Array.isArray(value.Items)) return value.Items;
+    if (Array.isArray(value.data)) return value.data;
+    if (Array.isArray(value.Data)) return value.Data;
+  }
+  return null;
 }
 
 export function assertStatus(res, expected, message) {
