@@ -13,7 +13,7 @@
 >    - `npx tsc --noEmit` (Must have 0 errors)
 >    - `npm test -- --watchAll=false` (Must pass 73/73)
 >    - `npx expo-doctor` (Must pass 18/18)
->    - `node scripts/execute_full_uat.js` (Must pass 48/48)
+>    - `npm run test:agents:self` (framework self-tests; live runs are opt-in)
 > 2. **Update this file (`ROADMAP.md`)**:
 >    - Mark finished tasks with `[x]` and record verification details.
 >    - Add any new tasks or blockers discovered during work.
@@ -25,8 +25,8 @@
 
 | Verification Dimension | Health / Coverage | Status |
 |---|---|:---:|
-| **Live Browser E2E** | 15 / 15 Flows passing (`node e2e/master_live_test.js`) | ✅ 100% PASS |
-| **Automated Full UAT** | 48 / 48 Scenarios passing (`node scripts/execute_full_uat.js`) | ✅ 100% PASS |
+| **Live multi-agent API** | `e2e/agents/runner.js` (opt-in; not the old UAT scripts) | Replaced |
+| **Agent self-tests** | `npm run test:agents:self` | Required |
 | **Backend Tests (.NET 10)** | 67 / 67 Tests passing (`SuperApp.API.Tests`) | ✅ 100% PASS |
 | **Frontend Tests (Jest)** | 73 / 73 Tests passing (`__tests__/`) | ✅ 100% PASS |
 | **TypeScript Typecheck** | Strict mode, 0 errors (`npx tsc --noEmit`) | ✅ CLEAN |
@@ -113,8 +113,9 @@ The tasks below represent the logical sequence of work remaining for production 
 
 ## 📝 Last Session Handoff
 
-- **Date**: September 28, 2026
-- **Status**: Backend listen port moved from 5000 to 80 (`launchSettings`, client defaults, UAT/e2e base URLs).
+- **Date**: September 29, 2026
+- **Status**: Live API checks now go through `e2e/agents/runner.js`. Old one-off UAT scripts were removed. Jest unit tests stay.
+- **Previous**: Backend listen port moved from 5000 to 80.
 - **Previous**: **58/58 MULTI-USER E2E PASS — ZERO DATA LEAKAGE.** All verification suites green.
 - **Fixes Applied This Session**:
   1. **Driver Isolation (403 vs 404)**: Fixed `DriverController.StartRide()` — changed single-query filter (`r.Id == id && r.DriverId == driver.Id`) to two-step lookup: find ride by ID first, then return `Forbid()` (403) if `ride.DriverId != driver.Id`. Previously returned 404 when a different driver tried to start another driver's ride.

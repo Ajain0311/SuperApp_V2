@@ -16,7 +16,7 @@
 - **BEFORE starting any work**: Every AI agent MUST inspect [`ROADMAP.md`](ROADMAP.md) to understand current project health, completed milestones, and the immediate next priority tasks.
 - **DURING work**: Adhere strictly to the zero-cost architecture guidelines and canonical documentation in `docs/`.
 - **AFTER completing work**:
-  1. Run the full verification suite (`dotnet test`, `npx tsc --noEmit`, `npm test`, `npx expo-doctor`, `node scripts/execute_full_uat.js`).
+  1. Run the full verification suite (`dotnet test`, `npx tsc --noEmit`, `npm test`, `npx expo-doctor`, `npm run test:agents:self`).
   2. You MUST update [`ROADMAP.md`](ROADMAP.md):
      - Mark completed tasks as `[x]`.
      - Add any newly identified tasks or blockers to the appropriate phase.

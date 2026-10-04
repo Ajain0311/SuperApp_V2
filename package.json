@@ -44,7 +44,12 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "test:agents": "node e2e/agents/runner.js",
+    "test:agents:food": "node e2e/agents/runner.js --scenario food-order",
+    "test:agents:isolation": "node e2e/agents/runner.js --scenario isolation",
+    "test:agents:full": "node e2e/agents/runner.js --scenario full-regression",
+    "test:agents:self": "node --test e2e/agents/selftest/framework.test.js"
   },
   "expo": {
     "install": {

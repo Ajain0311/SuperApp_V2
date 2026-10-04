@@ -86,9 +86,8 @@ HTTP-EXPNAT-NET/
 │   └── migrations/              # Incremental database migrations
 ├── docs/                        # 11 Canonical documentation files
 ├── e2e/
-│   └── master_live_test.js      # Canonical Playwright Chromium live browser test
+│   └── agents/                  # Multi-agent live API framework
 ├── scripts/
-│   ├── execute_full_uat.js      # Canonical 48-scenario automated UAT runner
 │   ├── seed-food-all.js         # Food catalog seed script
 │   └── seed-items.js            # Marketplace item seed script
 ├── src/                         # React Native application source
@@ -105,7 +104,7 @@ HTTP-EXPNAT-NET/
 ```bash
 dotnet run --project backend/SuperApp.API/SuperApp.API.csproj --launch-profile http
 ```
-- Listens on `http://localhost:5000`
+- Listens on `http://localhost:80`
 
 ### 2. Launch Frontend (Expo Web / Mobile)
 ```bash
@@ -130,11 +129,11 @@ npx tsc --noEmit
 # 4. Expo Diagnostics (18/18 checks)
 npx expo-doctor
 
-# 5. Automated Full UAT (48 scenarios)
-node scripts/execute_full_uat.js
+# 5. Agent framework self-tests (no live API)
+npm run test:agents:self
 
-# 6. Live Playwright Browser Tests (15 flows)
-node e2e/master_live_test.js
+# 6. Optional live multi-agent run (API must already be up; set ADMIN_PASSWORD)
+npm run test:agents:food
 ```
 
 ---

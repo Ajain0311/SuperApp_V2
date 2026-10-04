@@ -1,5 +1,7 @@
 # SuperApp V2 — End-to-End UAT & Live Browser Test Results
 
+> Historical snapshot. The scripts named below were removed. Current live runs use `e2e/agents/runner.js`.
+
 **Document Version**: 2.3.0  
 **Test Date**: September 20, 2026  
 **Environment**: Local Integration (React Native + Expo SDK 57 / ASP.NET Core 10 / Supabase PostgreSQL)  

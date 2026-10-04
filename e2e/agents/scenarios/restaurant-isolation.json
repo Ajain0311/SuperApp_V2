@@ -1,0 +1,7 @@
+{
+  "name": "restaurant-isolation",
+  "suite": "RESTAURANT_OWNER",
+  "flows": ["restaurant-isolation"],
+  "endpoints": ["/api/vendor/orders", "/api/vendor/orders/{id}/status", "/api/admin/users"],
+  "description": "Owner A and Owner B are mapped to different restaurants. Cross-status updates return 403."
+}

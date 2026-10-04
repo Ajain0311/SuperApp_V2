@@ -1,0 +1,7 @@
+{
+  "name": "ride",
+  "suite": "RIDE_CAPTAIN",
+  "flows": ["ride"],
+  "endpoints": ["/api/rides/book", "/api/driver/toggle-online", "/api/driver/rides/{id}/accept", "/api/driver/rides/{id}/start", "/api/driver/rides/{id}/complete"],
+  "description": "Captains accept separate rides. Completing another captain's ride returns 404. Starting it returns 403."
+}

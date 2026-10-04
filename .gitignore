@@ -32,6 +32,9 @@ yarn-error.*
 
 # local env files
 .env
+e2e/agents/config.local.json
+e2e/agents/reports/*
+!e2e/agents/reports/.gitkeep
 .env*.local
 .env.development
 .env.production

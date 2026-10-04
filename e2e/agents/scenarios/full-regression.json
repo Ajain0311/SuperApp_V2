@@ -1,0 +1,5 @@
+{
+  "name": "full-regression",
+  "flows": ["auth", "food-order", "restaurant-isolation", "ride", "marketplace", "admin", "authorization"],
+  "description": "Runs every live flow. Requires a running API and ADMIN_PASSWORD. Does not clean data unless --cleanup is passed."
+}

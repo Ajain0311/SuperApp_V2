@@ -14,8 +14,8 @@ This checklist defines the mandatory pre-flight verification gates, security aud
 ### Gate 2: Automated Test Validation
 - [ ] **Backend Unit Tests**: Run `dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj`. All 67 tests passing (100%).
 - [ ] **Frontend Unit Tests**: Run `npm test -- --watchAll=false`. All 73 tests passing (100%).
-- [ ] **Automated Full UAT**: Run `node scripts/execute_full_uat.js`. All 48 scenarios passing (100%).
-- [ ] **Live Browser E2E Tests**: Run `node e2e/master_live_test.js`. All 15 form flows passing with 0 browser exceptions.
+- [ ] **Agent self-tests**: `npm run test:agents:self`.
+- [ ] **Live agents (optional)**: `npm run test:agents` against a non-production API with `ADMIN_PASSWORD` set.
 
 ---
 

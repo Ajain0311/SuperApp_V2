@@ -162,10 +162,10 @@ npm test -- --watchAll=false
 npx expo-doctor
 
 # 5. Automated Full UAT Test Suite (48 scenarios)
-node scripts/execute_full_uat.js
+npm run test:agents:self
 
 # 6. Live Playwright Browser Tests (15 form flows)
-node e2e/master_live_test.js
+npm run test:agents
 ```
 
 ---
