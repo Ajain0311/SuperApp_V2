@@ -361,7 +361,8 @@ app.MapGet("/health", async (AppDbContext db) =>
             return Results.Ok(new 
             { 
                 status = "Healthy", 
-                version = Environment.GetEnvironmentVariable("APP_VERSION") ?? "1.0.0",
+                message = "SuperApp V2 Production Live CI/CD Verified",
+                version = Environment.GetEnvironmentVariable("APP_VERSION") ?? "1.0.1",
                 timestamp = DateTime.UtcNow 
             });
         }
