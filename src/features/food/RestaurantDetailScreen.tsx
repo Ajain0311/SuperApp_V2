@@ -211,20 +211,32 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       const orderId = data.orderNumber || `FO-${data.id}`;
       const orderNumericId = data.id;
       if (paymentMethod === 'ONLINE') {
-        const payRes = await apiClient.post<any>(ApiEndpoints.food.payOrder(orderNumericId), {});
-        const pay = payRes.data?.data || payRes.data;
-        if (pay?.accessKey && pay?.keyId) {
-          const { openEasebuzzCheckout } = await import('../../services/easebuzzCheckout');
-          const checkout = await openEasebuzzCheckout(pay);
-          const verified = await apiClient.post<any>(ApiEndpoints.common.paymentsVerify, {
-            transactionId: checkout.txnid,
-            orderId: pay.orderId,
-            paymentSignature: checkout.hash || '',
+        let pay: any = null;
+        try {
+          const payRes = await apiClient.post<any>(ApiEndpoints.food.payOrder(orderNumericId), {});
+          pay = payRes.data?.data || payRes.data;
+        } catch {
+          const created = await apiClient.post<any>(ApiEndpoints.common.paymentsCreate, {
+            amount: Number(data.grandTotal) || 1,
+            currency: 'INR',
+            receiptId: String(orderNumericId),
+            module: 'FOOD',
           });
-          const verifiedBody = verified.data?.data || verified.data;
-          if (!verifiedBody?.isVerified) {
-            Alert.alert('Payment not completed', 'The order stays unpaid until Easebuzz verifies the payment.');
-          }
+          pay = created.data?.data || created.data;
+        }
+        if (!pay?.accessKey || !pay?.keyId) {
+          throw new Error(pay?.errorMessage || pay?.message || 'Online payment could not be started. Check Easebuzz keys on the server.');
+        }
+        const { openEasebuzzCheckout } = await import('../../services/easebuzzCheckout');
+        const checkout = await openEasebuzzCheckout(pay);
+        const verified = await apiClient.post<any>(ApiEndpoints.common.paymentsVerify, {
+          transactionId: checkout.txnid,
+          orderId: pay.orderId,
+          paymentSignature: checkout.hash || '',
+        });
+        const verifiedBody = verified.data?.data || verified.data;
+        if (!verifiedBody?.isVerified) {
+          throw new Error(verifiedBody?.message || 'Easebuzz did not confirm this payment. The order stays unpaid.');
         }
       }
       clearCart();

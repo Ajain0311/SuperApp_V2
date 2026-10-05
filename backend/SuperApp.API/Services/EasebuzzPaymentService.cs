@@ -200,10 +200,18 @@ public class EasebuzzPaymentService : IPaymentService
         var payment = await _db.Payments.FirstOrDefaultAsync(p =>
             p.TransactionId == transactionId || p.TransactionId == orderId);
 
+        var hashMatchesSuccess = false;
         if (!string.IsNullOrWhiteSpace(paymentSignature) && payment != null)
         {
+            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == payment.UserId);
+            var firstname = string.IsNullOrWhiteSpace(user?.FullName) ? "Customer" : user!.FullName!.Trim();
+            var email = string.IsNullOrWhiteSpace(user?.Email) ? "test@superapp.local" : user!.Email!.Trim();
             var amountStr = payment.Amount.ToString("0.00", CultureInfo.InvariantCulture);
-            // Signature-only path is used after Easebuzz JS onResponse; status API is source of truth below.
+            var productinfo = string.IsNullOrWhiteSpace(payment.Module) ? "FOOD" : payment.Module.ToUpperInvariant();
+            var expected = EasebuzzHash.Reverse(
+                _salt, "success", "", "", "", "", "", "", "", "", "", "",
+                email, firstname, productinfo, amountStr, payment.TransactionId ?? transactionId, _key);
+            hashMatchesSuccess = string.Equals(paymentSignature, expected, StringComparison.OrdinalIgnoreCase);
         }
 
         var hash = EasebuzzHash.TransactionStatus(_key, transactionId, _salt);
@@ -241,15 +249,26 @@ public class EasebuzzPaymentService : IPaymentService
 
         _logger.LogInformation("Easebuzz status: {Body}", body);
 
-        var paid = body.Contains("\"status\":\"success\"", StringComparison.OrdinalIgnoreCase)
+        var paid = hashMatchesSuccess
+            || body.Contains("\"status\":\"success\"", StringComparison.OrdinalIgnoreCase)
             || body.Contains("\"txn_status\":\"success\"", StringComparison.OrdinalIgnoreCase)
             || body.Contains("\"status\": \"success\"", StringComparison.OrdinalIgnoreCase);
+        var explicitFailure = body.Contains("\"status\":\"failure\"", StringComparison.OrdinalIgnoreCase)
+            || body.Contains("\"status\":\"dropped\"", StringComparison.OrdinalIgnoreCase)
+            || body.Contains("\"status\":\"usercancelled\"", StringComparison.OrdinalIgnoreCase);
 
-        if (payment != null)
+        if (payment != null && (paid || explicitFailure))
         {
-            payment.Status = paid ? "PAID" : "FAILED";
-            payment.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            if (!string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+            {
+                payment.Status = paid ? "PAID" : "FAILED";
+                payment.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+            else if (paid)
+            {
+                payment.Status = "PAID";
+            }
         }
 
         return new PaymentVerificationResult
