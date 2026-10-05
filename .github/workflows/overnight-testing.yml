@@ -1,0 +1,80 @@
+name: Overnight multi-agent tests
+
+on:
+  schedule:
+    # 22:00–09:00 IST hourly. GitHub cron is UTC (IST = UTC+5:30).
+    # 16:30–23:30 and 00:30–03:30 UTC.
+    - cron: '30 16-23,0-3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: superapp-overnight-testing
+  cancel-in-progress: false
+
+jobs:
+  volume:
+    name: 100-user full regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      API_BASE_URL: ${{ secrets.API_BASE_URL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      ADMIN_MOBILE: ${{ secrets.ADMIN_MOBILE }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      TEST_OTP: ${{ secrets.TEST_OTP }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      ConnectionStrings__SupabaseConnection: ${{ secrets.SUPABASE_CONNECTION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refuse production and require test secrets
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in API_BASE_URL ADMIN_PASSWORD TEST_OTP; do
+            if [ -z "${!name}" ]; then
+              echo "Missing secret $name"
+              missing=1
+            fi
+          done
+          if [ -z "${SUPABASE_DB_URL}" ] && [ -z "${ConnectionStrings__SupabaseConnection}" ]; then
+            echo "Missing secret SUPABASE_DB_URL or SUPABASE_CONNECTION"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          url="$(printf '%s' "$API_BASE_URL" | tr '[:upper:]' '[:lower:]')"
+          case "$url" in
+            *makemytree.duckdns.org*|*20.106.173.109*|*production*)
+              echo "Refusing production API_BASE_URL"
+              exit 1
+              ;;
+          esac
+          echo "Target host accepted for the test environment."
+
+      - name: Run 100-user volume regression
+        run: npm run test:agents:volume -- --customers 100 --restaurant-owners 10 --captains 20 --sellers 20 --concurrency 25 --cleanup
+
+      - name: Write job summary
+        if: always()
+        run: node e2e/agents/scripts/overnight-summary.js e2e/agents/reports >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload hourly report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: overnight-test-report-${{ github.run_id }}
+          path: e2e/agents/reports/
+          retention-days: 14
+          if-no-files-found: warn
