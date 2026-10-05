@@ -168,16 +168,18 @@ async function isolationFood(ctx, orders, kitchen) {
     const ok = after?.status === 'ACCEPTED' && Number(after.user_id) === Number(primary.customer.user.id) && String(after.updated_at) !== String(before?.updated_at);
     recordDb(ctx, owner, 'order-status-persisted', ok, ok ? 'ACCEPTED persisted' : `DB ${JSON.stringify(after)}`);
   }
-  for (const status of ['PREPARING', 'READY', 'DELIVERED']) {
+  for (const status of ['PREPARING', 'READY']) {
     const res = await ownerActions.setStatus(owner, primary.order.id, status);
     expectHttp(ctx.record, owner, { suite: 'FOOD_ORDER', scenario: `lifecycle-${status}`, endpoint: `/api/vendor/orders/${primary.order.id}/status`, method: 'PUT', expected: 200, details: 'Kitchen transition on the owning restaurant' }, res);
   }
+  const vendorDelivered = await ownerActions.setStatus(owner, primary.order.id, 'DELIVERED');
+  expectHttp(ctx.record, owner, { suite: 'FOOD_ORDER', scenario: 'vendor-cannot-deliver', endpoint: `/api/vendor/orders/${primary.order.id}/status`, method: 'PUT', expected: 400, details: 'Captain delivers, not the restaurant' }, vendorDelivered);
   const seen = dataOf(await customerActions.getOrder(primary.customer, primary.order.id));
-  ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'customer-sees-delivered', endpoint: `/api/FoodOrders/${primary.order.id}`, method: 'GET', expected: 'DELIVERED', actual: seen?.status, status: seen?.status === 'DELIVERED' ? 'PASS' : 'FAIL', details: 'Customer reads the final status' });
+  ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'customer-sees-ready', endpoint: `/api/FoodOrders/${primary.order.id}`, method: 'GET', expected: 'READY', actual: seen?.status, status: seen?.status === 'READY' ? 'PASS' : 'FAIL', details: 'Customer reads the kitchen status' });
   if (ctx.db?.ok) {
     const paid = (await ctx.db.query('select status, payment_status, payment_method, user_id from food_orders where id = $1', [primary.order.id])).rows[0];
-    const ok = paid?.status === 'DELIVERED' && paid?.payment_method === 'COD' && paid?.payment_status === 'PAID' && Number(paid.user_id) === Number(primary.customer.user.id);
-    recordDb(ctx, primary.customer, 'cod-paid-on-delivery', ok, ok ? 'COD marked PAID on delivery' : `DB ${JSON.stringify(paid)}`);
+    const ok = paid?.status === 'READY' && paid?.payment_method === 'COD' && paid?.payment_status === 'PENDING' && Number(paid.user_id) === Number(primary.customer.user.id);
+    recordDb(ctx, primary.customer, 'cod-unpaid-until-captain-delivery', ok, ok ? 'COD stays PENDING until captain delivery' : `DB ${JSON.stringify(paid)}`);
   }
   await captainFoodAndOnlinePayment(ctx, primary, owner);
 }

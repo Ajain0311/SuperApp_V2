@@ -1057,42 +1057,54 @@ public class AdminController : ControllerBase
         var totalOrders = await _db.FoodOrders.CountAsync(o => o.Status == OrderStatus.Delivered);
         var totalRides = await _db.Rides.CountAsync(r => r.Status == RideStatus.Completed);
 
-        // Fallback for live MVP demo visualization if database is fresh
-        if (foodSales == 0) foodSales = 245000m;
-        if (rideFares == 0) rideFares = 98400m;
-        if (totalOrders == 0) totalOrders = 380;
-        if (totalRides == 0) totalRides = 265;
-
         decimal platformEarnings = Math.Round(foodSales * 0.15m + rideFares * 0.20m, 2);
 
-        var topRestaurants = await _db.Restaurants
+        var foodByRestaurant = await _db.FoodOrders
+            .Where(o => o.Status == OrderStatus.Delivered)
+            .GroupBy(o => o.RestaurantId)
+            .Select(g => new { Id = g.Key, Revenue = g.Sum(o => o.GrandTotal), Count = g.Count() })
+            .ToListAsync();
+
+        var topRestaurants = (await _db.Restaurants
             .Where(r => r.IsActive)
             .OrderByDescending(r => r.Rating)
             .Take(5)
-            .Select(r => new TopPerformerDto
+            .ToListAsync())
+            .Select(r =>
             {
-                Id = r.Id,
-                Name = r.Name,
-                Revenue = 45000,
-                TotalCount = 85,
-                Rating = r.Rating
+                var sales = foodByRestaurant.FirstOrDefault(s => s.Id == r.Id);
+                return new TopPerformerDto
+                {
+                    Id = r.Id,
+                    Name = r.Name,
+                    Revenue = sales?.Revenue ?? 0,
+                    TotalCount = sales?.Count ?? 0,
+                    Rating = r.Rating
+                };
             })
+            .ToList();
+
+        var fareByDriver = await _db.Rides
+            .Where(r => r.Status == RideStatus.Completed && r.DriverId != null)
+            .GroupBy(r => r.DriverId)
+            .Select(g => new { Id = g.Key, Revenue = g.Sum(r => r.ActualFare ?? 0) })
             .ToListAsync();
 
-        var topDrivers = await _db.Drivers
+        var topDrivers = (await _db.Drivers
             .Include(d => d.User)
             .Where(d => d.IsActive)
             .OrderByDescending(d => d.Rating)
             .Take(5)
+            .ToListAsync())
             .Select(d => new TopPerformerDto
             {
                 Id = d.Id,
                 Name = d.User.FullName ?? "Driver",
-                Revenue = 14200,
+                Revenue = fareByDriver.FirstOrDefault(f => f.Id == d.Id)?.Revenue ?? 0,
                 TotalCount = d.TotalRides,
                 Rating = d.Rating
             })
-            .ToListAsync();
+            .ToList();
 
         var report = new AdminReportDto
         {

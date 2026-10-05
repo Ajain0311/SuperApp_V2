@@ -117,6 +117,73 @@ public static class CouponEngine
         }
     }
 
+    /// <summary>
+    /// Stages coupon use and runs the order save under one transaction.
+    /// A failure inside saveOrder rolls the usage back.
+    /// </summary>
+    public static async Task<CouponQuote> ConsumeForOrderAsync(
+        AppDbContext db,
+        string code,
+        string? module,
+        decimal orderAmount,
+        long? restaurantId,
+        long userId,
+        Func<CouponQuote, Task> saveOrder)
+    {
+        await Gate.WaitAsync();
+        Coupon? coupon = null;
+        var relational = db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) != true;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
+        try
+        {
+            coupon = await FindAsync(db, code);
+            var uses = coupon == null
+                ? 0
+                : await db.CouponUsages.CountAsync(u => u.CouponId == coupon.Id && u.UserId == userId);
+            var quote = Evaluate(coupon, module, orderAmount, restaurantId, uses, DateTime.UtcNow);
+            if (!quote.IsValid || quote.Coupon == null)
+                return quote;
+
+            if (relational)
+                tx = await db.Database.BeginTransactionAsync();
+
+            quote.Coupon.CurrentUsageCount += 1;
+            quote.Coupon.UpdatedAt = DateTime.UtcNow;
+            db.CouponUsages.Add(new CouponUsage
+            {
+                CouponId = quote.Coupon.Id,
+                UserId = userId,
+                UsedAt = DateTime.UtcNow
+            });
+            await saveOrder(quote);
+            if (tx != null)
+                await tx.CommitAsync();
+            return quote;
+        }
+        catch
+        {
+            if (tx != null)
+                await tx.RollbackAsync();
+            else
+                DiscardStagedCoupon(db, coupon);
+            throw;
+        }
+        finally
+        {
+            if (tx != null)
+                await tx.DisposeAsync();
+            Gate.Release();
+        }
+    }
+
+    private static void DiscardStagedCoupon(AppDbContext db, Coupon? coupon)
+    {
+        foreach (var entry in db.ChangeTracker.Entries<CouponUsage>().Where(e => e.State == EntityState.Added).ToList())
+            entry.State = EntityState.Detached;
+        if (coupon != null && db.Entry(coupon).State == EntityState.Modified)
+            db.Entry(coupon).Reload();
+    }
+
     private static async Task<Coupon?> FindAsync(AppDbContext db, string? code)
     {
         if (string.IsNullOrWhiteSpace(code)) return null;

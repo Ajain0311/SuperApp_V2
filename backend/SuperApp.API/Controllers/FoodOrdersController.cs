@@ -29,6 +29,15 @@ public class FoodOrdersController : ControllerBase
         _payments = payments;
     }
 
+    private static void ApplyCouponTotals(FoodOrder order, long? couponId, decimal couponDiscount, decimal deliveryFee, decimal subTotal)
+    {
+        var taxAmount = Math.Round((subTotal - couponDiscount) * 0.05m, 2);
+        order.CouponId = couponId;
+        order.CouponDiscount = couponDiscount;
+        order.TaxAmount = taxAmount;
+        order.GrandTotal = Math.Max(0, subTotal - couponDiscount + deliveryFee + taxAmount);
+    }
+
     private long? GetCurrentUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -121,25 +130,8 @@ public class FoodOrdersController : ControllerBase
             });
         }
 
-        // Coupon calculation
-        decimal couponDiscount = 0;
-        long? couponId = null;
-        if (!string.IsNullOrWhiteSpace(request.CouponCode))
-        {
-            var quote = await CouponEngine.ConsumeAsync(
-                _db, request.CouponCode, "FOOD", subTotal, restaurant.Id, userId.Value, null);
-            if (!quote.IsValid || quote.Coupon == null)
-                return BadRequest(ApiResponse<FoodOrderDto>.Fail(quote.Message));
-            couponId = quote.Coupon.Id;
-            couponDiscount = quote.DiscountAmount;
-        }
-
         var deliveryFee = restaurant.DeliveryFee;
-        var taxAmount = Math.Round((subTotal - couponDiscount) * 0.05m, 2); // 5% GST
-        var grandTotal = Math.Max(0, subTotal - couponDiscount + deliveryFee + taxAmount);
-
         var orderNumber = $"FO-{Guid.NewGuid().ToString("N")[..16]}";
-
         var order = new FoodOrder
         {
             OrderNumber = orderNumber,
@@ -149,11 +141,7 @@ public class FoodOrdersController : ControllerBase
             Status = OrderStatus.Pending,
             SubTotal = subTotal,
             DiscountAmount = 0,
-            CouponId = couponId,
-            CouponDiscount = couponDiscount,
             DeliveryFee = deliveryFee,
-            TaxAmount = taxAmount,
-            GrandTotal = grandTotal,
             PaymentMethod = paymentMethod,
             PaymentStatus = initialPaymentStatus,
             Notes = request.Notes,
@@ -162,8 +150,32 @@ public class FoodOrdersController : ControllerBase
             Items = orderItems
         };
 
-        _db.FoodOrders.Add(order);
-        await _db.SaveChangesAsync();
+        if (!string.IsNullOrWhiteSpace(request.CouponCode))
+        {
+            var quote = await CouponEngine.ConsumeForOrderAsync(
+                _db, request.CouponCode, "FOOD", subTotal, restaurant.Id, userId.Value, async applied =>
+                {
+                    ApplyCouponTotals(order, applied.Coupon!.Id, applied.DiscountAmount, deliveryFee, subTotal);
+                    _db.FoodOrders.Add(order);
+                    await _db.SaveChangesAsync();
+                    var usage = _db.ChangeTracker.Entries<CouponUsage>()
+                        .Select(e => e.Entity)
+                        .FirstOrDefault(u => u.CouponId == applied.Coupon.Id && u.UserId == userId.Value && u.OrderId == null);
+                    if (usage != null)
+                    {
+                        usage.OrderId = order.Id;
+                        await _db.SaveChangesAsync();
+                    }
+                });
+            if (!quote.IsValid || quote.Coupon == null)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail(quote.Message));
+        }
+        else
+        {
+            ApplyCouponTotals(order, null, 0, deliveryFee, subTotal);
+            _db.FoodOrders.Add(order);
+            await _db.SaveChangesAsync();
+        }
 
         // Zomato-style witty notification for customer
         try

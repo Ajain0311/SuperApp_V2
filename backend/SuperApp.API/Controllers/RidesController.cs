@@ -195,12 +195,15 @@ public class RidesController : ControllerBase
         if (distanceKm < 0.15m)
             return BadRequest(ApiResponse<RideDto>.Fail("Pickup and destination are the same place"));
 
-        var vehicleType = (request.VehicleType ?? VehicleTypes.Bike).Trim().ToUpperInvariant();
+        if (!VehicleTypes.TryNormalize(request.VehicleType, out var vehicleType))
+            return BadRequest(ApiResponse<RideDto>.Fail("Unsupported vehicle type. Allowed values: BIKE, AUTO, CAB."));
         FareComputation quote;
         try
         {
             var (rules, catalog) = await LoadFareConfigAsync();
-            var rule = rules.FirstOrDefault(r => r.VehicleType == vehicleType) ?? rules.First(r => r.VehicleType == VehicleTypes.Bike);
+            var rule = rules.FirstOrDefault(r => r.VehicleType == vehicleType);
+            if (rule == null)
+                return BadRequest(ApiResponse<RideDto>.Fail("Unsupported vehicle type. Allowed values: BIKE, AUTO, CAB."));
             quote = RideFareEngine.Quote(rule, catalog, request.OptionCodes, distanceKm, route.EstimatedDurationMinutes, DateTime.UtcNow);
         }
         catch (InvalidFareException ex)
@@ -416,11 +419,7 @@ public class RidesController : ControllerBase
         if (!isDriver && !isAdmin)
             return Forbid();
 
-        ride.Status = RideStatus.Completed;
-        ride.ActualFare = ride.EstimatedFare;
-        ride.PaymentStatus = "COMPLETED";
-        ride.CompletedAt = DateTime.UtcNow;
-        ride.UpdatedAt = DateTime.UtcNow;
+        RideCompletion.MarkCompleted(ride);
         await _db.SaveChangesAsync();
 
         await _rideHub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new

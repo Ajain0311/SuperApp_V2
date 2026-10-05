@@ -286,12 +286,18 @@ public class VendorController : ControllerBase
         var currentStatus = order.Status.Trim().ToUpperInvariant();
         var targetStatus = request.Status?.Trim().ToUpperInvariant() ?? string.Empty;
 
-        // Valid State Machine Transitions:
+        // Kitchen only. Pickup and delivery belong to the captain.
         // PENDING -> ACCEPTED, CANCELLED
         // ACCEPTED -> PREPARING, CANCELLED
         // PREPARING -> READY, CANCELLED
-        // READY -> PICKED_UP, DELIVERED, CANCELLED
-        // PICKED_UP -> DELIVERED, CANCELLED
+        // READY -> CANCELLED
+        if (targetStatus == OrderStatus.Accepted
+            && string.Equals(order.PaymentMethod, "ONLINE", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(ApiResponse.Fail("Online payment is not verified yet. Order cannot be accepted."));
+        }
+
         bool isValidTransition = (currentStatus, targetStatus) switch
         {
             (OrderStatus.Pending, OrderStatus.Accepted) => true,
@@ -300,10 +306,7 @@ public class VendorController : ControllerBase
             (OrderStatus.Accepted, OrderStatus.Cancelled) => true,
             (OrderStatus.Preparing, OrderStatus.Ready) => true,
             (OrderStatus.Preparing, OrderStatus.Cancelled) => true,
-            (OrderStatus.Ready, OrderStatus.PickedUp) => true,
-            (OrderStatus.Ready, OrderStatus.Delivered) => true,
             (OrderStatus.Ready, OrderStatus.Cancelled) => true,
-            (OrderStatus.PickedUp, OrderStatus.Delivered) => true,
             (OrderStatus.PickedUp, OrderStatus.Cancelled) => true,
             _ => false
         };

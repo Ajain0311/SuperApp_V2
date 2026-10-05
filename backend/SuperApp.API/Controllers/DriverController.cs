@@ -455,11 +455,7 @@ public class DriverController : ControllerBase
         if (ride == null)
             return NotFound(ApiResponse.Fail("Ride not found for this driver"));
 
-        ride.Status = RideStatus.Completed;
-        ride.ActualFare = ride.EstimatedFare;
-        ride.PaymentStatus = "COMPLETED";
-        ride.CompletedAt = DateTime.UtcNow;
-        ride.UpdatedAt = DateTime.UtcNow;
+        RideCompletion.MarkCompleted(ride);
 
         driver.TotalRides += 1;
         driver.UpdatedAt = DateTime.UtcNow;

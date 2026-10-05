@@ -194,13 +194,7 @@ export const VendorOrdersScreen: React.FC = () => {
           )}
 
           {status === 'READY' && (
-            <TouchableOpacity
-              style={[styles.statusBtn, { backgroundColor: '#8B5CF6' }]}
-              disabled={isUpdating}
-              onPress={() => handleUpdateStatus(item.id, 'DELIVERED')}
-            >
-              {isUpdating ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.btnText}>Handed to Rider</Text>}
-            </TouchableOpacity>
+            <Text style={[styles.btnText, { color: '#8B5CF6' }]}>Waiting for captain pickup</Text>
           )}
         </View>
       </View>

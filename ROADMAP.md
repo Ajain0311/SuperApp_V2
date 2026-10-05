@@ -27,7 +27,7 @@
 |---|---|:---:|
 | **Live multi-agent API** | Not run on 5 Oct 2026. Needs a non-production API, `ADMIN_PASSWORD`, and Mock OTP. Do not point `test:agents` at production. | BLOCKED |
 | **Agent self-tests** | 14 / 14 (`npm run test:agents:self`, 5 Oct 2026) | PASS |
-| **Backend Tests (.NET 10)** | 89 / 89 (`dotnet test`, 5 Oct 2026) | PASS |
+| **Backend Tests (.NET 10)** | 105 / 105 (`dotnet test`, 5 Oct 2026) | PASS |
 | **Frontend Tests (Jest)** | 74 / 74 (`npm test -- --watchAll=false`, 5 Oct 2026) | PASS |
 | **TypeScript Typecheck** | 0 errors (`npx tsc --noEmit`, 5 Oct 2026) | PASS |
 | **Expo Ecosystem Doctor** | 21 / 21 (`npx expo-doctor`, 5 Oct 2026) | PASS |
@@ -117,7 +117,7 @@ The tasks below represent the logical sequence of work remaining for production 
 ## 📝 Last Session Handoff
 
 - **Date**: October 5, 2026
-- **Status**: Verification pass only. No new feature. HEAD `f7cfee4`. Automated suites passed. Live multi-agent, real Android, and live Easebuzz were not run.
+- **Status**: Kitchen accepts an ONLINE food order only when payment is PAID. Restaurant cannot mark pickup or delivered; the captain still does. Ride completion no longer marks an unpaid online fare completed. Unknown vehicle types are rejected. Admin reports return zeros instead of demo totals. Coupon use is saved with the food order and rolled back if that save fails. Live agents and real devices were not re-run.
 - **See**: `docs/ADMIN_OPERATIONS.md`, `docs/CAPTAIN_FOOD_DELIVERY_IMPLEMENTATION.md`, `docs/EASEBUZZ_ONLINE_PAYMENT_IMPLEMENTATION.md`, `docs/RIDE_FARE.md`, `docs/IMAGE_STORAGE.md`
 - **Verification Matrix (this session)**:
   - Backend: 89 / 89 PASS. Includes one-winner food accept, offline/stranger reject, other-captain pickup forbid, payment sync idempotency, coupon cap and usage limit, ride fare rules.

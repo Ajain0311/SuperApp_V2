@@ -42,4 +42,10 @@ public static class VehicleTypes
     public const string Bike = "BIKE";
     public const string Auto = "AUTO";
     public const string Cab = "CAB";
+
+    public static bool TryNormalize(string? value, out string normalized)
+    {
+        normalized = string.IsNullOrWhiteSpace(value) ? Bike : value.Trim().ToUpperInvariant();
+        return normalized is Bike or Auto or Cab;
+    }
 }

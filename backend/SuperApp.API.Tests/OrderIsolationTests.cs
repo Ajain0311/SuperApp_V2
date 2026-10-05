@@ -328,21 +328,22 @@ public class OrderIsolationTests
         Assert.Equal("ONLINE", onlineData.PaymentMethod);
         Assert.Equal("PENDING_PAYMENT", onlineData.PaymentStatus);
 
-        // 4. Transition COD order to DELIVERED by vendor -> automatically transitions PaymentStatus to PAID
+        // 4. Kitchen can ready a COD order. Delivery stays with the captain.
         var vendorController = new VendorController(db, hub.Object);
         SetUserContext(vendorController, 51, RoleNames.RestaurantOwner);
 
-        // Advance: PENDING -> ACCEPTED -> PREPARING -> READY -> PICKED_UP -> DELIVERED
         await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "ACCEPTED" });
         await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "PREPARING" });
-        await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "READY" });
-        await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "PICKED_UP" });
-        var deliverRes = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "DELIVERED" });
-        Assert.IsType<OkObjectResult>(deliverRes.Result);
+        var readyRes = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "READY" });
+        Assert.IsType<OkObjectResult>(readyRes.Result);
+        var picked = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "PICKED_UP" });
+        var delivered = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "DELIVERED" });
+        Assert.IsType<BadRequestObjectResult>(picked.Result);
+        Assert.IsType<BadRequestObjectResult>(delivered.Result);
 
         var finalizedOrder = await db.FoodOrders.FindAsync(codData.Id);
-        Assert.Equal(OrderStatus.Delivered, finalizedOrder!.Status);
-        Assert.Equal("PAID", finalizedOrder.PaymentStatus);
+        Assert.Equal(OrderStatus.Ready, finalizedOrder!.Status);
+        Assert.Equal("PENDING", finalizedOrder.PaymentStatus);
     }
 
     [Fact]
