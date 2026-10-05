@@ -120,6 +120,9 @@ public class FoodOrderDto
     public decimal GrandTotal { get; set; }
     public string? PaymentMethod { get; set; }
     public string PaymentStatus { get; set; } = string.Empty;
+    public long? DriverId { get; set; }
+    public string? DriverName { get; set; }
+    public string? DriverPhone { get; set; }
     public string? Notes { get; set; }
     public int? EstimatedDeliveryMinutes { get; set; }
     public DateTime CreatedAt { get; set; }

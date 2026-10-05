@@ -188,6 +188,11 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.CouponId)
                 .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(e => e.DriverId);
+            entity.HasOne(e => e.Driver)
+                .WithMany()
+                .HasForeignKey(e => e.DriverId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
         
         // FoodOrderItem

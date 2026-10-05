@@ -29,4 +29,16 @@ export const captainActions = {
   history(agent) {
     return agent.client.request('GET', '/api/driver/rides/history');
   },
+  availableFood(agent) {
+    return agent.client.request('GET', '/api/driver/available-food-orders');
+  },
+  acceptFood(agent, id) {
+    return agent.client.request('POST', `/api/driver/food-orders/${id}/accept`);
+  },
+  pickupFood(agent, id) {
+    return agent.client.request('POST', `/api/driver/food-orders/${id}/pickup`);
+  },
+  deliverFood(agent, id) {
+    return agent.client.request('POST', `/api/driver/food-orders/${id}/deliver`);
+  },
 };

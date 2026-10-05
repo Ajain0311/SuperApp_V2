@@ -129,6 +129,14 @@ class SignalRService {
     return () => this.rideHubConnection?.off('RideRequested', callback);
   }
 
+  onFoodDeliveryAvailable(callback: (data: any) => void): () => void {
+    if (!this.rideHubConnection) {
+      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+    }
+    this.rideHubConnection.on('FoodDeliveryAvailable', callback);
+    return () => this.rideHubConnection?.off('FoodDeliveryAvailable', callback);
+  }
+
   onRideAcceptedByOther(callback: (data: any) => void): () => void {
     if (!this.rideHubConnection) {
       this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);

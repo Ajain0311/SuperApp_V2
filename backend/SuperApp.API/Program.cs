@@ -328,6 +328,20 @@ CREATE INDEX IF NOT EXISTS idx_marketplace_offers_seller ON marketplace_offers (
         {
             Console.WriteLine($"[Schema Check] marketplace_offers: {ex.Message}");
         }
+
+        try
+        {
+            const string foodDriverSql = @"
+ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS driver_id BIGINT NULL;
+ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS driver_assigned_at TIMESTAMPTZ NULL;
+CREATE INDEX IF NOT EXISTS idx_food_orders_driver ON food_orders (driver_id);
+";
+            db.Database.ExecuteSqlRaw(foodDriverSql);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Schema Check] food_orders.driver_id: {ex.Message}");
+        }
     }
 }
 

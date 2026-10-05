@@ -13,6 +13,7 @@ export const ApiEndpoints = {
     restaurantDetail: (id: string | number) => `/restaurants/${id}`,
     orders: '/foodorders',
     orderDetail: (id: string | number) => `/foodorders/${id}`,
+    payOrder: (id: string | number) => `/foodorders/${id}/pay`,
     cancelOrder: (id: string | number) => `/foodorders/${id}/cancel`,
     validateCoupon: '/coupons/validate',
   },
@@ -70,6 +71,11 @@ export const ApiEndpoints = {
     updateLocation: '/driver/location',
     history: '/driver/history',
     earnings: '/driver/earnings',
+    availableFood: '/driver/available-food-orders',
+    activeFood: '/driver/active-food-order',
+    acceptFood: (id: string | number) => `/driver/food-orders/${id}/accept`,
+    pickupFood: (id: string | number) => `/driver/food-orders/${id}/pickup`,
+    deliverFood: (id: string | number) => `/driver/food-orders/${id}/deliver`,
   },
 
   // Vendor Mode (Restaurant Owner)

@@ -112,6 +112,29 @@ class DriverService {
     });
   }
 
+  async getAvailableFoodOrders(): Promise<any[]> {
+    const res = await apiClient.get<{ success: boolean; data: any[] }>(ApiEndpoints.driver.availableFood);
+    return res.data || [];
+  }
+
+  async getActiveFoodOrder(): Promise<any | null> {
+    const res = await apiClient.get<{ success: boolean; data: any }>(ApiEndpoints.driver.activeFood);
+    return res.data;
+  }
+
+  async acceptFoodOrder(id: number | string): Promise<any> {
+    const res = await apiClient.post<{ success: boolean; data: any }>(ApiEndpoints.driver.acceptFood(id));
+    return res.data;
+  }
+
+  async pickupFoodOrder(id: number | string): Promise<void> {
+    await apiClient.post(ApiEndpoints.driver.pickupFood(id));
+  }
+
+  async deliverFoodOrder(id: number | string): Promise<void> {
+    await apiClient.post(ApiEndpoints.driver.deliverFood(id));
+  }
+
   async getHistory(): Promise<DriverRideItem[]> {
     const res = await apiClient.get<{ success: boolean; data: DriverRideItem[] }>(ApiEndpoints.driver.history);
     return res.data || [];

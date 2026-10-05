@@ -17,11 +17,13 @@ public class VendorController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<OrderStatusHub> _orderHub;
+    private readonly IHubContext<RideTrackingHub>? _rideHub;
 
-    public VendorController(AppDbContext db, IHubContext<OrderStatusHub> orderHub)
+    public VendorController(AppDbContext db, IHubContext<OrderStatusHub> orderHub, IHubContext<RideTrackingHub>? rideHub = null)
     {
         _db = db;
         _orderHub = orderHub;
+        _rideHub = rideHub;
     }
 
     private async Task<List<long>> GetAuthorizedRestaurantIdsAsync()
@@ -367,6 +369,20 @@ public class VendorController : ControllerBase
             status = targetStatus,
             updatedAt = DateTime.UtcNow
         });
+
+        if (string.Equals(targetStatus, OrderStatus.Ready, StringComparison.OrdinalIgnoreCase) && _rideHub != null)
+        {
+            await _rideHub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAvailable", new
+            {
+                orderId = order.Id,
+                orderNumber = order.OrderNumber,
+                restaurantId = order.RestaurantId,
+                restaurantName = order.Restaurant?.Name,
+                grandTotal = order.GrandTotal,
+                status = targetStatus,
+                updatedAt = DateTime.UtcNow
+            });
+        }
 
         try
         {

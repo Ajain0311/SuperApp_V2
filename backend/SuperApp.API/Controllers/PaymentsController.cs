@@ -107,6 +107,11 @@ public class PaymentsController : ControllerBase
             request.OrderId,
             request.PaymentSignature);
 
+        if (result.IsVerified)
+            await FoodPaymentSync.ApplyAsync(_db, result.TransactionId, true);
+        else
+            await FoodPaymentSync.ApplyAsync(_db, request.TransactionId, false);
+
         return Ok(ApiResponse<PaymentVerificationResult>.Ok(result));
     }
 
@@ -131,9 +136,22 @@ public class PaymentsController : ControllerBase
         if (payment == null)
             return NotFound(ApiResponse<PaymentVerificationResult>.Fail("Payment order not found"));
 
+        if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+        {
+            await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, true);
+            return Ok(ApiResponse<PaymentVerificationResult>.Ok(new PaymentVerificationResult
+            {
+                IsVerified = true,
+                TransactionId = payment.TransactionId ?? request.TransactionId,
+                Status = "PAID",
+                Message = "Payment already settled"
+            }));
+        }
+
         payment.Status = request.Success ? "PAID" : "FAILED";
         payment.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, request.Success);
 
         var result = new PaymentVerificationResult
         {
@@ -163,26 +181,12 @@ public class PaymentsController : ControllerBase
         txnid ??= "";
         status ??= "";
 
+        var hashOk = false;
         if (_paymentService is EasebuzzPaymentService ease && fields.Count > 0)
-        {
-            var okHash = ease.VerifyCallbackHash(fields);
-            if (!okHash)
-            {
-                // Still persist status query; hash mismatch is logged.
-            }
-        }
+            hashOk = ease.VerifyCallbackHash(fields);
 
         if (!string.IsNullOrWhiteSpace(txnid))
-        {
-            var payment = await _db.Payments.FirstOrDefaultAsync(p => p.TransactionId == txnid);
-            if (payment != null)
-            {
-                var paid = string.Equals(status, "success", StringComparison.OrdinalIgnoreCase);
-                payment.Status = paid ? "PAID" : "FAILED";
-                payment.UpdatedAt = DateTime.UtcNow;
-                await _db.SaveChangesAsync();
-            }
-        }
+            await ApplyGatewayFieldsAsync(txnid, status, hashOk);
 
         var paidFlag = string.Equals(status, "success", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
         var html = $@"<!DOCTYPE html><html><head><meta charset='utf-8'><title>Payment</title></head>
@@ -217,17 +221,49 @@ setTimeout(function(){{ window.close(); }}, 1200);
         fields.TryGetValue("txnid", out var txnid);
         fields.TryGetValue("status", out var status);
         if (!string.IsNullOrWhiteSpace(txnid))
-        {
-            var payment = await _db.Payments.FirstOrDefaultAsync(p => p.TransactionId == txnid);
-            if (payment != null)
-            {
-                payment.Status = string.Equals(status, "success", StringComparison.OrdinalIgnoreCase) ? "PAID" : "FAILED";
-                payment.UpdatedAt = DateTime.UtcNow;
-                await _db.SaveChangesAsync();
-            }
-        }
+            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified: true);
 
         return Ok(new { received = true });
+    }
+
+    /// <summary>
+    /// Idempotent gateway apply. Success becomes PAID only when the callback hash was verified.
+    /// Unknown statuses are left unchanged.
+    /// </summary>
+    private async Task ApplyGatewayFieldsAsync(string txnid, string status, bool hashVerified)
+    {
+        var payment = await _db.Payments.FirstOrDefaultAsync(p => p.TransactionId == txnid);
+        if (payment == null)
+            return;
+        if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+        {
+            await FoodPaymentSync.ApplyAsync(_db, txnid, true);
+            return;
+        }
+
+        var normalized = (status ?? "").Trim().ToLowerInvariant();
+        if (normalized == "success")
+        {
+            if (!hashVerified)
+                return;
+            payment.Status = "PAID";
+        }
+        else if (normalized is "usercancelled" or "user_cancelled" or "cancelled")
+        {
+            payment.Status = "CANCELLED";
+        }
+        else if (normalized is "failure" or "failed" or "dropped" or "bounced")
+        {
+            payment.Status = "FAILED";
+        }
+        else
+        {
+            return;
+        }
+
+        payment.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        await FoodPaymentSync.ApplyAsync(_db, txnid, payment.Status == "PAID");
     }
 
     [HttpGet("my-payments")]

@@ -18,11 +18,11 @@ export const customerActions = {
       isDefault: true,
     });
   },
-  async placeOrder(agent, { restaurantId, foodItemId, addressId, notes }) {
+  async placeOrder(agent, { restaurantId, foodItemId, addressId, notes, paymentMethod }) {
     return agent.client.request('POST', '/api/FoodOrders', {
       restaurantId,
       addressId,
-      paymentMethod: 'COD',
+      paymentMethod: paymentMethod || 'COD',
       notes,
       items: [{ foodItemId, quantity: 1 }],
     });

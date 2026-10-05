@@ -23,7 +23,7 @@ interface CartSummarySheetProps {
   restaurantName: string;
   cartItems: CartItem[];
   onClear: () => void;
-  onOrderPlaced: (couponCode?: string) => void;
+  onOrderPlaced: (couponCode?: string, paymentMethod?: 'COD' | 'ONLINE') => void;
   isSubmitting?: boolean;
 }
 
@@ -41,6 +41,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   const [discountAmount, setDiscountAmount] = useState(0);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'ONLINE'>('COD');
 
   const itemTotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const deliveryFee = 0; // FREE
@@ -199,6 +200,29 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
                 </Text>
               </View>
 
+              <Text style={[styles.billLabel, { marginBottom: 8 }]}>Payment</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                {(['COD', 'ONLINE'] as const).map((method) => (
+                  <TouchableOpacity
+                    key={method}
+                    onPress={() => setPaymentMethod(method)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: paymentMethod === method ? AppColors.primary : AppColors.border,
+                      backgroundColor: paymentMethod === method ? AppColors.primary + '22' : 'transparent',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: AppColors.textPrimary, fontWeight: '600' }}>
+                      {method === 'COD' ? 'Cash on delivery' : 'Pay online'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <View style={styles.billDivider} />
 
               <View style={styles.grandTotalRow}>
@@ -227,7 +251,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
 
             <TouchableOpacity
               style={[styles.placeOrderButton, isSubmitting && { opacity: 0.7 }]}
-              onPress={() => onOrderPlaced(appliedCoupon || undefined)}
+              onPress={() => onOrderPlaced(appliedCoupon || undefined, paymentMethod)}
               disabled={isSubmitting}
               activeOpacity={0.85}
             >

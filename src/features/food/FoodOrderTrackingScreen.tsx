@@ -534,7 +534,8 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
               <Text style={styles.grandTotalValue}>₹{grandTotal.toFixed(0)}</Text>
             </View>
             <Text style={styles.paymentMethodCaption}>
-              Payment: {orderData?.paymentMethod === 'ONLINE' ? 'Paid Online via Easebuzz' : 'Cash On Delivery'}
+              Payment: {orderData?.paymentMethod === 'ONLINE' ? `Online · ${orderData?.paymentStatus || ''}` : 'Cash On Delivery'}
+              {orderData?.driverName ? ` · Captain ${orderData.driverName}` : ''}
             </Text>
           </View>
         ) : null}

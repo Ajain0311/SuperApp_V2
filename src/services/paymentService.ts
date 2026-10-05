@@ -54,7 +54,7 @@ class PaymentService {
     if (this.usesEasebuzz(order, kit)) {
       const checkout = await openEasebuzzCheckout(order);
       const verified = await this.verify(checkout.txnid, order.orderId, checkout.hash);
-      const ok = verified.isVerified || checkout.status === 'success';
+      const ok = verified.isVerified === true;
       return {
         isSuccess: ok,
         transactionId: checkout.txnid,

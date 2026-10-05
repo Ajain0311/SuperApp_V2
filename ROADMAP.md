@@ -116,7 +116,8 @@ The tasks below represent the logical sequence of work remaining for production 
 ## 📝 Last Session Handoff
 
 - **Date**: October 5, 2026
-- **Status**: Production auto-deployment and auto-rollback pipeline successfully built and verified on live Azure VM (`20.106.173.109`). Integrated with Nginx reverse proxy and Let's Encrypt SSL on `https://makemytree.duckdns.org`. Complete verification pipeline passing at 100%.
+- **Status**: Captain food delivery dispatch and verified online food payment are wired on main. Easebuzz live merchant keys are still unset, so live charges stay blocked. Sandbox/mock verification is the working payment path.
+- **Previous**: Production auto-deployment and auto-rollback pipeline on `20.106.173.109` / `https://makemytree.duckdns.org`.
 - **Fixes Applied This Session**:
   1. **Discovered Server Disconnect**: Inspected Azure VM (`20.106.173.109`) via SSH key (`rockbuilder_key.pem`); identified that `superapp.service` was running out of `/opt/SuperApp_V2/dist`, which was never rebuilt or republished on manual `git pull`.
   2. **Automated Versioned Deployment & Auto-Rollback Engine**: Created [`scripts/manage.sh`](scripts/manage.sh) maintaining versioned releases in `/opt/SuperApp_V2/releases/release_SHA`, updating `dist` symlink, testing `/health` probe, auto-rolling back on failure, and pruning older releases.

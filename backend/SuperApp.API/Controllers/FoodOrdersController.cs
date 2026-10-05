@@ -20,11 +20,13 @@ public class FoodOrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<OrderStatusHub> _orderHub;
+    private readonly IPaymentService? _payments;
 
-    public FoodOrdersController(AppDbContext db, IHubContext<OrderStatusHub> orderHub)
+    public FoodOrdersController(AppDbContext db, IHubContext<OrderStatusHub> orderHub, IPaymentService? payments = null)
     {
         _db = db;
         _orderHub = orderHub;
+        _payments = payments;
     }
 
     private long? GetCurrentUserId()
@@ -222,6 +224,7 @@ public class FoodOrdersController : ControllerBase
             .Include(o => o.Restaurant)
             .Include(o => o.Address)
             .Include(o => o.Items)
+            .Include(o => o.Driver).ThenInclude(d => d!.User)
             .Where(o => o.UserId == userId.Value)
             .OrderByDescending(o => o.CreatedAt)
             .Take(50)
@@ -246,12 +249,15 @@ public class FoodOrdersController : ControllerBase
             .Include(o => o.Address)
             .Include(o => o.User)
             .Include(o => o.Items)
+            .Include(o => o.Driver).ThenInclude(d => d!.User)
             .FirstOrDefaultAsync(o => o.Id == id);
 
         if (order == null)
             return NotFound(ApiResponse<FoodOrderDto>.Fail("Order not found"));
 
         bool isAuthorized = order.UserId == userId.Value || User.IsInRole(RoleNames.Admin);
+        if (!isAuthorized && order.Driver != null && order.Driver.UserId == userId.Value)
+            isAuthorized = true;
         if (!isAuthorized)
         {
             var isRestaurantOwner = await _db.RestaurantUsers
@@ -293,6 +299,40 @@ public class FoodOrdersController : ControllerBase
         return Ok(ApiResponse.Ok("Order cancelled successfully"));
     }
 
+    /// <summary>
+    /// Start an Easebuzz (or configured gateway) session for an ONLINE food order.
+    /// The order stays PENDING_PAYMENT until the gateway verifies the payment.
+    /// </summary>
+    [HttpPost("{id:long}/pay")]
+    public async Task<ActionResult<ApiResponse<PaymentOrderResult>>> StartOnlinePayment(long id)
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<PaymentOrderResult>.Fail("Authentication required"));
+        if (_payments == null)
+            return StatusCode(503, ApiResponse<PaymentOrderResult>.Fail("Payment service is not configured"));
+
+        var order = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id);
+        if (order == null)
+            return NotFound(ApiResponse<PaymentOrderResult>.Fail("Order not found"));
+        if (order.UserId != userId.Value)
+            return Forbid();
+        if (!string.Equals(order.PaymentMethod, "ONLINE", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(ApiResponse<PaymentOrderResult>.Fail("This order is not an online payment"));
+        if (string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+            return Conflict(ApiResponse<PaymentOrderResult>.Fail("This order is already paid"));
+        if (order.Status == OrderStatus.Cancelled)
+            return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Cancelled orders cannot be paid"));
+        if (order.GrandTotal < 1)
+            return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Order amount must be at least ₹1"));
+
+        var result = await _payments.CreatePaymentOrderAsync(order.GrandTotal, "INR", order.Id.ToString(), "FOOD", userId.Value);
+        if (!result.Success)
+            return BadRequest(ApiResponse<PaymentOrderResult>.Fail(result.ErrorMessage ?? "Could not start payment"));
+
+        return Ok(ApiResponse<PaymentOrderResult>.Ok(result, "Complete payment in Easebuzz. The order is paid only after verification."));
+    }
+
     private static FoodOrderDto MapToOrderDto(FoodOrder o, Restaurant restaurant, Address? address = null, User? user = null)
     {
         var restPhone = !string.IsNullOrWhiteSpace(restaurant?.Phone) 
@@ -325,6 +365,9 @@ public class FoodOrdersController : ControllerBase
             GrandTotal = o.GrandTotal,
             PaymentMethod = o.PaymentMethod,
             PaymentStatus = o.PaymentStatus,
+            DriverId = o.DriverId,
+            DriverName = o.Driver?.User?.FullName,
+            DriverPhone = o.Driver?.User?.MobileNumber,
             Notes = o.Notes,
             EstimatedDeliveryMinutes = o.EstimatedDeliveryMinutes ?? (restaurant?.AvgDeliveryTimeMinutes ?? 25),
             CreatedAt = o.CreatedAt,

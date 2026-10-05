@@ -176,7 +176,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       ? foodItems
       : foodItems.filter((f) => f.category === menuCategories[selectedCategoryIndex]);
 
-  const handlePlaceOrder = async (couponCode?: string) => {
+  const handlePlaceOrder = async (couponCode?: string, paymentMethod: 'COD' | 'ONLINE' = 'COD') => {
     setIsPlacingOrder(true);
     try {
       const restId = Number(route.params?.restaurantId) || 1;
@@ -200,7 +200,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         })),
         addressId,
         couponCode: couponCode || null,
-        paymentMethod: 'COD',
+        paymentMethod,
         deliveryInstructions: 'Leave at front door',
       };
       const res = await apiClient.post<any>(ApiEndpoints.food.orders, payload);
@@ -210,6 +210,23 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       }
       const orderId = data.orderNumber || `FO-${data.id}`;
       const orderNumericId = data.id;
+      if (paymentMethod === 'ONLINE') {
+        const payRes = await apiClient.post<any>(ApiEndpoints.food.payOrder(orderNumericId), {});
+        const pay = payRes.data?.data || payRes.data;
+        if (pay?.accessKey && pay?.keyId) {
+          const { openEasebuzzCheckout } = await import('../../services/easebuzzCheckout');
+          const checkout = await openEasebuzzCheckout(pay);
+          const verified = await apiClient.post<any>(ApiEndpoints.common.paymentsVerify, {
+            transactionId: checkout.txnid,
+            orderId: pay.orderId,
+            paymentSignature: checkout.hash || '',
+          });
+          const verifiedBody = verified.data?.data || verified.data;
+          if (!verifiedBody?.isVerified) {
+            Alert.alert('Payment not completed', 'The order stays unpaid until Easebuzz verifies the payment.');
+          }
+        }
+      }
       clearCart();
       setIsCartVisible(false);
       navigation.navigate('FoodOrderTracking', { orderId, orderNumericId });

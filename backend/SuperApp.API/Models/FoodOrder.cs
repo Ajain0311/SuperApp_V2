@@ -25,6 +25,14 @@ public class FoodOrder
     
     [ForeignKey(nameof(AddressId))]
     public Address? Address { get; set; }
+
+    /// <summary>Assigned delivery captain. Null until a driver accepts a READY order.</summary>
+    public long? DriverId { get; set; }
+
+    [ForeignKey(nameof(DriverId))]
+    public Driver? Driver { get; set; }
+
+    public DateTime? DriverAssignedAt { get; set; }
     
     [Required, MaxLength(20)]
     public string Status { get; set; } = OrderStatus.Pending;

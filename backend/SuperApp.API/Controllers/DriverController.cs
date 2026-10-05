@@ -19,12 +19,19 @@ public class DriverController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IHubContext<RideTrackingHub> _hub;
     private readonly INotificationService? _notificationService;
+    private readonly IHubContext<OrderStatusHub>? _orderHub;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, SemaphoreSlim> FoodAcceptLocks = new();
 
-    public DriverController(AppDbContext db, IHubContext<RideTrackingHub> hub, INotificationService? notificationService = null)
+    public DriverController(
+        AppDbContext db,
+        IHubContext<RideTrackingHub> hub,
+        INotificationService? notificationService = null,
+        IHubContext<OrderStatusHub>? orderHub = null)
     {
         _db = db;
         _hub = hub;
         _notificationService = notificationService;
+        _orderHub = orderHub;
     }
 
     private async Task<Driver?> GetAuthorizedDriverAsync()
@@ -642,5 +649,312 @@ public class DriverController : ControllerBase
             TotalRides = driver.TotalRides,
             RecentTrips = recent
         }));
+    }
+
+    /// <summary>READY food orders with no captain, visible only while this captain is online.</summary>
+    [HttpGet("available-food-orders")]
+    public async Task<ActionResult<ApiResponse<List<FoodOrderDto>>>> GetAvailableFoodOrders()
+    {
+        var driver = await GetAuthorizedDriverAsync();
+        if (driver == null)
+            return Forbid();
+        if (!driver.IsOnline)
+            return Ok(ApiResponse<List<FoodOrderDto>>.Ok(new List<FoodOrderDto>(), "Go online to see food deliveries"));
+
+        var orders = await _db.FoodOrders
+            .Include(o => o.Restaurant)
+            .Include(o => o.Address)
+            .Include(o => o.Items)
+            .Where(o => o.Status == OrderStatus.Ready && o.DriverId == null)
+            .OrderBy(o => o.CreatedAt)
+            .Take(30)
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<FoodOrderDto>>.Ok(orders.Select(o => MapFood(o)).ToList()));
+    }
+
+    [HttpGet("active-food-order")]
+    public async Task<ActionResult<ApiResponse<FoodOrderDto?>>> GetActiveFoodOrder()
+    {
+        var driver = await GetAuthorizedDriverAsync();
+        if (driver == null)
+            return Forbid();
+
+        var order = await _db.FoodOrders
+            .Include(o => o.Restaurant)
+            .Include(o => o.Address)
+            .Include(o => o.Items)
+            .Include(o => o.User)
+            .Include(o => o.Driver).ThenInclude(d => d!.User)
+            .Where(o => o.DriverId == driver.Id && (o.Status == OrderStatus.Ready || o.Status == OrderStatus.PickedUp))
+            .OrderByDescending(o => o.UpdatedAt)
+            .FirstOrDefaultAsync();
+
+        return Ok(ApiResponse<FoodOrderDto?>.Ok(order == null ? null : MapFood(order, order.User)));
+    }
+
+    /// <summary>One captain wins. The conditional update requires READY and a null driver.</summary>
+    [HttpPost("food-orders/{id:long}/accept")]
+    public async Task<ActionResult<ApiResponse<FoodOrderDto>>> AcceptFoodOrder(long id)
+    {
+        var driver = await GetAuthorizedDriverAsync();
+        if (driver == null)
+            return Forbid();
+        if (!driver.IsOnline)
+            return Conflict(ApiResponse<FoodOrderDto>.Fail("Go online before accepting a food delivery"));
+
+        var busy = await _db.FoodOrders.AnyAsync(o =>
+            o.DriverId == driver.Id && o.Id != id &&
+            (o.Status == OrderStatus.Ready || o.Status == OrderStatus.PickedUp));
+        if (busy)
+            return Conflict(ApiResponse<FoodOrderDto>.Fail("Finish the current food delivery before accepting another"));
+
+        var order = await _db.FoodOrders.Include(o => o.Restaurant).Include(o => o.User).FirstOrDefaultAsync(o => o.Id == id);
+        if (order == null)
+            return NotFound(ApiResponse<FoodOrderDto>.Fail("Food order not found"));
+
+        var now = DateTime.UtcNow;
+        var gate = FoodAcceptLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        int claimed;
+        try
+        {
+            if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                var current = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id);
+                if (current == null || current.Status != OrderStatus.Ready || current.DriverId != null)
+                {
+                    claimed = 0;
+                }
+                else
+                {
+                    current.DriverId = driver.Id;
+                    current.DriverAssignedAt = now;
+                    current.UpdatedAt = now;
+                    await _db.SaveChangesAsync();
+                    claimed = 1;
+                }
+            }
+            else
+            {
+                claimed = await _db.FoodOrders
+                    .Where(o => o.Id == id && o.Status == OrderStatus.Ready && o.DriverId == null)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(o => o.DriverId, driver.Id)
+                        .SetProperty(o => o.DriverAssignedAt, now)
+                        .SetProperty(o => o.UpdatedAt, now));
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        if (claimed == 0)
+            return Conflict(ApiResponse<FoodOrderDto>.Fail("This delivery was already accepted by another captain"));
+
+        order.DriverId = driver.Id;
+        order.DriverAssignedAt = now;
+        order.Status = OrderStatus.Ready;
+        _db.Entry(order).Property(o => o.DriverId).IsModified = false;
+        _db.Entry(order).Property(o => o.DriverAssignedAt).IsModified = false;
+
+        await PublishFoodAssignment(order, driver, "CAPTAIN_ASSIGNED");
+        var fresh = await _db.FoodOrders.Include(o => o.Restaurant).Include(o => o.Address).Include(o => o.Items)
+            .Include(o => o.Driver).ThenInclude(d => d!.User).Include(o => o.User)
+            .FirstAsync(o => o.Id == id);
+        return Ok(ApiResponse<FoodOrderDto>.Ok(MapFood(fresh, fresh.User), "Food delivery accepted"));
+    }
+
+    [HttpPost("food-orders/{id:long}/pickup")]
+    public async Task<ActionResult<ApiResponse>> PickupFoodOrder(long id)
+    {
+        var driver = await GetAuthorizedDriverAsync();
+        if (driver == null)
+            return Forbid();
+
+        int moved;
+        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var current = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id && o.DriverId == driver.Id && o.Status == OrderStatus.Ready);
+            if (current == null) moved = 0;
+            else
+            {
+                current.Status = OrderStatus.PickedUp;
+                current.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                moved = 1;
+            }
+        }
+        else
+        {
+            moved = await _db.FoodOrders
+                .Where(o => o.Id == id && o.DriverId == driver.Id && o.Status == OrderStatus.Ready)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(o => o.Status, OrderStatus.PickedUp)
+                    .SetProperty(o => o.UpdatedAt, DateTime.UtcNow));
+        }
+        if (moved == 0)
+        {
+            var exists = await _db.FoodOrders.AnyAsync(o => o.Id == id);
+            if (!exists) return NotFound(ApiResponse.Fail("Food order not found"));
+            var mine = await _db.FoodOrders.AnyAsync(o => o.Id == id && o.DriverId == driver.Id);
+            return mine
+                ? BadRequest(ApiResponse.Fail("This delivery cannot be picked up in its current status"))
+                : Forbid();
+        }
+
+        await PublishFoodStatus(id, OrderStatus.PickedUp, driver);
+        return Ok(ApiResponse.Ok("Order picked up"));
+    }
+
+    [HttpPost("food-orders/{id:long}/deliver")]
+    public async Task<ActionResult<ApiResponse>> DeliverFoodOrder(long id)
+    {
+        var driver = await GetAuthorizedDriverAsync();
+        if (driver == null)
+            return Forbid();
+
+        var order = await _db.FoodOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id);
+        if (order == null)
+            return NotFound(ApiResponse.Fail("Food order not found"));
+        if (order.DriverId != driver.Id)
+            return Forbid();
+
+        int moved;
+        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var current = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id && o.DriverId == driver.Id && o.Status == OrderStatus.PickedUp);
+            if (current == null) moved = 0;
+            else
+            {
+                current.Status = OrderStatus.Delivered;
+                current.UpdatedAt = DateTime.UtcNow;
+                if (string.Equals(current.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(current.PaymentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+                    current.PaymentStatus = "PAID";
+                await _db.SaveChangesAsync();
+                moved = 1;
+            }
+        }
+        else
+        {
+            moved = await _db.FoodOrders
+                .Where(o => o.Id == id && o.DriverId == driver.Id && o.Status == OrderStatus.PickedUp)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(o => o.Status, OrderStatus.Delivered)
+                    .SetProperty(o => o.UpdatedAt, DateTime.UtcNow));
+        }
+        if (moved == 0)
+            return BadRequest(ApiResponse.Fail("Pick up the order before marking it delivered"));
+
+        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) != true &&
+            string.Equals(order.PaymentMethod, "COD", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(order.PaymentStatus, "PENDING", StringComparison.OrdinalIgnoreCase))
+        {
+            await _db.FoodOrders.Where(o => o.Id == id && o.PaymentStatus == "PENDING")
+                .ExecuteUpdateAsync(s => s.SetProperty(o => o.PaymentStatus, "PAID"));
+        }
+
+        await PublishFoodStatus(id, OrderStatus.Delivered, driver);
+        return Ok(ApiResponse.Ok("Order delivered"));
+    }
+
+    private async Task PublishFoodAssignment(FoodOrder order, Driver driver, string eventName)
+    {
+        var payload = new
+        {
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            status = OrderStatus.Ready,
+            driverId = driver.Id,
+            driverName = driver.User?.FullName,
+            driverPhone = driver.User?.MobileNumber,
+            updatedAt = DateTime.UtcNow
+        };
+        if (_orderHub != null)
+            await _orderHub.Clients.Group($"order-{order.Id}").SendAsync("OrderStatusUpdated", payload);
+        await _hub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAccepted", payload);
+        if (order.UserId > 0 && _notificationService != null)
+        {
+            await _notificationService.SendPushNotificationAsync(
+                order.UserId,
+                "Captain assigned",
+                $"{driver.User?.FullName ?? "Your captain"} accepted order {order.OrderNumber}.",
+                "FOOD_ORDER",
+                order.OrderNumber);
+        }
+        _ = eventName;
+    }
+
+    private async Task PublishFoodStatus(long orderId, string status, Driver driver)
+    {
+        var order = await _db.FoodOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) return;
+        var payload = new
+        {
+            orderId,
+            status,
+            driverId = driver.Id,
+            driverName = driver.User?.FullName,
+            message = $"Order is now {status}",
+            updatedAt = DateTime.UtcNow
+        };
+        if (_orderHub != null)
+            await _orderHub.Clients.Group($"order-{orderId}").SendAsync("OrderStatusUpdated", payload);
+        await _hub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryStatusChanged", payload);
+
+        var title = status == OrderStatus.Delivered ? "Order delivered" : "Order picked up";
+        var body = status == OrderStatus.Delivered
+            ? $"Order {order.OrderNumber} has been delivered."
+            : $"Captain picked up order {order.OrderNumber}.";
+        _db.Notifications.Add(new Notification
+        {
+            UserId = order.UserId,
+            Title = title,
+            Body = body,
+            Type = "FOOD_ORDER",
+            ReferenceId = order.OrderNumber,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+        if (_notificationService != null)
+            await _notificationService.SendPushNotificationAsync(order.UserId, title, body, "FOOD_ORDER", order.OrderNumber);
+    }
+
+    private static FoodOrderDto MapFood(FoodOrder o, User? customer = null)
+    {
+        return new FoodOrderDto
+        {
+            Id = o.Id,
+            OrderNumber = o.OrderNumber,
+            RestaurantId = o.RestaurantId,
+            RestaurantName = o.Restaurant?.Name ?? "Restaurant",
+            RestaurantPhone = o.Restaurant?.Phone,
+            RestaurantAddress = o.Restaurant?.AddressLine,
+            DeliveryAddress = o.Address == null ? null : $"{o.Address.AddressLine1}, {o.Address.City}",
+            CustomerPhone = customer?.MobileNumber ?? o.User?.MobileNumber,
+            Status = o.Status,
+            GrandTotal = o.GrandTotal,
+            SubTotal = o.SubTotal,
+            DeliveryFee = o.DeliveryFee,
+            TaxAmount = o.TaxAmount,
+            PaymentMethod = o.PaymentMethod,
+            PaymentStatus = o.PaymentStatus,
+            DriverId = o.DriverId,
+            DriverName = o.Driver?.User?.FullName,
+            DriverPhone = o.Driver?.User?.MobileNumber,
+            CreatedAt = o.CreatedAt,
+            Items = o.Items?.Select(i => new FoodOrderItemDto
+            {
+                Id = i.Id,
+                FoodItemId = i.FoodItemId,
+                ItemName = i.ItemName,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice,
+                TotalPrice = i.TotalPrice
+            }).ToList() ?? new()
+        };
     }
 }

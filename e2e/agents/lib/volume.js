@@ -179,8 +179,103 @@ async function isolationFood(ctx, orders, kitchen) {
     const ok = paid?.status === 'DELIVERED' && paid?.payment_method === 'COD' && paid?.payment_status === 'PAID' && Number(paid.user_id) === Number(primary.customer.user.id);
     recordDb(ctx, primary.customer, 'cod-paid-on-delivery', ok, ok ? 'COD marked PAID on delivery' : `DB ${JSON.stringify(paid)}`);
   }
-  ctx.record(null, { suite: 'FOOD_ORDER', scenario: 'captain-food-delivery', status: 'NOT_IMPLEMENTED', expected: 'driver delivery assignment', actual: 'NOT_IMPLEMENTED', details: 'DriverController handles rides only. There is no captain accept/pickup API for food orders.' });
-  ctx.record(null, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', status: 'NOT_IMPLEMENTED', expected: 'food order payment row', actual: 'NOT_IMPLEMENTED', details: 'ONLINE sets payment_status PENDING_PAYMENT on the food order. mock-complete settles the Payments table, which food checkout does not create. No real gateway call is made.' });
+  await captainFoodAndOnlinePayment(ctx, primary, owner);
+}
+
+async function captainFoodAndOnlinePayment(ctx, primary, owner) {
+  const captains = logged(ctx.agents.filter((agent) => agent.role === 'DRIVER'));
+  const itemId = primary?.order?.items?.[0]?.foodItemId;
+  if (!primary || !owner || captains.length < 2 || !itemId) {
+    ctx.record(null, { suite: 'FOOD_ORDER', scenario: 'captain-food-delivery', status: 'BLOCKED', expected: 'two online captains and a menu item', actual: captains.length, details: 'Need two logged-in captains and the placed order item to run delivery.' });
+    ctx.record(null, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', status: 'BLOCKED', expected: 'customer order', actual: 'missing fixture', details: 'Online payment check needs the same customer fixture.' });
+    return;
+  }
+  const deliveryRes = await customerActions.placeOrder(primary.customer, {
+    restaurantId: primary.customer.resources.restaurantId,
+    foodItemId: itemId,
+    addressId: primary.address?.id || primary.customer.resources.addressId,
+    notes: `${ctx.runId} captain-delivery`,
+    paymentMethod: 'COD',
+  });
+  const delivery = dataOf(deliveryRes);
+  if (!delivery?.id) {
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'captain-food-delivery', status: 'FAIL', expected: 200, actual: deliveryRes.status, details: 'Could not place the delivery order' });
+  } else {
+    for (const status of ['ACCEPTED', 'PREPARING', 'READY']) {
+      await ownerActions.setStatus(owner, delivery.id, status);
+    }
+    await captainActions.toggleOnline(captains[0], true);
+    await captainActions.toggleOnline(captains[1], true);
+    const [first, second] = await Promise.all([
+      captainActions.acceptFood(captains[0], delivery.id),
+      captainActions.acceptFood(captains[1], delivery.id),
+    ]);
+    const wins = [first, second].filter((res) => res.status === 200);
+    const losses = [first, second].filter((res) => res.status === 409);
+    const oneWinner = wins.length === 1 && losses.length === 1;
+    ctx.record(captains[0], { suite: 'FOOD_ORDER', scenario: 'captain-accept-race', endpoint: `/api/driver/food-orders/${delivery.id}/accept`, method: 'POST', expected: 'one 200 and one 409', actual: `${wins.length} won / ${losses.length} conflict`, status: oneWinner ? 'PASS' : 'FAIL', details: 'Concurrent captain accept' });
+    const winner = first.status === 200 ? captains[0] : captains[1];
+    const loser = winner === captains[0] ? captains[1] : captains[0];
+    const stolen = await captainActions.pickupFood(loser, delivery.id);
+    ctx.record(loser, { suite: 'FOOD_ORDER', scenario: 'captain-cannot-pickup-other', endpoint: `/api/driver/food-orders/${delivery.id}/pickup`, method: 'POST', expected: [403, 404], actual: stolen.status, status: [403, 404].includes(stolen.status) ? 'PASS' : 'FAIL', security: true, details: 'Losing captain cannot pick up' });
+    const picked = await captainActions.pickupFood(winner, delivery.id);
+    const delivered = await captainActions.deliverFood(winner, delivery.id);
+    const seen = dataOf(await customerActions.getOrder(primary.customer, delivery.id));
+    const flowOk = picked.status === 200 && delivered.status === 200 && seen?.status === 'DELIVERED' && seen?.driverId;
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'captain-food-delivery', endpoint: `/api/FoodOrders/${delivery.id}`, method: 'GET', expected: 'DELIVERED', actual: seen?.status, status: flowOk ? 'PASS' : 'FAIL', details: 'Captain pickup and deliver through the API' });
+    if (ctx.db?.ok) {
+      const row = (await ctx.db.query('select driver_id, status, payment_status from food_orders where id = $1', [delivery.id])).rows[0];
+      const ok = row && row.driver_id && row.status === 'DELIVERED' && row.payment_status === 'PAID';
+      recordDb(ctx, primary.customer, 'captain-delivery-persisted', ok, ok ? `driver ${row.driver_id}` : `DB ${JSON.stringify(row)}`);
+    }
+  }
+
+  const onlineRes = await customerActions.placeOrder(primary.customer, {
+    restaurantId: primary.customer.resources.restaurantId,
+    foodItemId: itemId,
+    addressId: primary.address?.id || primary.customer.resources.addressId,
+    notes: `${ctx.runId} online-pay`,
+    paymentMethod: 'ONLINE',
+  });
+  const online = dataOf(onlineRes);
+  if (!online?.id || online.paymentStatus !== 'PENDING_PAYMENT') {
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', status: 'FAIL', expected: 'PENDING_PAYMENT', actual: online?.paymentStatus, details: 'Online order was not created unpaid' });
+    return;
+  }
+  const started = await primary.customer.client.request('POST', `/api/FoodOrders/${online.id}/pay`);
+  const session = dataOf(started);
+  if (started.status !== 200 || !session?.transactionId) {
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', endpoint: `/api/FoodOrders/${online.id}/pay`, method: 'POST', expected: 200, actual: started.status, status: 'FAIL', details: started.body?.message || 'Payment session was not created' });
+    return;
+  }
+  if (session.accessKey) {
+    const verify = await primary.customer.client.request('POST', '/api/payments/verify', { transactionId: session.transactionId, orderId: session.orderId, paymentSignature: '' });
+    const after = dataOf(await customerActions.getOrder(primary.customer, online.id));
+    const stillUnpaid = after?.paymentStatus !== 'PAID';
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', endpoint: '/api/payments/verify', method: 'POST', expected: 'not PAID before checkout', actual: after?.paymentStatus, status: stillUnpaid ? 'PASS' : 'FAIL', details: `Easebuzz session created (${verify.status}). Completing the hosted sandbox page is a device step. Live merchant keys are not in this run.` });
+    return;
+  }
+  const settled = await primary.customer.client.request('POST', '/api/payments/mock-complete', { transactionId: session.transactionId, success: true });
+  const again = await primary.customer.client.request('POST', '/api/payments/mock-complete', { transactionId: session.transactionId, success: true });
+  const paid = dataOf(await customerActions.getOrder(primary.customer, online.id));
+  const ok = settled.status === 200 && again.status === 200 && paid?.paymentStatus === 'PAID' && paid?.status === 'PENDING';
+  ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', endpoint: '/api/payments/mock-complete', method: 'POST', expected: 'PAID', actual: paid?.paymentStatus, status: ok ? 'PASS' : 'FAIL', details: 'Mock gateway settles the food order once. Easebuzz live keys are not configured in this environment.' });
+  const failedRes = await customerActions.placeOrder(primary.customer, {
+    restaurantId: primary.customer.resources.restaurantId,
+    foodItemId: itemId,
+    addressId: primary.address?.id || primary.customer.resources.addressId,
+    notes: `${ctx.runId} online-fail`,
+    paymentMethod: 'ONLINE',
+  });
+  const failedOrder = dataOf(failedRes);
+  if (failedOrder?.id) {
+    const failSession = dataOf(await primary.customer.client.request('POST', `/api/FoodOrders/${failedOrder.id}/pay`));
+    if (failSession?.transactionId && !failSession.accessKey) {
+      await primary.customer.client.request('POST', '/api/payments/mock-complete', { transactionId: failSession.transactionId, success: false });
+      const failedSeen = dataOf(await customerActions.getOrder(primary.customer, failedOrder.id));
+      ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-payment-failed', expected: 'FAILED', actual: failedSeen?.paymentStatus, status: failedSeen?.paymentStatus === 'FAILED' ? 'PASS' : 'FAIL', details: 'Failed mock payment does not become PAID' });
+    }
+  }
 }
 
 async function scaleRides(ctx) {
