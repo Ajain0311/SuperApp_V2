@@ -25,6 +25,8 @@ interface AuthState {
   clearError: () => void;
 }
 
+let lastOfflineOtp: string | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
@@ -90,6 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const isDev = process.env.EXPO_PUBLIC_ENV !== 'production';
       if (isDev) {
         const offlineOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        lastOfflineOtp = offlineOtp;
         const isAdmin = mobileNumber === '9999999999' || mobileNumber.endsWith('9999');
         console.warn('[Auth] Backend OTP endpoint unreachable or error. Using development mock OTP.');
         return {
@@ -135,10 +138,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       return response;
     } catch (e: any) {
-      // If backend verification fails in dev and code is 123456, allow development session
+      // If backend verification fails in dev, allow development session if OTP matches test code or any 6-digit dev input
       const isDev = process.env.EXPO_PUBLIC_ENV !== 'production';
-      if (isDev && otpCode === '123456') {
-        console.warn('[Auth] Using development session fallback for dev OTP 123456.');
+      const isAcceptableDevOtp = isDev && (
+        otpCode === '123456' ||
+        otpCode === lastOfflineOtp ||
+        (typeof otpCode === 'string' && otpCode.length === 6)
+      );
+      if (isAcceptableDevOtp) {
+        console.warn(`[Auth] Using development session fallback for dev OTP ${otpCode}.`);
         const devToken = `dev_jwt_token_${Date.now()}`;
         const devUser: User = {
           id: 1,

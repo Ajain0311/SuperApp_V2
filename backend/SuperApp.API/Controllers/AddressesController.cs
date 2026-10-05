@@ -152,11 +152,24 @@ public class AddressesController : ControllerBase
         // Column-scoped updates only — never touch latitude/longitude on set-default.
         await ClearDefaultsAsync(userId.Value, id);
 
-        await _db.Addresses
-            .Where(a => a.Id == id && a.UserId == userId.Value && a.IsActive)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(a => a.IsDefault, true)
-                .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+        if (_db.Database.IsInMemory())
+        {
+            var target = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId.Value && a.IsActive);
+            if (target != null)
+            {
+                target.IsDefault = true;
+                target.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            await _db.Addresses
+                .Where(a => a.Id == id && a.UserId == userId.Value && a.IsActive)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(a => a.IsDefault, true)
+                    .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+        }
 
         address.IsDefault = true;
         address.UpdatedAt = DateTime.UtcNow;
@@ -189,11 +202,24 @@ public class AddressesController : ControllerBase
                 .FirstOrDefaultAsync();
             if (nextId != null)
             {
-                await _db.Addresses
-                    .Where(a => a.Id == nextId.Value)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(a => a.IsDefault, true)
-                        .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+                if (_db.Database.IsInMemory())
+                {
+                    var nextTarget = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == nextId.Value);
+                    if (nextTarget != null)
+                    {
+                        nextTarget.IsDefault = true;
+                        nextTarget.UpdatedAt = DateTime.UtcNow;
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                else
+                {
+                    await _db.Addresses
+                        .Where(a => a.Id == nextId.Value)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(a => a.IsDefault, true)
+                            .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
+                }
             }
         }
 
@@ -206,9 +232,23 @@ public class AddressesController : ControllerBase
     /// </summary>
     private async Task ClearDefaultsAsync(long userId, long? exceptId = null)
     {
-        await _db.Addresses
-            .Where(a => a.UserId == userId && a.IsActive && a.IsDefault && (exceptId == null || a.Id != exceptId))
-            .ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
+        if (_db.Database.IsInMemory())
+        {
+            var defaults = await _db.Addresses
+                .Where(a => a.UserId == userId && a.IsActive && a.IsDefault && (exceptId == null || a.Id != exceptId))
+                .ToListAsync();
+            foreach (var d in defaults)
+            {
+                d.IsDefault = false;
+            }
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            await _db.Addresses
+                .Where(a => a.UserId == userId && a.IsActive && a.IsDefault && (exceptId == null || a.Id != exceptId))
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
+        }
     }
 
     private static (decimal? Latitude, decimal? Longitude) NormalizeCoordinates(decimal? latitude, decimal? longitude)

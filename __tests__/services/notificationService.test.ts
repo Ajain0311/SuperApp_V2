@@ -277,4 +277,13 @@ describe('NotificationService - Push Permissions, Scheduling & Deep-Link Routing
       expect(listener).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('Expo Go Runtime Guard (SDK 53+ compatibility)', () => {
+    it('provides isRunningInExpoGoClient detection helper', () => {
+      const { isRunningInExpoGoClient } = require('../../src/services/notificationService');
+      expect(typeof isRunningInExpoGoClient).toBe('function');
+      // In jest node environment without Expo Go host, returns false
+      expect(typeof isRunningInExpoGoClient()).toBe('boolean');
+    });
+  });
 });

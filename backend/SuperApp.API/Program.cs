@@ -64,18 +64,28 @@ else if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCas
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
         ?? "Host=localhost;Database=SuperAppDB;Username=postgres;Password=postgres;";
 
-    builder.Services.AddDbContext<AppDbContext>(options =>
+    if (pgConnectionString.Contains("<LOCAL_SECRET>") || pgConnectionString.Contains("<SUPABASE_DB_PASSWORD>"))
     {
-        options.UseNpgsql(pgConnectionString, npgsqlOptions =>
+        Console.WriteLine("[Database] Supabase connection string contains placeholder secrets. Falling back to InMemory provider for local development.");
+        builder.Services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase("SuperAppInMemoryDb"));
+        dbProvider = "InMemory";
+    }
+    else
+    {
+        builder.Services.AddDbContext<AppDbContext>(options =>
         {
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3, 
-                maxRetryDelay: TimeSpan.FromSeconds(5), 
-                errorCodesToAdd: null);
-            npgsqlOptions.CommandTimeout(30);
+            options.UseNpgsql(pgConnectionString, npgsqlOptions =>
+            {
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3, 
+                    maxRetryDelay: TimeSpan.FromSeconds(5), 
+                    errorCodesToAdd: null);
+                npgsqlOptions.CommandTimeout(30);
+            });
+            options.UseSnakeCaseNamingConvention();
         });
-        options.UseSnakeCaseNamingConvention();
-    });
+    }
 }
 else
 {
@@ -339,6 +349,29 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// --- Health Check Probe (Used by Deployment & Nginx) ---
+app.MapGet("/health", async (AppDbContext db) =>
+{
+    try
+    {
+        var canConnect = await db.Database.CanConnectAsync();
+        if (canConnect)
+        {
+            return Results.Ok(new 
+            { 
+                status = "Healthy", 
+                version = Environment.GetEnvironmentVariable("APP_VERSION") ?? "1.0.0",
+                timestamp = DateTime.UtcNow 
+            });
+        }
+        return Results.Problem(detail: "Database connection unreachable", statusCode: 503);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 503);
+    }
+});
 
 // --- Real-Time SignalR Hub Endpoints ---
 app.MapHub<RideTrackingHub>("/hubs/ride");

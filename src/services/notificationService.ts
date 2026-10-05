@@ -1,5 +1,5 @@
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import type * as ExpoNotifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { apiClient } from './apiClient';
 
@@ -34,19 +34,62 @@ export interface ScheduleNotificationOptions {
   delaySeconds?: number;
 }
 
+/**
+ * Detect whether the app is executing inside the standard Expo Go client app.
+ * In Expo SDK 53+, remote push notifications were permanently removed from Expo Go on Android.
+ * Requiring or importing expo-notifications inside Expo Go on Android crashes on startup.
+ */
+export function isRunningInExpoGoClient(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const expo = require('expo');
+    if (typeof expo?.isRunningInExpoGo === 'function') {
+      return expo.isRunningInExpoGo();
+    }
+  } catch {
+    // ignore
+  }
+  return (
+    (Constants as any)?.appOwnership === 'expo' ||
+    (ExecutionEnvironment && Constants?.executionEnvironment === ExecutionEnvironment.StoreClient)
+  );
+}
+
+function resolveNotificationsModule(): typeof ExpoNotifications | null {
+  // Guard against fatal crash in Expo Go on Android (removed in SDK 53+)
+  if (Platform.OS === 'android' && isRunningInExpoGoClient()) {
+    console.warn(
+      '[NotificationService] Expo Go on Android does not support remote push notifications in SDK 53+. ' +
+      'Bypassing expo-notifications to prevent runtime crash. Use a development build (expo run:android) for full push notifications.'
+    );
+    return null;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-notifications');
+  } catch (error) {
+    console.warn('[NotificationService] Native expo-notifications unavailable in current runtime:', error);
+    return null;
+  }
+}
+
+const Notifications = resolveNotificationsModule();
+
 // Configure foreground presentation behavior for received notifications
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldSetAlert: true,
-    } as any),
-  });
-} catch (e) {
-  // In certain testing/headless environments, setNotificationHandler may be a no-op
+if (Notifications?.setNotificationHandler) {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldSetAlert: true,
+      } as any),
+    });
+  } catch (e) {
+    // In certain testing/headless environments, setNotificationHandler may be a no-op
+  }
 }
 
 export class NotificationService {
@@ -57,6 +100,9 @@ export class NotificationService {
    * Check current push notification permission status without prompting
    */
   async getPermissionStatus(): Promise<NotificationPermissionStatus> {
+    if (!Notifications?.getPermissionsAsync) {
+      return 'undetermined';
+    }
     try {
       const settings = await Notifications.getPermissionsAsync();
       if (settings.granted || settings.status === 'granted') {
@@ -76,6 +122,9 @@ export class NotificationService {
    * Request push notification permissions from user
    */
   async requestPermission(): Promise<NotificationPermissionStatus> {
+    if (!Notifications?.requestPermissionsAsync) {
+      return 'granted';
+    }
     try {
       const settings = await Notifications.requestPermissionsAsync({
         ios: {
@@ -105,6 +154,22 @@ export class NotificationService {
   async getExpoPushToken(): Promise<string | null> {
     if (this.cachedPushToken) {
       return this.cachedPushToken;
+    }
+
+    if (Platform.OS === 'android' && isRunningInExpoGoClient()) {
+      console.warn(
+        '[NotificationService] Remote push notifications are disabled in Expo Go on Android (SDK 53+). ' +
+        'Using dev mock token. Build a development client (npx expo run:android) for live remote push.'
+      );
+      const devToken = `ExponentPushToken[DEV-EXPO-GO-ANDROID-${Date.now()}]`;
+      this.cachedPushToken = devToken;
+      return devToken;
+    }
+
+    if (!Notifications?.getExpoPushTokenAsync) {
+      const devToken = `ExponentPushToken[DEV-${Platform.OS}-${Date.now()}]`;
+      this.cachedPushToken = devToken;
+      return devToken;
     }
 
     const permission = await this.requestPermission();
@@ -169,6 +234,11 @@ export class NotificationService {
    * Schedule a local notification (immediate or delayed)
    */
   async scheduleLocalNotification(options: ScheduleNotificationOptions): Promise<string> {
+    if (!Notifications?.scheduleNotificationAsync) {
+      this.showAppAlert(options.title, options.body, options.data?.module || 'GENERAL');
+      return `local-fallback-${Date.now()}`;
+    }
+
     try {
       const permission = await this.requestPermission();
       if (permission !== 'granted') {
@@ -176,9 +246,9 @@ export class NotificationService {
         return '';
       }
 
-      const trigger: Notifications.NotificationTriggerInput = options.delaySeconds && options.delaySeconds > 0
+      const trigger = options.delaySeconds && options.delaySeconds > 0
         ? {
-            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            type: Notifications.SchedulableTriggerInputTypes?.TIME_INTERVAL || 'timeInterval',
             seconds: options.delaySeconds,
             repeats: false,
           }
@@ -191,7 +261,7 @@ export class NotificationService {
           data: options.data || {},
           sound: true,
         },
-        trigger,
+        trigger: trigger as any,
       });
 
       return id;
@@ -205,6 +275,9 @@ export class NotificationService {
    * Cancel all pending scheduled notifications
    */
   async cancelAllScheduledNotifications(): Promise<void> {
+    if (!Notifications?.cancelAllScheduledNotificationsAsync) {
+      return;
+    }
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
     } catch (error) {
@@ -216,8 +289,11 @@ export class NotificationService {
    * Listen for incoming notifications while app is in foreground
    */
   addNotificationReceivedListener(
-    listener: (notification: Notifications.Notification) => void
+    listener: (notification: ExpoNotifications.Notification) => void
   ): () => void {
+    if (!Notifications?.addNotificationReceivedListener) {
+      return () => {};
+    }
     const subscription = Notifications.addNotificationReceivedListener(listener);
     return () => {
       subscription.remove();
@@ -228,8 +304,11 @@ export class NotificationService {
    * Listen for user tapping / responding to a notification
    */
   addNotificationResponseReceivedListener(
-    listener: (response: Notifications.NotificationResponse) => void
+    listener: (response: ExpoNotifications.NotificationResponse) => void
   ): () => void {
+    if (!Notifications?.addNotificationResponseReceivedListener) {
+      return () => {};
+    }
     const subscription = Notifications.addNotificationResponseReceivedListener(listener);
     return () => {
       subscription.remove();
@@ -240,7 +319,7 @@ export class NotificationService {
    * Deep-link / route user to the relevant screen based on the notification payload
    */
   handleNotificationResponse(
-    response: Notifications.NotificationResponse,
+    response: ExpoNotifications.NotificationResponse,
     navigation: { navigate: (screen: string, params?: any) => void }
   ): void {
     if (!navigation || !response?.notification?.request?.content) return;

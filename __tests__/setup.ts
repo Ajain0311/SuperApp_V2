@@ -49,12 +49,25 @@ jest.mock('react-native', () => ({
 }));
 
 jest.mock('expo-constants', () => ({
-  expoConfig: {
-    extra: {
-      eas: {
-        projectId: 'test-eas-project-id',
+  __esModule: true,
+  default: {
+    expoConfig: {
+      extra: {
+        eas: {
+          projectId: 'test-eas-project-id',
+        },
       },
     },
+    appOwnership: 'standalone',
+    executionEnvironment: 'standalone',
+  },
+  ExecutionEnvironment: {
+    Bare: 'bare',
+    Standalone: 'standalone',
+    StoreClient: 'storeClient',
+  },
+  AppOwnership: {
+    Expo: 'expo',
   },
 }));
 
