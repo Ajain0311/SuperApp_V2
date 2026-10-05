@@ -76,15 +76,33 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Execute Deployment on VM via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          port: ${{ secrets.VM_PORT || 22 }}
-          script: |
-            set -e
-            echo "Connected to VM. Navigating to /opt/SuperApp_V2..."
-            cd /opt/SuperApp_V2
-            sudo chmod +x scripts/manage.sh
-            sudo ./scripts/manage.sh "${{ steps.vars.outputs.action }}" "${{ steps.vars.outputs.tag }}"
+        env:
+          SSH_HOST: ${{ secrets.VM_HOST }}
+          SSH_USER: ${{ secrets.VM_USER }}
+          SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          ACTION: ${{ steps.vars.outputs.action }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          set -e
+          if [ -z "$SSH_HOST" ]; then
+            echo "::error::Secret VM_HOST is not set in GitHub repository secrets!"
+            exit 1
+          fi
+          if [ -z "$SSH_USER" ]; then
+            echo "::error::Secret VM_USER is not set in GitHub repository secrets!"
+            exit 1
+          fi
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::Secret VM_SSH_KEY is not set in GitHub repository secrets!"
+            exit 1
+          fi
+
+          echo "Configuring SSH client..."
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          echo "Connecting to $SSH_USER@$SSH_HOST to trigger $ACTION ($TAG)..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+            "sudo chmod +x /opt/SuperApp_V2/scripts/manage.sh && sudo /opt/SuperApp_V2/scripts/manage.sh '$ACTION' '$TAG'"
+
