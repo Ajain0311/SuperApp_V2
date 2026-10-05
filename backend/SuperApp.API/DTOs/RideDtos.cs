@@ -39,6 +39,8 @@ public class RideEstimateRequest
 
     [JsonPropertyName("destinationLng")]
     public decimal DestinationLng { set => DropoffLongitude = value; }
+
+    public List<string> OptionCodes { get; set; } = new();
 }
 
 public class RideEstimateResponse
@@ -47,6 +49,16 @@ public class RideEstimateResponse
     public int EstimatedMinutes { get; set; }
     public string TrafficCondition { get; set; } = "Moderate Traffic";
     public List<VehicleEstimateDto> VehicleOptions { get; set; } = new();
+    public List<RideOptionDto> AvailableOptions { get; set; } = new();
+}
+
+public class RideOptionDto
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal AdditionalAmount { get; set; }
+    public bool Enabled { get; set; }
 }
 
 public class VehicleEstimateDto
@@ -58,6 +70,14 @@ public class VehicleEstimateDto
     public decimal EstimatedFare { get; set; }
     public int EtaMinutes { get; set; }
     public string IconName { get; set; } = string.Empty;
+    public decimal BaseFare { get; set; }
+    public decimal DistanceFare { get; set; }
+    public decimal TimeFare { get; set; }
+    public decimal BookingFee { get; set; }
+    public decimal PlatformFee { get; set; }
+    public decimal OptionsTotal { get; set; }
+    public decimal Tax { get; set; }
+    public string FareLabel { get; set; } = "Estimated fare";
 }
 
 public class BookRideRequest
@@ -75,6 +95,7 @@ public class BookRideRequest
     public decimal DropoffLongitude { get; set; } = 77.1000m;
 
     public string PaymentMethod { get; set; } = "CASH";
+    public List<string> OptionCodes { get; set; } = new();
 }
 
 public class RideDto

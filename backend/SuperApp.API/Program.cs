@@ -364,6 +364,61 @@ CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents (owner_user_id);
         {
             Console.WriteLine($"[Schema Check] documents: {ex.Message}");
         }
+
+        try
+        {
+            const string fareSql = @"
+ALTER TABLE rides ADD COLUMN IF NOT EXISTS fare_breakdown VARCHAR(1000) NULL;
+CREATE TABLE IF NOT EXISTS ride_fare_rules (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    vehicle_type VARCHAR(20) NOT NULL,
+    city VARCHAR(40) NOT NULL DEFAULT 'DEFAULT',
+    minimum_fare DECIMAL(10,2) NOT NULL,
+    base_fare DECIMAL(10,2) NOT NULL,
+    included_distance_km DECIMAL(6,2) NOT NULL,
+    per_km_rate DECIMAL(8,2) NOT NULL,
+    per_minute_rate DECIMAL(8,2) NOT NULL,
+    booking_fee DECIMAL(8,2) NOT NULL,
+    platform_fee DECIMAL(8,2) NOT NULL,
+    night_surcharge_percent DECIMAL(6,2) NOT NULL DEFAULT 0,
+    peak_multiplier DECIMAL(6,2) NOT NULL DEFAULT 1,
+    tax_percentage DECIMAL(6,2) NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE TABLE IF NOT EXISTS ride_fare_options (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code VARCHAR(40) NOT NULL,
+    name VARCHAR(80) NOT NULL,
+    description VARCHAR(200) NULL,
+    additional_amount DECIMAL(8,2) NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    vehicle_types VARCHAR(80) NOT NULL DEFAULT 'ALL'
+);
+INSERT INTO ride_fare_rules (vehicle_type, city, minimum_fare, base_fare, included_distance_km, per_km_rate, per_minute_rate, booking_fee, platform_fee, night_surcharge_percent)
+SELECT 'BIKE', 'DEFAULT', 35, 25, 1.5, 8, 1, 5, 4, 10
+WHERE NOT EXISTS (SELECT 1 FROM ride_fare_rules WHERE vehicle_type = 'BIKE');
+INSERT INTO ride_fare_rules (vehicle_type, city, minimum_fare, base_fare, included_distance_km, per_km_rate, per_minute_rate, booking_fee, platform_fee, night_surcharge_percent)
+SELECT 'AUTO', 'DEFAULT', 50, 35, 1.5, 12, 1.5, 8, 5, 10
+WHERE NOT EXISTS (SELECT 1 FROM ride_fare_rules WHERE vehicle_type = 'AUTO');
+INSERT INTO ride_fare_rules (vehicle_type, city, minimum_fare, base_fare, included_distance_km, per_km_rate, per_minute_rate, booking_fee, platform_fee, night_surcharge_percent)
+SELECT 'CAB', 'DEFAULT', 90, 55, 2, 16, 2, 15, 8, 10
+WHERE NOT EXISTS (SELECT 1 FROM ride_fare_rules WHERE vehicle_type = 'CAB');
+INSERT INTO ride_fare_options (code, name, description, additional_amount)
+SELECT 'PRIORITY', 'Priority pickup', 'Shown first to nearby captains', 10
+WHERE NOT EXISTS (SELECT 1 FROM ride_fare_options WHERE code = 'PRIORITY');
+INSERT INTO ride_fare_options (code, name, description, additional_amount)
+SELECT 'CONVENIENCE', 'Extra convenience', 'Preferred pickup handling', 20
+WHERE NOT EXISTS (SELECT 1 FROM ride_fare_options WHERE code = 'CONVENIENCE');
+INSERT INTO ride_fare_options (code, name, description, additional_amount)
+SELECT 'WAITING', 'Extra waiting', 'A few extra minutes at pickup', 30
+WHERE NOT EXISTS (SELECT 1 FROM ride_fare_options WHERE code = 'WAITING');
+";
+            db.Database.ExecuteSqlRaw(fareSql);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Schema Check] ride fares: {ex.Message}");
+        }
     }
 }
 

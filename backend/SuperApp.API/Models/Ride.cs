@@ -52,6 +52,9 @@ public class Ride
     
     [Column(TypeName = "decimal(10,2)")]
     public decimal EstimatedFare { get; set; }
+
+    [MaxLength(1000)]
+    public string? FareBreakdown { get; set; }
     
     [Column(TypeName = "decimal(10,2)")]
     public decimal? ActualFare { get; set; }

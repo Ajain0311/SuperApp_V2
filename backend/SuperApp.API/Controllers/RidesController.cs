@@ -41,6 +41,60 @@ public class RidesController : ControllerBase
         return null;
     }
 
+    private async Task<(List<RideFareRule> rules, List<RideFareOption> options)> LoadFareConfigAsync()
+    {
+        var rules = await _db.RideFareRules.AsNoTracking().Where(r => r.IsActive).ToListAsync();
+        var options = await _db.RideFareOptions.AsNoTracking().ToListAsync();
+        if (rules.Count == 0) rules = RideFareEngine.DefaultRules();
+        if (options.Count == 0) options = RideFareEngine.DefaultOptions();
+        return (rules, options);
+    }
+
+    private async Task<(List<VehicleEstimateDto> vehicles, List<RideOptionDto> addons)> QuoteVehiclesAsync(
+        decimal distanceKm, int minutes, List<string>? optionCodes)
+    {
+        var (rules, catalog) = await LoadFareConfigAsync();
+        var now = DateTime.UtcNow;
+        VehicleEstimateDto Map(string type, string title, string tag, string subtitle, int eta, string icon)
+        {
+            var rule = rules.First(r => r.VehicleType == type);
+            var quote = RideFareEngine.Quote(rule, catalog, optionCodes, distanceKm, minutes, now);
+            return new VehicleEstimateDto
+            {
+                VehicleType = type,
+                Title = title,
+                Tag = tag,
+                Subtitle = subtitle,
+                EstimatedFare = quote.Total,
+                EtaMinutes = eta,
+                IconName = icon,
+                BaseFare = quote.BaseFare,
+                DistanceFare = quote.DistanceFare,
+                TimeFare = quote.TimeFare,
+                BookingFee = quote.BookingFee,
+                PlatformFee = quote.PlatformFee,
+                OptionsTotal = quote.OptionsTotal,
+                Tax = quote.Tax
+            };
+        }
+
+        var vehicles = new List<VehicleEstimateDto>
+        {
+            Map(VehicleTypes.Bike, "Bike Taxi", "FASTEST", "Beat traffic • Helmet provided", 3, "two_wheeler"),
+            Map(VehicleTypes.Auto, "Auto Rickshaw", "VALUE", "Direct drop • Max 3 seats", 5, "electric_rickshaw"),
+            Map(VehicleTypes.Cab, "Economy Cab", "COMFORT", "AC Hatchback • Luggage space", 7, "directions_car")
+        };
+        var addons = catalog.Where(o => o.IsEnabled).Select(o => new RideOptionDto
+        {
+            Code = o.Code,
+            Name = o.Name,
+            Description = o.Description,
+            AdditionalAmount = o.AdditionalAmount,
+            Enabled = o.IsEnabled
+        }).ToList();
+        return (vehicles, addons);
+    }
+
     /// <summary>
     /// Get list of past and active rides for the current authenticated user
     /// </summary>
@@ -92,51 +146,27 @@ public class RidesController : ControllerBase
 
         var distanceKm = (decimal)route.DistanceKm;
         var estimatedMinutes = route.EstimatedDurationMinutes;
+        if (distanceKm < 0.15m)
+            return BadRequest(ApiResponse<RideEstimateResponse>.Fail("Pickup and destination are the same place"));
 
-        var bikeFare = Math.Round(20.0m + (distanceKm * 1.5m), 0);
-        var autoFare = Math.Round(25.0m + (distanceKm * 2.5m), 0);
-        var cabFare = Math.Round(45.0m + (distanceKm * 5.0m), 0);
-
-        var options = new List<VehicleEstimateDto>
+        List<VehicleEstimateDto> options;
+        List<RideOptionDto> addons;
+        try
         {
-            new()
-            {
-                VehicleType = VehicleTypes.Bike,
-                Title = "Bike Taxi",
-                Tag = "FASTEST",
-                Subtitle = "Beat traffic • Helmet provided • 3m away",
-                EstimatedFare = bikeFare,
-                EtaMinutes = 3,
-                IconName = "two_wheeler"
-            },
-            new()
-            {
-                VehicleType = VehicleTypes.Auto,
-                Title = "Auto Rickshaw",
-                Tag = "VALUE",
-                Subtitle = "Direct drop • Max 3 seats • 5m away",
-                EstimatedFare = autoFare,
-                EtaMinutes = 5,
-                IconName = "electric_rickshaw"
-            },
-            new()
-            {
-                VehicleType = VehicleTypes.Cab,
-                Title = "Economy Cab",
-                Tag = "COMFORT",
-                Subtitle = "AC Hatchback • Luggage space • 7m away",
-                EstimatedFare = cabFare,
-                EtaMinutes = 7,
-                IconName = "directions_car"
-            }
-        };
+            (options, addons) = await QuoteVehiclesAsync(distanceKm, estimatedMinutes, request.OptionCodes);
+        }
+        catch (InvalidFareException ex)
+        {
+            return BadRequest(ApiResponse<RideEstimateResponse>.Fail(ex.Message));
+        }
 
         return Ok(ApiResponse<RideEstimateResponse>.Ok(new RideEstimateResponse
         {
             DistanceKm = distanceKm,
             EstimatedMinutes = estimatedMinutes,
             TrafficCondition = "Moderate Traffic",
-            VehicleOptions = options
+            VehicleOptions = options,
+            AvailableOptions = addons
         }));
     }
 
@@ -162,19 +192,27 @@ public class RidesController : ControllerBase
             request.DropoffLatitude,
             request.DropoffLongitude);
         var distanceKm = (decimal)route.DistanceKm;
+        if (distanceKm < 0.15m)
+            return BadRequest(ApiResponse<RideDto>.Fail("Pickup and destination are the same place"));
 
-        decimal estimatedFare = request.VehicleType.ToUpper() switch
+        var vehicleType = (request.VehicleType ?? VehicleTypes.Bike).Trim().ToUpperInvariant();
+        FareComputation quote;
+        try
         {
-            VehicleTypes.Auto => Math.Round(25.0m + (distanceKm * 2.5m), 0),
-            VehicleTypes.Cab => Math.Round(45.0m + (distanceKm * 5.0m), 0),
-            _ => Math.Round(20.0m + (distanceKm * 1.5m), 0)
-        };
+            var (rules, catalog) = await LoadFareConfigAsync();
+            var rule = rules.FirstOrDefault(r => r.VehicleType == vehicleType) ?? rules.First(r => r.VehicleType == VehicleTypes.Bike);
+            quote = RideFareEngine.Quote(rule, catalog, request.OptionCodes, distanceKm, route.EstimatedDurationMinutes, DateTime.UtcNow);
+        }
+        catch (InvalidFareException ex)
+        {
+            return BadRequest(ApiResponse<RideDto>.Fail(ex.Message));
+        }
 
         var ride = new Ride
         {
             RideNumber = rideNumber,
             UserId = userId.Value,
-            VehicleType = request.VehicleType.ToUpper(),
+            VehicleType = vehicleType,
             PickupAddress = request.PickupAddress,
             PickupLatitude = request.PickupLatitude,
             PickupLongitude = request.PickupLongitude,
@@ -182,7 +220,8 @@ public class RidesController : ControllerBase
             DropoffLatitude = request.DropoffLatitude,
             DropoffLongitude = request.DropoffLongitude,
             DistanceKm = distanceKm,
-            EstimatedFare = estimatedFare,
+            EstimatedFare = quote.Total,
+            FareBreakdown = $"base={quote.BaseFare};distance={quote.DistanceFare};time={quote.TimeFare};booking={quote.BookingFee};platform={quote.PlatformFee};options={quote.OptionsTotal};tax={quote.Tax};total={quote.Total}",
             Status = RideStatus.Requested, // Set to REQUESTED for driver dispatch
             OtpCode = rideOtp,
             PaymentMethod = request.PaymentMethod,

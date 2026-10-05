@@ -8,6 +8,8 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +22,7 @@ import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { locationService } from '../../services/locationService';
 import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
-import { SelectedMapPlace } from '../../services/mapboxService';
+import { mapboxService, SelectedMapPlace } from '../../services/mapboxService';
 
 interface VehicleOption {
   type: string;
@@ -30,6 +32,12 @@ interface VehicleOption {
   subtitle: string;
   fare: number;
   icon: keyof typeof MaterialIcons.glyphMap;
+  baseFare?: number;
+  distanceFare?: number;
+  timeFare?: number;
+  bookingFee?: number;
+  platformFee?: number;
+  optionsTotal?: number;
 }
 
 const VEHICLES: VehicleOption[] = [
@@ -76,7 +84,12 @@ export const RideBookingScreen: React.FC = () => {
   const [dropoffAddress, setDropoffAddress] = useState('Tap map to set destination');
   const [activePoint, setActivePoint] = useState<'pickup' | 'dropoff'>('dropoff');
   const [isLocating, setIsLocating] = useState(false);
-  const [gpsStatus, setGpsStatus] = useState<'ONLINE' | 'LOCATING' | 'DENIED'>('LOCATING');
+  const [gpsStatus, setGpsStatus] = useState<'ONLINE' | 'LOCATING' | 'DENIED' | 'UNAVAILABLE'>('LOCATING');
+  const [optionCatalog, setOptionCatalog] = useState<{ code: string; name: string; additionalAmount: number }[]>([]);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [placeHits, setPlaceHits] = useState<{ label: string; latitude: number; longitude: number }[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const fetchEstimate = (
     pickup: { latitude: number; longitude: number } | null,
@@ -97,6 +110,7 @@ export const RideBookingScreen: React.FC = () => {
         dropoffLatitude: dropoff.latitude,
         dropoffLongitude: dropoff.longitude,
         dropoffAddress: dropoffLabel,
+        optionCodes: selectedOptions,
       })
       .then((res) => {
         const data = res.data?.data || res.data;
@@ -119,6 +133,12 @@ export const RideBookingScreen: React.FC = () => {
                   : colors.secondary,
               subtitle: v.subtitle || 'Nearby driver',
               fare: Number(v.estimatedFare) || 50,
+              baseFare: Number(v.baseFare) || 0,
+              distanceFare: Number(v.distanceFare) || 0,
+              timeFare: Number(v.timeFare) || 0,
+              bookingFee: Number(v.bookingFee) || 0,
+              platformFee: Number(v.platformFee) || 0,
+              optionsTotal: Number(v.optionsTotal) || 0,
               icon:
                 v.vehicleType === 'CAB'
                   ? 'directions-car'
@@ -128,9 +148,18 @@ export const RideBookingScreen: React.FC = () => {
             }));
             setVehicles(mapped);
           }
+          if (Array.isArray(data.availableOptions)) {
+            setOptionCatalog(data.availableOptions.map((o: any) => ({
+              code: o.code,
+              name: o.name,
+              additionalAmount: Number(o.additionalAmount) || 0,
+            })));
+          }
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setRouteMetrics('Fare could not be calculated. Check the connection and try again.');
+      });
   };
 
   const handleLocateMe = async () => {
@@ -148,8 +177,11 @@ export const RideBookingScreen: React.FC = () => {
       }
     } catch (error) {
       console.warn('[RideBookingScreen] Could not retrieve GPS:', error);
-      setGpsStatus('DENIED');
-      setPickupAddress('Tap map to set pickup point');
+      const message = String((error as any)?.message || '');
+      setGpsStatus(message.toLowerCase().includes('denied') ? 'DENIED' : 'UNAVAILABLE');
+      setPickupAddress(message.toLowerCase().includes('denied')
+        ? 'Location permission denied. Search or move the map pin.'
+        : 'GPS unavailable. Search an address or move the map pin.');
     } finally {
       setIsLocating(false);
     }
@@ -176,6 +208,41 @@ export const RideBookingScreen: React.FC = () => {
     handleLocateMe();
   }, []);
 
+  useEffect(() => {
+    if (pickupCoords && dropoffCoords) {
+      fetchEstimate(pickupCoords, pickupAddress, dropoffCoords, dropoffAddress);
+    }
+  }, [selectedOptions.join('|')]);
+
+  const searchPlaces = async (text: string) => {
+    setPlaceQuery(text);
+    setSearchError(null);
+    if (text.trim().length < 2) {
+      setPlaceHits([]);
+      return;
+    }
+    try {
+      const hits = await mapboxService.searchPlaces(text.trim(), pickupCoords || undefined);
+      setPlaceHits(hits.map((hit) => ({ label: hit.address || hit.name, latitude: hit.latitude, longitude: hit.longitude })));
+    } catch {
+      setSearchError('Address search failed. Move the map pin or try again.');
+      setPlaceHits([]);
+    }
+  };
+
+  const chooseSearchHit = async (hit: { label: string; latitude: number; longitude: number }) => {
+    let address = hit.label;
+    try {
+      const reversed = await mapboxService.reverseGeocode(hit.latitude, hit.longitude);
+      if (reversed.address) address = reversed.address;
+    } catch {
+      setSearchError('Could not read that address. The pin is still placed.');
+    }
+    handlePlaceSelect({ latitude: hit.latitude, longitude: hit.longitude, address });
+    setPlaceHits([]);
+    setPlaceQuery('');
+  };
+
   const selectedVehicle = vehicles[selectedIndex] || vehicles[0];
 
   const handleBookRide = async () => {
@@ -199,6 +266,7 @@ export const RideBookingScreen: React.FC = () => {
         dropoffLatitude: dropoffCoords.latitude,
         dropoffLongitude: dropoffCoords.longitude,
         paymentMethod: 'CASH',
+        optionCodes: selectedOptions,
       });
       const data = res.data?.data || res.data;
       const rideId = data?.rideNumber || `RD-${data?.id || 'NEW'}`;
@@ -263,6 +331,20 @@ export const RideBookingScreen: React.FC = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <TextInput
+          value={placeQuery}
+          onChangeText={searchPlaces}
+          placeholder={activePoint === 'pickup' ? 'Search pickup location' : 'Search destination'}
+          placeholderTextColor={colors.textSecondary}
+          style={{ backgroundColor: colors.surface, color: colors.textPrimary, borderRadius: 12, padding: 12, marginBottom: 8 }}
+        />
+        {searchError ? <Text style={{ color: colors.error, marginBottom: 8 }}>{searchError}</Text> : null}
+        {placeHits.map((hit) => (
+          <TouchableOpacity key={`${hit.latitude}-${hit.longitude}`} onPress={() => chooseSearchHit(hit)} style={{ paddingVertical: 8 }}>
+            <Text style={{ color: colors.textPrimary }}>{hit.label}</Text>
+          </TouchableOpacity>
+        ))}
+
         {/* Pickup / Dropoff Card */}
         <View style={styles.card}>
           <TouchableOpacity
@@ -398,6 +480,33 @@ export const RideBookingScreen: React.FC = () => {
         </View>
 
         {/* Available Vehicles Section Header */}
+        {optionCatalog.length > 0 && (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.sectionHeader}>RIDE OPTIONS</Text>
+            {optionCatalog.map((option) => {
+              const on = selectedOptions.includes(option.code);
+              return (
+                <TouchableOpacity
+                  key={option.code}
+                  onPress={() => setSelectedOptions((current) => on ? current.filter((code) => code !== option.code) : [...current, option.code])}
+                  style={{ paddingVertical: 8 }}
+                >
+                  <Text style={{ color: colors.textPrimary }}>
+                    {on ? '✓' : '○'} {option.name}  +₹{option.additionalAmount}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+        {selectedVehicle.baseFare ? (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{ color: colors.textSecondary }}>Estimated fare · {routeMetrics || 'set pickup and destination'}</Text>
+            <Text style={{ color: colors.textPrimary }}>Base ₹{selectedVehicle.baseFare} · Distance ₹{selectedVehicle.distanceFare} · Time ₹{selectedVehicle.timeFare}</Text>
+            <Text style={{ color: colors.textPrimary }}>Booking ₹{selectedVehicle.bookingFee} · Platform ₹{selectedVehicle.platformFee} · Options ₹{selectedVehicle.optionsTotal || 0}</Text>
+          </View>
+        ) : null}
+
         <Text style={styles.sectionHeader}>AVAILABLE VEHICLES</Text>
 
         {/* Vehicles List */}
@@ -481,7 +590,7 @@ export const RideBookingScreen: React.FC = () => {
                 ? 'Booking Ride...'
                 : !dropoffCoords
                 ? 'Select Destination on Map'
-                : `Book ${selectedVehicle.name} • ₹${selectedVehicle.fare.toFixed(0)}`}
+                : `Confirm ride · estimated ₹${selectedVehicle.fare.toFixed(0)}`}
             </Text>
           </TouchableOpacity>
         </View>

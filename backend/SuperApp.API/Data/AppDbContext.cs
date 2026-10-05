@@ -37,6 +37,8 @@ public class AppDbContext : DbContext
     public DbSet<UserDeviceToken> UserDeviceTokens => Set<UserDeviceToken>();
     public DbSet<MarketplaceOffer> MarketplaceOffers => Set<MarketplaceOffer>();
     public DbSet<AppDocument> Documents => Set<AppDocument>();
+    public DbSet<RideFareRule> RideFareRules => Set<RideFareRule>();
+    public DbSet<RideFareOption> RideFareOptions => Set<RideFareOption>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
