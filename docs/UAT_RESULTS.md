@@ -1,6 +1,21 @@
 # SuperApp V2 — End-to-End UAT & Live Browser Test Results
 
-> Historical snapshot. The scripts named below were removed. Current live runs use `e2e/agents/runner.js`.
+> Historical snapshot from 20 September 2026. The scripts named below were removed. Do not treat the counts in this file as the 5 October 2026 state. Current commands and the 5 October matrix are in `ROADMAP.md` and `docs/TESTING.md`.
+
+## Latest verification note (5 October 2026)
+
+This note does not replace the September results below.
+
+| Check | Result |
+|---|---|
+| Backend xUnit | 89/89 PASS |
+| Jest | 74/74 PASS |
+| `tsc --noEmit` | PASS |
+| `expo-doctor` | 21/21 PASS |
+| Agent self-tests | 14/14 PASS |
+| Live `test:agents:full` and volume | BLOCKED (no non-production API run) |
+| Real Android food and ride | NOT TESTED |
+| Easebuzz production charge | BLOCKED (live keys unset) |
 
 **Document Version**: 2.3.0  
 **Test Date**: September 20, 2026  

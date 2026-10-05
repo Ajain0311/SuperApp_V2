@@ -1,6 +1,6 @@
 # SuperApp V2 — Automated Testing & Quality Assurance Guide
 
-This guide describes the comprehensive testing pyramid and automated verification suites for **SuperApp V2** (`HTTP-EXPNAT-NET`), covering backend unit tests, frontend component tests, static analysis, automated UAT runners, and live Playwright browser tests.
+This guide describes the current verification commands for **SuperApp V2**. September 2026 browser and UAT script results stay in `docs/UAT_RESULTS.md`. Those runners were removed.
 
 ---
 
@@ -8,15 +8,13 @@ This guide describes the comprehensive testing pyramid and automated verificatio
 
 ```text
                ┌─────────────────────────────┐
-               │    Live Browser E2E Tests   │  Playwright (15 flows, 36 APIs)
-               │    (node e2e/master_live)   │
+               │  Live multi-agent API       │  npm run test:agents (opt-in)
                ├─────────────────────────────┤
-               │    Automated Full UAT       │  Node.js Axios (48 scenarios)
-               │ (node scripts/execute_full) │
+               │  Agent framework self-tests │  npm run test:agents:self
                ├─────────────────────────────┤
-               │  Static Analysis & Doctor   │  TypeScript tsc & expo-doctor
+               │  Static analysis & doctor   │  tsc and expo-doctor
                ├─────────────────────────────┤
-               │  Backend & Frontend Unit    │  xUnit (67 tests) + Jest (73 tests)
+               │  Backend and frontend unit  │  xUnit 89 and Jest 74 (5 Oct 2026)
                └─────────────────────────────┘
 ```
 
@@ -26,10 +24,10 @@ This guide describes the comprehensive testing pyramid and automated verificatio
 
 | Test Suite | Command | Coverage | Passing Threshold |
 |---|---|---|:---:|
-| **Backend Unit Tests** | `dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj --no-build` | 67 tests in xUnit | 100% (67/67) |
-| **Frontend Unit Tests** | `npm test -- --watchAll=false` | 73 tests in Jest | 100% (73/73) |
+| **Backend Unit Tests** | `dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj` | 89 tests on 5 Oct 2026 | 89/89 |
+| **Frontend Unit Tests** | `npm test -- --watchAll=false` | 74 tests on 5 Oct 2026 | 74/74 |
 | **TypeScript Static Check** | `npx tsc --noEmit` | Entire TypeScript codebase | 0 errors |
-| **Expo Ecosystem Doctor** | `npx expo-doctor` | 18 ecosystem health checks | 18/18 PASS |
+| **Expo Ecosystem Doctor** | `npx expo-doctor` | 21 checks on 5 Oct 2026 | 21/21 |
 | **Agent framework self-tests** | `npm run test:agents:self` | Runner, reports, concurrency | Required in CI |
 | **Live multi-agent API** | `npm run test:agents` | Opt-in against a running API | Not run in CI |
 
@@ -40,12 +38,8 @@ This guide describes the comprehensive testing pyramid and automated verificatio
 Located in `backend/SuperApp.API.Tests/`. Built with **xUnit 2.9**, **FluentAssertions 8.0**, and **Moq 4.20**.
 
 ### Test Suite Structure
-- `AuthControllerTests.cs`: OTP generation, master OTP validation, invalid token rejection, admin credential login.
-- `FoodOrdersControllerTests.cs`: Order creation, item subtotal calculation, GST tax computation, state transitions.
-- `RidesControllerTests.cs`: Haversine distance calculations, multi-tier fare matrices, OTP security generation.
-- `DriverControllerTests.cs`: Online/offline duty toggle, ride claiming, OTP handshake verification.
-- `ReviewsControllerTests.cs`: Rolling average score calculation for restaurants and drivers.
-- `VendorControllerTests.cs`: Kitchen state machine validation (`PENDING` -> `ACCEPTED` -> `PREPARING` -> `READY`).
+
+Current files include `AuthTests`, `FoodDeliveryAndPaymentTests`, `FoodPricingTests`, `RideFareEngineTests`, `DriverTests`, `OrderIsolationTests`, `AdminOnboardingTests`, `DocumentImageTests`, `MultiRoleTests`, `AddressTests`, and `MapAndMarketplaceTests`. Older controller-named files listed in previous revisions are gone.
 
 ### Running Backend Tests
 ```bash

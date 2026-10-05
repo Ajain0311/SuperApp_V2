@@ -9,11 +9,11 @@
 >
 > **AFTER COMPLETING ANY CODE CHANGE:**
 > 1. **Run full verification pipeline**:
->    - `dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj --no-build` (Must pass 67/67)
->    - `npx tsc --noEmit` (Must have 0 errors)
->    - `npm test -- --watchAll=false` (Must pass 73/73)
->    - `npx expo-doctor` (Must pass 18/18)
->    - `npm run test:agents:self` (framework self-tests; live runs are opt-in)
+>    - `dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj`
+>    - `npx tsc --noEmit`
+>    - `npm test -- --watchAll=false`
+>    - `npx expo-doctor`
+>    - `npm run test:agents:self` (live `test:agents` is opt-in and must not target production)
 > 2. **Update this file (`ROADMAP.md`)**:
 >    - Mark finished tasks with `[x]` and record verification details.
 >    - Add any new tasks or blockers discovered during work.
@@ -25,14 +25,15 @@
 
 | Verification Dimension | Health / Coverage | Status |
 |---|---|:---:|
-| **Live multi-agent API** | `e2e/agents/runner.js` (opt-in; not the old UAT scripts) | Replaced |
-| **Agent self-tests** | 14 / 14 passing (`npm run test:agents:self`) | ✅ 100% PASS |
-| **Backend Tests (.NET 10)** | 75 / 75 Tests passing (`SuperApp.API.Tests`) | ✅ 100% PASS |
-| **Frontend Tests (Jest)** | 74 / 74 Tests passing (`__tests__/`) | ✅ 100% PASS |
-| **TypeScript Typecheck** | Strict mode, 0 errors (`npx tsc --noEmit`) | ✅ CLEAN |
-| **Expo Ecosystem Doctor** | 21 / 21 checks passed (`npx expo-doctor`) | ✅ HEALTHY |
-| **Database Schema** | 28 PostgreSQL tables with 34 indexes & check constraints | ✅ VERIFIED |
-| **Documentation** | 11 Canonical files in `docs/` (zero clutter, no obsolete archives) | ✅ CONSOLIDATED |
+| **Live multi-agent API** | Not run on 5 Oct 2026. Needs a non-production API, `ADMIN_PASSWORD`, and Mock OTP. Do not point `test:agents` at production. | BLOCKED |
+| **Agent self-tests** | 14 / 14 (`npm run test:agents:self`, 5 Oct 2026) | PASS |
+| **Backend Tests (.NET 10)** | 89 / 89 (`dotnet test`, 5 Oct 2026) | PASS |
+| **Frontend Tests (Jest)** | 74 / 74 (`npm test -- --watchAll=false`, 5 Oct 2026) | PASS |
+| **TypeScript Typecheck** | 0 errors (`npx tsc --noEmit`, 5 Oct 2026) | PASS |
+| **Expo Ecosystem Doctor** | 21 / 21 (`npx expo-doctor`, 5 Oct 2026) | PASS |
+| **Food captain race** | In-memory `ConcurrentCaptains_OnlyOneAccepts` inside the 89. Postgres row-lock race not re-run. | PARTIAL |
+| **Easebuzz live charge** | Sandbox path is in code. Production merchant keys are not set. | BLOCKED |
+| **Real Android device** | Notch, GPS ride, and 3-role food delivery were not executed. | NOT TESTED |
 
 ---
 
@@ -83,10 +84,6 @@ The tasks below represent the logical sequence of work remaining for production 
 - [ ] **OPS-01: Docker Production Deployment**
   - Test multi-stage Docker build using `backend/SuperApp.API/Dockerfile`.
   - Deploy ASP.NET Core 10 container behind Nginx reverse proxy with TLS 1.3 and WebSocket sticky upgrade for SignalR.
-### Phase 3: Infrastructure, Monitoring & Operations
-- [ ] **OPS-01: Docker Production Deployment**
-  - Test multi-stage Docker build using `backend/SuperApp.API/Dockerfile`.
-  - Deploy ASP.NET Core 10 container behind Nginx reverse proxy with TLS 1.3 and WebSocket sticky upgrade for SignalR.
 - [x] **OPS-02: Health Check Endpoint for Deployment Validation**
   - Wired `/health` probe endpoint in `backend/SuperApp.API/Program.cs` verifying database connectivity.
 - [x] **OPS-03: Automated CI/CD GitHub Actions Workflow & Zero-Downtime Rollback**
@@ -101,38 +98,39 @@ The tasks below represent the logical sequence of work remaining for production 
 - [x] **Zero-Touch CI/CD Auto-Deployment**: Push to `main` automatically runs verification tests and deploys versioned builds (`releases/release_SHA`) to Azure VM with automatic healthcheck rollback and disk pruning (`.github/workflows/deploy.yml`, `scripts/manage.sh`, `guide.md`).
 - [x] **Consolidated Canonical Documentation**: 11 clean docs in `docs/`, deleted all 23 obsolete reports and archived folders.
 - [x] **Secret Sanitization**: Removed all hardcoded database credentials from scripts; dynamically read from `.env`.
-- [x] **Master Playwright Live Browser Suite**: 15 form flows tested live against running Chromium with 100% HTTP 200 responses (`e2e/master_live_test.js`).
-- [x] **Automated Full UAT Test Suite**: 48 end-to-end scenarios covering all 12 controllers and multi-role operations (`scripts/execute_full_uat.js`).
+- [x] **Historical browser and UAT runners**: September 2026 results stay in `docs/UAT_RESULTS.md`. Those scripts were removed. Current live checks are `e2e/agents/`.
+- [x] **Food captain dispatch**: READY order can be accepted by one online captain, then pickup and deliver. Second accept is a conflict in the in-memory test.
+- [x] **Online food payment verification**: Order is PAID only after server verification. Duplicate success sync stays one order. Live Easebuzz charge is still blocked.
+- [x] **Admin role onboarding, coupons, banners**: Existing user can be assigned restaurant, captain, or seller. Coupons are validated on the server. Banners can upload a PostgreSQL image.
+- [x] **Ride fare engine**: Server quotes bike, auto, and cab fares and stores the booked fare. Real-device GPS booking was not run.
+- [x] **PostgreSQL image storage**: User images are compressed JPEGs in `documents`. Real gallery upload was not run.
 - [x] **Multi-Role Single-Identity Architecture**: Seamless switching between Customer, Driver, Restaurant Owner, Marketplace Seller, and Admin.
 - [x] **Manual Address Entry**: Removed external india-pincode API / postal lookup; Saved Addresses form uses manual City, State, and PIN fields.
 - [x] **Address Pin Persistence**: Set-default / update paths preserve `latitude`/`longitude` (column-scoped default update + frontend omits null coords).
 - [x] **Web Bottom Tabs**: Fixed full-page refresh back to Home caused by custom `tabBarButton` `href` handling on React Native Web.
 - [x] **Real-Time SignalR WebSockets**: Order tracking (`OrderStatusHub`), Ride telemetry (`RideTrackingHub`), and Chat (`ChatHub`).
 - [x] **Database Schema Alignment**: 28 PostgreSQL tables in Supabase with foreign key indexes and status check constraints.
-- [x] **Multi-User Real End-to-End Verification**: 58/58 scenarios passing across 9 distinct accounts (2 customers, 2 restaurant owners, 2 drivers, 2 marketplace sellers, 1 admin). Strict zero data leakage confirmed across all matrices (`scripts/multi_user_e2e_test.js`).
+- [x] **Multi-user isolation (historical)**: The old `scripts/multi_user_e2e_test.js` run is not the current suite. Isolation expectations now live in `e2e/agents/` and the xUnit order tests. A fresh live volume run was not executed on 5 Oct 2026.
 
 ---
 
 ## 📝 Last Session Handoff
 
 - **Date**: October 5, 2026
-- **Status**: Admin can search an existing user and assign restaurant, captain, or bazaar seller on that same account. Coupons are validated on the server with usage limits. Banner create sends the admin token and can store a compressed image in PostgreSQL. Home banners are filtered by the API. Android screens use safe-area insets. Real-device notch testing was not run. Easebuzz live keys are still unset.
-- **See**: `docs/ADMIN_OPERATIONS.md`
-- **Previous**: Production auto-deployment and auto-rollback pipeline on `20.106.173.109` / `https://makemytree.duckdns.org`.
-- **Fixes Applied This Session**:
-  1. **Discovered Server Disconnect**: Inspected Azure VM (`20.106.173.109`) via SSH key (`rockbuilder_key.pem`); identified that `superapp.service` was running out of `/opt/SuperApp_V2/dist`, which was never rebuilt or republished on manual `git pull`.
-  2. **Automated Versioned Deployment & Auto-Rollback Engine**: Created [`scripts/manage.sh`](scripts/manage.sh) maintaining versioned releases in `/opt/SuperApp_V2/releases/release_SHA`, updating `dist` symlink, testing `/health` probe, auto-rolling back on failure, and pruning older releases.
-  3. **Backend Health Check Probe**: Added native `/health` endpoint to [`backend/SuperApp.API/Program.cs`](backend/SuperApp.API/Program.cs) testing EF Core `CanConnectAsync()`.
-  4. **GitHub Actions CI/CD Pipeline**: Added [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) for automated deployments on push to `main` with `workflow_dispatch` manual rollback/deploy triggers.
-  5. **Schema & Configuration Fixes**: Cleaned up [`app.json`](app.json) schema, validated git line endings via [`.gitattributes`](.gitattributes), and authored comprehensive operator manual in [`guide.md`](guide.md).
-- **Verification Matrix**:
-  - `dotnet test backend/SuperApp.API.Tests`: 75 / 75 PASS (100%)
-  - `npm test -- --watchAll=false`: 74 / 74 PASS (100%)
-  - `npx tsc --noEmit`: Clean (0 errors)
-  - `npx expo-doctor`: 21 / 21 PASS (100%)
-  - `npm run test:agents:self`: 14 / 14 PASS (100%)
-- **Next Steps / Production Rollout Checklist**:
-  1. Add GitHub repository secrets: `VM_HOST` (`20.106.173.109`), `VM_USER` (`azureuser`), and `VM_SSH_KEY` (from `rockbuilder_key.pem`).
-  2. Commit and push changes to `main` to trigger the first fully automated CI/CD deployment run.
-  3. Continue with Phase 1 gateways: Easebuzz live merchant keys and Punjab DLT SMS gateway activation.
+- **Status**: Verification pass only. No new feature. HEAD `f7cfee4`. Automated suites passed. Live multi-agent, real Android, and live Easebuzz were not run.
+- **See**: `docs/ADMIN_OPERATIONS.md`, `docs/CAPTAIN_FOOD_DELIVERY_IMPLEMENTATION.md`, `docs/EASEBUZZ_ONLINE_PAYMENT_IMPLEMENTATION.md`, `docs/RIDE_FARE.md`, `docs/IMAGE_STORAGE.md`
+- **Verification Matrix (this session)**:
+  - Backend: 89 / 89 PASS. Includes one-winner food accept, offline/stranger reject, other-captain pickup forbid, payment sync idempotency, coupon cap and usage limit, ride fare rules.
+  - TypeScript: 0 errors PASS
+  - Jest: 74 / 74 PASS (mocked flows, not a live API)
+  - Expo doctor: 21 / 21 PASS
+  - Agent self-tests: 14 / 14 PASS
+  - `npm run test:agents:full` and volume: BLOCKED. Local API was down, `ADMIN_PASSWORD` was unset, and the configured database is the shared Supabase instance. Do not run that suite against production.
+  - CI/CD: workflow and `scripts/manage.sh` still build, test, SSH deploy, probe `/health`, roll back, and prune. This session did not execute a deploy. GitHub secrets were not inspected.
+  - Real device: NOT TESTED
+- **Bugs fixed this session**: none. No failing test.
+- **Next priorities**:
+  1. Run `npm run test:agents:full` against a non-production API with Mock OTP and `ADMIN_PASSWORD`.
+  2. One real Android food order with customer, restaurant, and captain, plus one GPS ride.
+  3. Set Easebuzz production keys only when a sandbox charge has already been verified. Do not mark live payment PASS before that.
 
