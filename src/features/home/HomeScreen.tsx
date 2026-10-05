@@ -3,10 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
@@ -16,6 +17,13 @@ import { AppSearchBar } from '../../components/common/AppSearchBar';
 import { useAuthStore } from '../../store/authStore';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { AppEnvironment } from '../../config/environment';
+
+function resolveBannerImage(url: string) {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const origin = AppEnvironment.hubBaseUrl.replace(/\/$/, '');
+  return `${origin}${url.startsWith('/') ? url : `/${url}`}`;
+}
 
 interface HomeScreenProps {
   navigation: any;
@@ -59,6 +67,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       })
       .catch(() => {});
   }, []);
+
+  const openBanner = (banner: any) => {
+    const moduleName = String(banner.module || banner.targetType || '').toUpperCase();
+    if (moduleName === 'FOOD' || banner.targetType === 'RESTAURANT') {
+      if (banner.targetId) {
+        navigation.navigate('RestaurantDetail', { restaurantId: Number(banner.targetId) });
+        return;
+      }
+      navigation.navigate('Food');
+      return;
+    }
+    if (moduleName === 'RIDE') {
+      navigation.navigate('Rides');
+      return;
+    }
+    if (moduleName === 'MARKETPLACE' || moduleName === 'BAZAAR') {
+      navigation.navigate('Bazaar');
+    }
+  };
 
   const getInitials = () => {
     if (!user?.fullName) return 'JD';
@@ -175,6 +202,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           </View>
+        ) : null}
+
+        {banners.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dealsScroll}>
+            {banners.map((banner) => (
+              <TouchableOpacity
+                key={String(banner.id)}
+                style={styles.promoCard}
+                activeOpacity={0.85}
+                onPress={() => openBanner(banner)}
+              >
+                {banner.imageUrl ? (
+                  <Image source={{ uri: resolveBannerImage(banner.imageUrl) }} style={styles.promoImage} />
+                ) : null}
+                <Text style={styles.dealTitle}>{banner.title}</Text>
+                {banner.subtitle ? <Text style={styles.dealSubtitle}>{banner.subtitle}</Text> : null}
+                {banner.ctaText ? <Text style={styles.promoCta}>{banner.ctaText}</Text> : null}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         ) : null}
 
         {/* Section Title */}
@@ -630,6 +677,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 8,
     marginBottom: 2,
+  },
+  promoCard: {
+    width: 260,
+    marginRight: 12,
+    backgroundColor: AppColors.surface,
+    borderRadius: AppRadius.md,
+    padding: 12,
+  },
+  promoImage: {
+    width: '100%',
+    height: 110,
+    borderRadius: AppRadius.sm,
+    marginBottom: 8,
+  },
+  promoCta: {
+    marginTop: 6,
+    color: AppColors.primary,
+    fontWeight: '700',
   },
   dealSubtitle: {
     color: AppColors.textSecondary,

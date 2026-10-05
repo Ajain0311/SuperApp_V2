@@ -116,7 +116,8 @@ The tasks below represent the logical sequence of work remaining for production 
 ## 📝 Last Session Handoff
 
 - **Date**: October 5, 2026
-- **Status**: Captain food delivery dispatch and verified online food payment are wired on main. Easebuzz live merchant keys are still unset, so live charges stay blocked. Sandbox/mock verification is the working payment path.
+- **Status**: Admin can search an existing user and assign restaurant, captain, or bazaar seller on that same account. Coupons are validated on the server with usage limits. Banner create sends the admin token and can store a compressed image in PostgreSQL. Home banners are filtered by the API. Android screens use safe-area insets. Real-device notch testing was not run. Easebuzz live keys are still unset.
+- **See**: `docs/ADMIN_OPERATIONS.md`
 - **Previous**: Production auto-deployment and auto-rollback pipeline on `20.106.173.109` / `https://makemytree.duckdns.org`.
 - **Fixes Applied This Session**:
   1. **Discovered Server Disconnect**: Inspected Azure VM (`20.106.173.109`) via SSH key (`rockbuilder_key.pem`); identified that `superapp.service` was running out of `/opt/SuperApp_V2/dist`, which was never rebuilt or republished on manual `git pull`.

@@ -582,8 +582,10 @@
             background-color: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
-            width: 480px;
+            width: min(520px, calc(100vw - 24px));
             max-width: 90vw;
+            max-height: calc(100vh - 24px);
+            overflow: auto;
             padding: 24px;
             display: flex;
             flex-direction: column;
@@ -797,7 +799,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">User Accounts & RBAC</h2>
-                        <input type="text" class="search-box" placeholder="Search by name or phone..." id="userSearchInput" oninput="filterUsers()">
+                        <input type="text" class="search-box" placeholder="Search mobile, name, or user id" id="userSearchInput" oninput="fetchUsers()">
                     </div>
                     <div class="table-container">
                         <table>
@@ -1168,8 +1170,20 @@
                 <input type="text" class="form-input" id="bannerTitle" placeholder="e.g. 50% Flat Discount on Biryani">
             </div>
             <div class="form-group">
-                <label>Image URL *</label>
-                <input type="text" class="form-input" id="bannerImageUrl" placeholder="https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600">
+                <label>Subtitle</label>
+                <input type="text" class="form-input" id="bannerSubtitle" placeholder="Minimum order details">
+            </div>
+            <div class="form-group">
+                <label>Image file</label>
+                <input type="file" class="form-input" id="bannerImageFile" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label>Or image URL</label>
+                <input type="text" class="form-input" id="bannerImageUrl" placeholder="https://...">
+            </div>
+            <div class="form-group">
+                <label>Button text</label>
+                <input type="text" class="form-input" id="bannerCta" placeholder="Order Now">
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div class="form-group">
@@ -1247,7 +1261,55 @@
         </div>
     </div>
 
+    <div class="modal-backdrop" id="assignModal">
+        <div class="modal" style="max-width: 520px;">
+            <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 8px;">Assign roles</h3>
+            <p id="assignUserLabel" style="margin-bottom: 12px;"></p>
+            <input type="hidden" id="assignUserId">
+            <label><input type="checkbox" id="roleCustomer" checked disabled> Customer (kept)</label><br>
+            <label><input type="checkbox" id="roleOwner"> Restaurant owner</label><br>
+            <label><input type="checkbox" id="roleDriver"> Captain</label><br>
+            <label><input type="checkbox" id="roleSeller"> Bazaar seller</label><br>
+            <label><input type="checkbox" id="roleAdmin"> Admin</label>
+            <div class="form-group" style="margin-top: 12px;">
+                <label>Restaurant name</label>
+                <input class="form-input" id="assignRestName">
+            </div>
+            <div class="form-group"><label>Address</label><input class="form-input" id="assignAddress"></div>
+            <div class="form-group"><label>City</label><input class="form-input" id="assignCity"></div>
+            <div class="form-group"><label>Contact</label><input class="form-input" id="assignPhone"></div>
+            <div class="form-group"><label>Cuisine</label><input class="form-input" id="assignCuisine"></div>
+            <div class="form-group"><label>License</label><input class="form-input" id="assignLicense"></div>
+            <div class="form-group">
+                <label>Vehicle</label>
+                <select class="form-input" id="assignVehicle">
+                    <option value="BIKE">BIKE</option>
+                    <option value="AUTO">AUTO</option>
+                    <option value="CAB">CAB</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeAssignUser()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitAssignUser()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        (function attachAdminAuth() {
+            const queryToken = new URLSearchParams(location.search).get('token');
+            if (queryToken) localStorage.setItem('adminToken', queryToken);
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                const next = init ? { ...init } : {};
+                const headers = new Headers(next.headers || {});
+                const token = localStorage.getItem('adminToken');
+                if (token && !headers.has('Authorization')) headers.set('Authorization', 'Bearer ' + token);
+                next.headers = headers;
+                return originalFetch(input, next);
+            };
+        })();
+
         function triggerAdminLogout() {
             if (confirm('Are you sure you want to log out of Admin Command Portal?')) {
                 if (window.parent && window.parent !== window) {
@@ -1331,7 +1393,8 @@
         // --- TAB 2: USERS MANAGEMENT ---
         async function fetchUsers() {
             try {
-                const res = await fetch('/api/admin/users');
+                const term = document.getElementById('userSearchInput')?.value?.trim() || '';
+                const res = await fetch('/api/admin/users?search=' + encodeURIComponent(term));
                 if (res.ok) {
                     const json = await res.json();
                     const users = json.data?.items || json.data || [];
@@ -1345,6 +1408,7 @@
                                 <td>${(u.roles || ['CUSTOMER']).map(r => `<span class="badge ${r === 'ADMIN' ? 'badge-verified' : 'badge-role'}">${r}</span>`).join(' ')}</td>
                                 <td><span class="badge ${u.isActive ? 'badge-active' : ''}">${u.isActive ? 'ACTIVE' : 'SUSPENDED'}</span></td>
                                 <td>
+                                    <button class="btn btn-secondary btn-sm" onclick="openAssignUser(${u.id}, '${(u.fullName || '').replace(/'/g, '')}', '${u.mobileNumber}')">Manage</button>
                                     <button class="btn btn-secondary btn-sm" onclick="toggleUserStatus(${u.id}, ${u.isActive})">
                                         ${u.isActive ? 'Suspend' : 'Activate'}
                                     </button>
@@ -1711,29 +1775,75 @@
             document.getElementById('bannerModal').classList.remove('open');
         }
 
+        function openAssignUser(id, name, mobile) {
+            document.getElementById('assignUserId').value = id;
+            document.getElementById('assignUserLabel').innerText = name + ' · ' + mobile;
+            document.getElementById('assignModal').classList.add('open');
+        }
+
+        function closeAssignUser() {
+            document.getElementById('assignModal').classList.remove('open');
+        }
+
+        async function submitAssignUser() {
+            const userId = Number(document.getElementById('assignUserId').value);
+            const roles = ['CUSTOMER'];
+            if (document.getElementById('roleOwner').checked) roles.push('RESTAURANT_OWNER');
+            if (document.getElementById('roleDriver').checked) roles.push('DRIVER');
+            if (document.getElementById('roleSeller').checked) roles.push('MARKETPLACE_SELLER');
+            if (document.getElementById('roleAdmin').checked) roles.push('ADMIN');
+            try {
+                const res = await fetch('/api/admin/users/assign', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId,
+                        roles,
+                        restaurantName: document.getElementById('assignRestName').value.trim(),
+                        address: document.getElementById('assignAddress').value.trim(),
+                        city: document.getElementById('assignCity').value.trim(),
+                        phone: document.getElementById('assignPhone').value.trim(),
+                        cuisine: document.getElementById('assignCuisine').value.trim(),
+                        licenseNumber: document.getElementById('assignLicense').value.trim(),
+                        vehicleType: document.getElementById('assignVehicle').value
+                    })
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) {
+                    alert(json.message || 'Could not assign roles');
+                    return;
+                }
+                closeAssignUser();
+                alert(json.message || 'Saved');
+                fetchUsers();
+            } catch (err) {
+                alert('Error assigning roles: ' + err.message);
+            }
+        }
+
         async function submitNewBanner() {
             const title = document.getElementById('bannerTitle').value.trim();
             const img = document.getElementById('bannerImageUrl').value.trim();
+            const file = document.getElementById('bannerImageFile').files[0];
             const mod = document.getElementById('bannerModule').value;
             const targetType = document.getElementById('bannerTargetType').value;
 
-            if (!title || !img) {
-                alert('Please enter banner title and image URL');
+            if (!title || (!img && !file)) {
+                alert('Enter a title and choose an image file or URL');
                 return;
             }
 
             try {
-                const res = await fetch('/api/admin/banners', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'ADD',
-                        title: title,
-                        imageUrl: img,
-                        module: mod,
-                        targetType: targetType
-                    })
-                });
+                const body = new FormData();
+                body.append('action', 'ADD');
+                body.append('title', title);
+                body.append('subtitle', document.getElementById('bannerSubtitle').value.trim());
+                body.append('ctaText', document.getElementById('bannerCta').value.trim());
+                body.append('module', mod);
+                body.append('targetType', targetType);
+                if (img) body.append('imageUrl', img);
+                if (file) body.append('image', file);
+                const res = await fetch('/api/admin/banners', { method: 'POST', body });
 
                 const json = await res.json();
                 if (json.success) {

@@ -23,12 +23,16 @@ public class BannersController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<Banner>>>> GetActiveBanners([FromQuery] string? module)
     {
-        var query = _db.Banners.Where(b => b.IsActive);
+        var now = DateTime.UtcNow;
+        var query = _db.Banners.Where(b => b.IsActive
+            && (b.StartDate == null || b.StartDate <= now)
+            && (b.EndDate == null || b.EndDate >= now));
 
         if (!string.IsNullOrWhiteSpace(module))
         {
             var mod = module.Trim().ToUpperInvariant();
-            query = query.Where(b => b.Module == mod || b.Module == "ALL");
+            if (mod == "BAZAAR") mod = "MARKETPLACE";
+            query = query.Where(b => b.Module == mod || b.Module == "HOME" || b.Module == "ALL");
         }
 
         var banners = await query.OrderBy(b => b.SortOrder).ToListAsync();

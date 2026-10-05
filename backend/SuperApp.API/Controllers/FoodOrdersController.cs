@@ -126,24 +126,12 @@ public class FoodOrdersController : ControllerBase
         long? couponId = null;
         if (!string.IsNullOrWhiteSpace(request.CouponCode))
         {
-            var coupon = await _db.Coupons.FirstOrDefaultAsync(c =>
-                c.Code.ToUpper() == request.CouponCode.Trim().ToUpper() && c.IsActive);
-
-            if (coupon != null && DateTime.UtcNow >= coupon.StartDate && DateTime.UtcNow <= coupon.ExpiryDate && subTotal >= coupon.MinOrderAmount)
-            {
-                couponId = coupon.Id;
-                if (coupon.DiscountType.Equals("PERCENTAGE", StringComparison.OrdinalIgnoreCase))
-                {
-                    couponDiscount = Math.Round(subTotal * (coupon.DiscountValue / 100m), 2);
-                    if (coupon.MaxDiscount.HasValue && couponDiscount > coupon.MaxDiscount.Value)
-                        couponDiscount = coupon.MaxDiscount.Value;
-                }
-                else
-                {
-                    couponDiscount = coupon.DiscountValue;
-                }
-                couponDiscount = Math.Min(couponDiscount, subTotal);
-            }
+            var quote = await CouponEngine.ConsumeAsync(
+                _db, request.CouponCode, "FOOD", subTotal, restaurant.Id, userId.Value, null);
+            if (!quote.IsValid || quote.Coupon == null)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail(quote.Message));
+            couponId = quote.Coupon.Id;
+            couponDiscount = quote.DiscountAmount;
         }
 
         var deliveryFee = restaurant.DeliveryFee;

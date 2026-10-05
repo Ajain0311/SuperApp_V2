@@ -150,6 +150,7 @@ public class ValidateCouponRequest
     public string Code { get; set; } = string.Empty;
     public decimal OrderAmount { get; set; }
     public string Module { get; set; } = "FOOD";
+    public long? RestaurantId { get; set; }
 }
 
 public class CouponValidationResult

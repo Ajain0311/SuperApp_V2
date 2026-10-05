@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Platform,
   Linking,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { AppColors } from '../../theme/colors';
@@ -20,7 +20,8 @@ interface AdminPortalScreenProps {
 }
 
 export const AdminPortalScreen: React.FC<AdminPortalScreenProps> = ({ navigation }) => {
-  const adminUrl = `${AppEnvironment.hubBaseUrl}/admin/`;
+  const token = useAuthStore((state) => state.token);
+  const adminUrl = `${AppEnvironment.hubBaseUrl}/admin/${token ? `?token=${encodeURIComponent(token)}` : ''}`;
   const logout = useAuthStore((state) => state.logout);
 
   const performLogout = async () => {

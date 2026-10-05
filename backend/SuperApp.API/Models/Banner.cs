@@ -9,9 +9,15 @@ public class Banner
     
     [Required, MaxLength(200)]
     public string Title { get; set; } = string.Empty;
+
+    [MaxLength(300)]
+    public string? Subtitle { get; set; }
     
     [MaxLength(500)]
     public string? ImageUrl { get; set; }
+
+    [MaxLength(80)]
+    public string? CtaText { get; set; }
     
     [MaxLength(50)]
     public string? TargetType { get; set; }  // RESTAURANT, FOOD_ITEM, LISTING, URL

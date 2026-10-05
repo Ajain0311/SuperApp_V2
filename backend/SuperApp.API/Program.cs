@@ -419,6 +419,22 @@ WHERE NOT EXISTS (SELECT 1 FROM ride_fare_options WHERE code = 'WAITING');
         {
             Console.WriteLine($"[Schema Check] ride fares: {ex.Message}");
         }
+
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"
+ALTER TABLE coupons ADD COLUMN IF NOT EXISTS title VARCHAR(120) NULL;
+ALTER TABLE coupons ADD COLUMN IF NOT EXISTS applicable_restaurant_id BIGINT NULL;
+ALTER TABLE banners ADD COLUMN IF NOT EXISTS subtitle VARCHAR(300) NULL;
+ALTER TABLE banners ADD COLUMN IF NOT EXISTS cta_text VARCHAR(80) NULL;
+ALTER TABLE coupons DROP CONSTRAINT IF EXISTS chk_coupons_module;
+ALTER TABLE coupons ADD CONSTRAINT chk_coupons_module CHECK (applicable_module IN ('FOOD', 'RIDE', 'MARKETPLACE', 'ALL'));
+");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Schema Check] coupons/banners: {ex.Message}");
+        }
     }
 }
 

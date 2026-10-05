@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -10,7 +11,6 @@ import {
   TextInput,
   Alert,
   RefreshControl,
-  SafeAreaView,
   Platform,
   Modal,
 } from 'react-native';

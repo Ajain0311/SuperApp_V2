@@ -10,6 +10,9 @@ public class Coupon
     
     [Required, MaxLength(20)]
     public string Code { get; set; } = string.Empty;
+
+    [MaxLength(120)]
+    public string? Title { get; set; }
     
     [MaxLength(255)]
     public string? Description { get; set; }
@@ -37,7 +40,9 @@ public class Coupon
     public int CurrentUsageCount { get; set; } = 0;
     
     [MaxLength(20)]
-    public string ApplicableModule { get; set; } = "FOOD";  // FOOD, RIDE, ALL
+    public string ApplicableModule { get; set; } = "FOOD";  // FOOD, RIDE, MARKETPLACE, ALL
+
+    public long? ApplicableRestaurantId { get; set; }
     
     public bool IsActive { get; set; } = true;
     

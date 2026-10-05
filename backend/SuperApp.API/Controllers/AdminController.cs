@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
+using SuperApp.API.Services;
 
 namespace SuperApp.API.Controllers;
 
@@ -113,7 +114,15 @@ public class AdminController : ControllerBase
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
-            query = query.Where(u => u.MobileNumber.Contains(term) || (u.FullName != null && u.FullName.Contains(term)) || (u.Email != null && u.Email.Contains(term)));
+            var digits = new string(term.Where(char.IsDigit).ToArray());
+            long parsedId = 0;
+            var hasId = long.TryParse(digits, out parsedId) && digits.Length > 0 && digits.Length < 12;
+            query = query.Where(u =>
+                u.MobileNumber.Contains(term)
+                || (digits.Length >= 4 && u.MobileNumber.Contains(digits))
+                || (u.FullName != null && u.FullName.Contains(term))
+                || (u.Email != null && u.Email.Contains(term))
+                || (hasId && u.Id == parsedId));
         }
 
         if (!string.IsNullOrWhiteSpace(role))
@@ -138,19 +147,6 @@ public class AdminController : ControllerBase
                 Roles = u.UserRoles.Select(ur => ur.Role.Name).ToList()
             })
             .ToListAsync();
-
-        if (!users.Any() && string.IsNullOrWhiteSpace(search))
-        {
-            // Return sample seed users
-            users = new List<AdminUserDto>
-            {
-                new AdminUserDto { Id = 1, MobileNumber = "9999999999", FullName = "Super Admin", Email = "admin@superapp.com", IsActive = true, CreatedAt = DateTime.UtcNow.AddMonths(-6), Roles = new List<string> { "ADMIN", "CUSTOMER" } },
-                new AdminUserDto { Id = 2, MobileNumber = "9876543210", FullName = "Meghana Foods Manager", Email = "owner@meghana.com", IsActive = true, CreatedAt = DateTime.UtcNow.AddMonths(-3), Roles = new List<string> { "RESTAURANT_OWNER", "CUSTOMER" } },
-                new AdminUserDto { Id = 3, MobileNumber = "9845112233", FullName = "Rajesh Kumar (Driver)", Email = "driver.rajesh@superapp.com", IsActive = true, CreatedAt = DateTime.UtcNow.AddMonths(-2), Roles = new List<string> { "DRIVER" } },
-                new AdminUserDto { Id = 4, MobileNumber = "9988776655", FullName = "Aditya Sharma (Bazaar Seller)", Email = "aditya@bazaar.com", IsActive = true, CreatedAt = DateTime.UtcNow.AddMonths(-1), Roles = new List<string> { "MARKETPLACE_SELLER", "CUSTOMER" } }
-            };
-            totalCount = users.Count;
-        }
 
         return Ok(ApiResponse<PagedResult<AdminUserDto>>.Ok(new PagedResult<AdminUserDto>
         {
@@ -192,6 +188,8 @@ public class AdminController : ControllerBase
                 var existingRole = user.UserRoles.FirstOrDefault(ur => ur.RoleId == role.Id);
                 if (string.Equals(request.Action, "REMOVE_ROLE", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (role.Name == RoleNames.Customer)
+                        return BadRequest(ApiResponse.Fail("Customer access stays on the account"));
                     if (existingRole != null)
                     {
                         _db.UserRoles.Remove(existingRole);
@@ -227,8 +225,7 @@ public class AdminController : ControllerBase
                                 IsOnline = false,
                                 Rating = 5.0m,
                                 TotalRides = 0,
-                                CurrentLatitude = 28.6139m,
-                                CurrentLongitude = 77.2090m,
+                                IsVerified = true,
                                 CreatedAt = DateTime.UtcNow
                             };
                             _db.Drivers.Add(driver);
@@ -286,6 +283,120 @@ public class AdminController : ControllerBase
             default:
                 return BadRequest(ApiResponse.Fail($"Unknown user action '{request.Action}'. Use STATUS or ROLE."));
         }
+    }
+
+    /// <summary>
+    /// Link an existing customer to restaurant, captain, or bazaar seller profiles.
+    /// Customer access is always kept.
+    /// </summary>
+    [HttpPost("users/assign")]
+    public async Task<ActionResult<ApiResponse<AdminUserDto>>> AssignProfiles([FromBody] AdminAssignProfileRequest request)
+    {
+        var user = await _db.Users.Include(u => u.UserRoles).FirstOrDefaultAsync(u => u.Id == request.UserId);
+        if (user == null)
+            return NotFound(ApiResponse<AdminUserDto>.Fail("User not found"));
+
+        var wanted = request.Roles
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => r.Trim().ToUpperInvariant())
+            .Distinct()
+            .ToList();
+        if (!wanted.Contains(RoleNames.Customer))
+            wanted.Add(RoleNames.Customer);
+
+        var known = await _db.Roles.ToListAsync();
+        foreach (var name in wanted)
+        {
+            var role = known.FirstOrDefault(r => r.Name == name);
+            if (role == null)
+                return BadRequest(ApiResponse<AdminUserDto>.Fail($"Role '{name}' does not exist"));
+            if (user.UserRoles.All(ur => ur.RoleId != role.Id))
+                _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id, CreatedAt = DateTime.UtcNow });
+        }
+
+        if (wanted.Contains(RoleNames.RestaurantOwner))
+        {
+            if (string.IsNullOrWhiteSpace(request.RestaurantName))
+                return BadRequest(ApiResponse<AdminUserDto>.Fail("Restaurant name is required"));
+            var restaurant = new Restaurant
+            {
+                Name = request.RestaurantName.Trim(),
+                Description = request.Cuisine?.Trim(),
+                Phone = string.IsNullOrWhiteSpace(request.Phone) ? user.MobileNumber : request.Phone.Trim(),
+                AddressLine = request.Address?.Trim(),
+                City = string.IsNullOrWhiteSpace(request.City) ? null : request.City.Trim(),
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.Restaurants.Add(restaurant);
+            await _db.SaveChangesAsync();
+            var link = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
+            if (link == null)
+            {
+                _db.RestaurantUsers.Add(new RestaurantUser
+                {
+                    UserId = user.Id,
+                    RestaurantId = restaurant.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                link.RestaurantId = restaurant.Id;
+                link.IsActive = true;
+            }
+        }
+
+        if (wanted.Contains(RoleNames.Driver))
+        {
+            var driver = await _db.Drivers.FirstOrDefaultAsync(d => d.UserId == user.Id);
+            if (driver == null)
+            {
+                driver = new Driver
+                {
+                    UserId = user.Id,
+                    LicenseNumber = request.LicenseNumber?.Trim(),
+                    IsVerified = true,
+                    IsOnline = false,
+                    Rating = 5.0m,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.Drivers.Add(driver);
+                await _db.SaveChangesAsync();
+                _db.Vehicles.Add(new Vehicle
+                {
+                    DriverId = driver.Id,
+                    Type = string.IsNullOrWhiteSpace(request.VehicleType) ? VehicleTypes.Bike : request.VehicleType.Trim().ToUpperInvariant(),
+                    RegistrationNumber = "PENDING",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                driver.IsActive = true;
+                driver.IsVerified = true;
+                if (!string.IsNullOrWhiteSpace(request.LicenseNumber))
+                    driver.LicenseNumber = request.LicenseNumber.Trim();
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        var roles = await _db.UserRoles.Where(ur => ur.UserId == user.Id).Include(ur => ur.Role).Select(ur => ur.Role.Name).ToListAsync();
+        return Ok(ApiResponse<AdminUserDto>.Ok(new AdminUserDto
+        {
+            Id = user.Id,
+            MobileNumber = user.MobileNumber,
+            FullName = user.FullName,
+            Email = user.Email,
+            IsActive = user.IsActive,
+            CreatedAt = user.CreatedAt,
+            Roles = roles
+        }, "Roles saved on the existing account"));
     }
 
     /// <summary>
@@ -469,31 +580,28 @@ public class AdminController : ControllerBase
                 var codeUpper = request.Code.Trim().ToUpperInvariant();
                 var existingCoupon = await _db.Coupons.FirstOrDefaultAsync(c => c.Code == codeUpper);
                 if (existingCoupon != null)
-                {
-                    existingCoupon.Description = request.Description?.Trim() ?? existingCoupon.Description;
-                    existingCoupon.DiscountType = request.DiscountType ?? existingCoupon.DiscountType;
-                    existingCoupon.DiscountValue = request.DiscountValue.Value;
-                    existingCoupon.MinOrderAmount = request.MinOrderAmount ?? existingCoupon.MinOrderAmount;
-                    existingCoupon.MaxDiscount = request.MaxDiscount ?? existingCoupon.MaxDiscount;
-                    existingCoupon.ApplicableModule = request.ApplicableModule ?? existingCoupon.ApplicableModule;
-                    existingCoupon.IsActive = true;
-                    existingCoupon.UpdatedAt = DateTime.UtcNow;
-                    await _db.SaveChangesAsync();
-                    return Ok(ApiResponse<Coupon>.Ok(existingCoupon, "Coupon updated successfully"));
-                }
+                    return Conflict(ApiResponse<Coupon>.Fail("A coupon with this code already exists"));
+
+                var module = CouponEngine.NormalizeModule(request.ApplicableModule);
+                if (module is not ("FOOD" or "RIDE" or "MARKETPLACE" or "ALL"))
+                    return BadRequest(ApiResponse<Coupon>.Fail("Applicable module must be FOOD, RIDE, MARKETPLACE, or ALL"));
 
                 var coupon = new Coupon
                 {
                     Code = codeUpper,
+                    Title = request.Title?.Trim(),
                     Description = request.Description?.Trim(),
                     DiscountType = request.DiscountType ?? "PERCENTAGE",
                     DiscountValue = request.DiscountValue.Value,
                     MinOrderAmount = request.MinOrderAmount ?? 0,
                     MaxDiscount = request.MaxDiscount,
-                    ApplicableModule = request.ApplicableModule ?? "FOOD",
-                    IsActive = true,
-                    StartDate = DateTime.UtcNow,
-                    ExpiryDate = DateTime.UtcNow.AddMonths(3),
+                    ApplicableModule = module,
+                    ApplicableRestaurantId = request.ApplicableRestaurantId,
+                    TotalUsageLimit = request.TotalUsageLimit,
+                    PerUserLimit = request.PerUserLimit is > 0 ? request.PerUserLimit.Value : 1,
+                    IsActive = request.IsActive ?? true,
+                    StartDate = request.StartDate ?? DateTime.UtcNow,
+                    ExpiryDate = request.ExpiryDate ?? DateTime.UtcNow.AddMonths(1),
                     CreatedAt = DateTime.UtcNow
                 };
                 _db.Coupons.Add(coupon);
@@ -537,27 +645,123 @@ public class AdminController : ControllerBase
     /// Banner Action Endpoint: ADD, EDIT, DELETE, STATUS
     /// </summary>
     [HttpPost("banners")]
-    public async Task<ActionResult<ApiResponse<Banner>>> ManageBanner([FromBody] AdminBannerActionRequest request)
+    [RequestSizeLimit(ImageByteProcessor.MaxUploadBytes)]
+    public async Task<ActionResult<ApiResponse<Banner>>> ManageBanner()
     {
+        AdminBannerActionRequest request;
+        IFormFile? image = null;
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            image = form.Files.GetFile("image") ?? form.Files.FirstOrDefault();
+            request = new AdminBannerActionRequest
+            {
+                Action = form["action"].FirstOrDefault() ?? "ADD",
+                Id = long.TryParse(form["id"], out var id) ? id : null,
+                Title = form["title"],
+                Subtitle = form["subtitle"],
+                ImageUrl = form["imageUrl"],
+                CtaText = form["ctaText"],
+                Module = form["module"],
+                TargetType = form["targetType"],
+                TargetId = form["targetId"],
+                SortOrder = int.TryParse(form["sortOrder"], out var sort) ? sort : null,
+                IsActive = bool.TryParse(form["isActive"], out var active) ? active : null
+            };
+            if (DateTime.TryParse(form["startDate"], out var start)) request.StartDate = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+            if (DateTime.TryParse(form["endDate"], out var end)) request.EndDate = DateTime.SpecifyKind(end, DateTimeKind.Utc);
+        }
+        else
+        {
+            request = await System.Text.Json.JsonSerializer.DeserializeAsync<AdminBannerActionRequest>(
+                Request.Body,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new AdminBannerActionRequest();
+        }
+
         switch (request.Action?.ToUpperInvariant())
         {
             case "ADD":
-                if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.ImageUrl))
-                    return BadRequest(ApiResponse<Banner>.Fail("Title and ImageUrl are required"));
+            case "EDIT":
+                if (string.IsNullOrWhiteSpace(request.Title) && request.Action?.ToUpperInvariant() == "ADD")
+                    return BadRequest(ApiResponse<Banner>.Fail("Title is required"));
 
-                var banner = new Banner
+                string? imageUrl = request.ImageUrl?.Trim();
+                if (image != null)
                 {
-                    Title = request.Title.Trim(),
-                    ImageUrl = request.ImageUrl.Trim(),
-                    Module = request.Module ?? "HOME",
-                    TargetType = request.TargetType,
-                    TargetId = request.TargetId,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.Banners.Add(banner);
+                    if (image.Length == 0)
+                        return BadRequest(ApiResponse<Banner>.Fail("Banner image was empty"));
+                    await using var stream = image.OpenReadStream();
+                    using var buffer = new MemoryStream();
+                    await stream.CopyToAsync(buffer);
+                    byte[] compressed;
+                    try
+                    {
+                        compressed = ImageByteProcessor.Compress(buffer.ToArray());
+                    }
+                    catch (InvalidImageException ex)
+                    {
+                        return BadRequest(ApiResponse<Banner>.Fail(ex.Message));
+                    }
+                    if (!long.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var owner) || owner <= 0)
+                        return Unauthorized(ApiResponse<Banner>.Fail("Admin sign-in is required to store a banner image"));
+                    var document = new AppDocument
+                    {
+                        DocumentNo = "DOC-" + Guid.NewGuid().ToString("N")[..16],
+                        DocumentName = string.IsNullOrWhiteSpace(image.FileName) ? "banner.jpg" : Path.GetFileName(image.FileName),
+                        BlobObject = compressed,
+                        OwnerUserId = owner,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _db.Documents.Add(document);
+                    imageUrl = $"/api/documents/{document.DocumentNo}/image";
+                }
+
+                var module = (request.Module ?? "HOME").Trim().ToUpperInvariant();
+                if (module == "BAZAAR") module = "MARKETPLACE";
+                if (module is not ("HOME" or "FOOD" or "RIDE" or "MARKETPLACE"))
+                    return BadRequest(ApiResponse<Banner>.Fail("Target module must be HOME, FOOD, RIDE, or MARKETPLACE"));
+
+                if (request.Action!.Equals("ADD", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (string.IsNullOrWhiteSpace(imageUrl))
+                        return BadRequest(ApiResponse<Banner>.Fail("A banner image file or image URL is required"));
+                    var banner = new Banner
+                    {
+                        Title = request.Title!.Trim(),
+                        Subtitle = request.Subtitle?.Trim(),
+                        ImageUrl = imageUrl,
+                        CtaText = request.CtaText?.Trim(),
+                        Module = module,
+                        TargetType = request.TargetType,
+                        TargetId = request.TargetId,
+                        SortOrder = request.SortOrder ?? 0,
+                        IsActive = request.IsActive ?? true,
+                        StartDate = request.StartDate,
+                        EndDate = request.EndDate,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    _db.Banners.Add(banner);
+                    await _db.SaveChangesAsync();
+                    return Ok(ApiResponse<Banner>.Ok(banner, "Banner added successfully"));
+                }
+
+                if (!request.Id.HasValue) return BadRequest(ApiResponse<Banner>.Fail("ID is required for EDIT"));
+                var existing = await _db.Banners.FindAsync(request.Id.Value);
+                if (existing == null) return NotFound(ApiResponse<Banner>.Fail("Banner not found"));
+                if (!string.IsNullOrWhiteSpace(request.Title)) existing.Title = request.Title.Trim();
+                if (request.Subtitle != null) existing.Subtitle = request.Subtitle.Trim();
+                if (!string.IsNullOrWhiteSpace(imageUrl)) existing.ImageUrl = imageUrl;
+                if (request.CtaText != null) existing.CtaText = request.CtaText.Trim();
+                existing.Module = module;
+                if (request.TargetType != null) existing.TargetType = request.TargetType;
+                if (request.TargetId != null) existing.TargetId = request.TargetId;
+                if (request.SortOrder.HasValue) existing.SortOrder = request.SortOrder.Value;
+                if (request.IsActive.HasValue) existing.IsActive = request.IsActive.Value;
+                existing.StartDate = request.StartDate ?? existing.StartDate;
+                existing.EndDate = request.EndDate ?? existing.EndDate;
+                existing.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
-                return Ok(ApiResponse<Banner>.Ok(banner, "Banner added successfully"));
+                return Ok(ApiResponse<Banner>.Ok(existing, "Banner updated"));
 
             case "STATUS":
                 if (!request.Id.HasValue || !request.IsActive.HasValue)

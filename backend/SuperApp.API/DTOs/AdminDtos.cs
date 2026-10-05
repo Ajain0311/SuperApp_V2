@@ -44,6 +44,21 @@ public class AdminUserActionRequest
     public long? RestaurantId { get; set; }
 }
 
+public class AdminAssignProfileRequest
+{
+    public long UserId { get; set; }
+    public List<string> Roles { get; set; } = new();
+    public string? RestaurantName { get; set; }
+    public string? Address { get; set; }
+    public string? City { get; set; }
+    public string? Phone { get; set; }
+    public string? Cuisine { get; set; }
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
+    public string? LicenseNumber { get; set; }
+    public string? VehicleType { get; set; }
+}
+
 public class AdminRestaurantActionRequest
 {
     public string Action { get; set; } = "ADD"; // ADD, EDIT, DELETE, STATUS, FEATURED
@@ -73,12 +88,18 @@ public class AdminCouponActionRequest
     public string Action { get; set; } = "ADD"; // ADD, EDIT, DELETE, STATUS
     public long? Id { get; set; }
     public string? Code { get; set; }
+    public string? Title { get; set; }
     public string? Description { get; set; }
     public string? DiscountType { get; set; } = "PERCENTAGE"; // PERCENTAGE, FLAT
     public decimal? DiscountValue { get; set; }
     public decimal? MinOrderAmount { get; set; }
     public decimal? MaxDiscount { get; set; }
-    public string? ApplicableModule { get; set; } = "FOOD"; // FOOD, RIDE, ALL
+    public DateTime? StartDate { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public int? TotalUsageLimit { get; set; }
+    public int? PerUserLimit { get; set; }
+    public string? ApplicableModule { get; set; } = "FOOD"; // FOOD, RIDE, MARKETPLACE, ALL
+    public long? ApplicableRestaurantId { get; set; }
     public bool? IsActive { get; set; }
 }
 
@@ -87,10 +108,15 @@ public class AdminBannerActionRequest
     public string Action { get; set; } = "ADD"; // ADD, EDIT, DELETE, STATUS
     public long? Id { get; set; }
     public string? Title { get; set; }
+    public string? Subtitle { get; set; }
     public string? ImageUrl { get; set; }
+    public string? CtaText { get; set; }
     public string? Module { get; set; } = "HOME"; // HOME, FOOD, RIDE, MARKETPLACE
     public string? TargetType { get; set; }
     public string? TargetId { get; set; }
+    public int? SortOrder { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
     public bool? IsActive { get; set; }
 }
 
