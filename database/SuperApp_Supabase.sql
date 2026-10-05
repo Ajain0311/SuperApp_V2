@@ -439,6 +439,20 @@ CREATE INDEX IF NOT EXISTS idx_marketplace_listings_category_status ON marketpla
 CREATE INDEX IF NOT EXISTS idx_marketplace_listings_user_id ON marketplace_listings (user_id);
 CREATE INDEX IF NOT EXISTS idx_marketplace_listings_created ON marketplace_listings (created_at DESC);
 
+-- 20b. User images (compressed JPEG in PostgreSQL, not object storage)
+CREATE TABLE IF NOT EXISTS documents (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    document_no VARCHAR(40) NOT NULL,
+    document_name VARCHAR(255) NOT NULL,
+    blob_object BYTEA NOT NULL,
+    owner_user_id BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    CONSTRAINT uq_documents_document_no UNIQUE (document_no),
+    CONSTRAINT fk_documents_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents (owner_user_id);
+
 -- 21. Listing Images
 CREATE TABLE IF NOT EXISTS listing_images (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

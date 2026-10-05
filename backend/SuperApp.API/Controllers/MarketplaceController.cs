@@ -424,6 +424,13 @@ public class MarketplaceController : ControllerBase
                 listingToDelete.IsActive = false;
                 listingToDelete.Status = ListingStatus.Removed;
                 listingToDelete.UpdatedAt = DateTime.UtcNow;
+                var imageUrls = await _db.ListingImages.Where(i => i.ListingId == listingToDelete.Id).Select(i => i.ImageUrl).ToListAsync();
+                var documentNos = imageUrls.Select(DocumentsController.DocumentNoFromUrl).Where(n => n != null).Cast<string>().ToList();
+                if (documentNos.Count > 0)
+                {
+                    var docs = await _db.Documents.Where(d => documentNos.Contains(d.DocumentNo) && d.OwnerUserId == listingToDelete.UserId).ToListAsync();
+                    _db.Documents.RemoveRange(docs);
+                }
                 await _db.SaveChangesAsync();
 
                 return Ok(ApiResponse<ListingSummaryDto>.Ok(null!, "Listing removed successfully"));

@@ -57,6 +57,10 @@ class ApiClient {
         // Dynamically ensure baseURL matches environment in case of runtime change
         config.baseURL = AppEnvironment.baseUrl;
 
+        if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
+        }
+
         const token = await storage.getToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;

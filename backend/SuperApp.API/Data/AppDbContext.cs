@@ -36,6 +36,7 @@ public class AppDbContext : DbContext
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<UserDeviceToken> UserDeviceTokens => Set<UserDeviceToken>();
     public DbSet<MarketplaceOffer> MarketplaceOffers => Set<MarketplaceOffer>();
+    public DbSet<AppDocument> Documents => Set<AppDocument>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -209,6 +210,17 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.NoAction);
         });
         
+        modelBuilder.Entity<AppDocument>(entity =>
+        {
+            entity.HasIndex(e => e.DocumentNo).IsUnique();
+            entity.HasIndex(e => e.OwnerUserId);
+            entity.HasOne(e => e.Owner)
+                .WithMany()
+                .HasForeignKey(e => e.OwnerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.BlobObject).HasColumnType("bytea");
+        });
+
         // Driver
         modelBuilder.Entity<Driver>(entity =>
         {

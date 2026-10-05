@@ -25,6 +25,7 @@ import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { notificationService } from '../../services/notificationService';
+import { documentService } from '../../services/documentService';
 
 const CATEGORIES = [
   { id: 1, name: 'Mobiles' },
@@ -59,6 +60,27 @@ export const AddListingScreen: React.FC = () => {
   const [isAddingPhoto, setIsAddingPhoto] = useState(false);
   const [photoUrlInput, setPhotoUrlInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handlePickPhoto = async () => {
+    try {
+      const ImagePicker = await import('expo-image-picker');
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Photos', 'Allow photo access to upload a listing image.');
+        return;
+      }
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+      });
+      if (picked.canceled || !picked.assets?.[0]?.uri) return;
+      const asset = picked.assets[0];
+      const stored = await documentService.upload(asset.uri, asset.fileName || 'photo.jpg');
+      setPhotos((current) => [...current.filter((url) => !url.includes('unsplash.com')), stored.imageUrl]);
+    } catch (err: any) {
+      Alert.alert('Upload failed', err?.message || 'Could not store the photo');
+    }
+  };
 
   const handleAddPhoto = () => {
     if (!photoUrlInput.trim()) return;
@@ -168,6 +190,9 @@ export const AddListingScreen: React.FC = () => {
           Clear photos with good lighting attract 3x more buyers.
         </Text>
 
+        <TouchableOpacity onPress={handlePickPhoto} style={{ marginBottom: 8 }}>
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Upload photo from gallery</Text>
+        </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
           <TouchableOpacity
             style={styles.addPhotoBox}
