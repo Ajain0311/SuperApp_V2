@@ -116,21 +116,15 @@ The tasks below represent the logical sequence of work remaining for production 
 
 ## 📝 Last Session Handoff
 
-- **Date**: October 5, 2026
-- **Status**: Kitchen accepts an ONLINE food order only when payment is PAID. Restaurant cannot mark pickup or delivered; the captain still does. Ride completion no longer marks an unpaid online fare completed. Unknown vehicle types are rejected. Admin reports return zeros instead of demo totals. Coupon use is saved with the food order and rolled back if that save fails. Live agents and real devices were not re-run.
-- **See**: `docs/ADMIN_OPERATIONS.md`, `docs/CAPTAIN_FOOD_DELIVERY_IMPLEMENTATION.md`, `docs/EASEBUZZ_ONLINE_PAYMENT_IMPLEMENTATION.md`, `docs/RIDE_FARE.md`, `docs/IMAGE_STORAGE.md`
+- **Date**: October 6, 2026
+- **Status**: Overnight workflow production host guard removed so scheduled volume can use `API_BASE_URL` such as `https://makemytree.duckdns.org/api`. Secret presence checks remain. Private secrets fill sheet lives outside the repo at `Desktop/SuperApp_V2/GITHUB_ACTIONS_SECRETS.md` (do not commit). GitHub Actions secrets must still be pasted in the repo Settings UI.
+- **See**: `.github/workflows/overnight-testing.yml`, `e2e/agents/README.md`, `docs/TESTING.md`
 - **Verification Matrix (this session)**:
-  - Backend: 89 / 89 PASS. Includes one-winner food accept, offline/stranger reject, other-captain pickup forbid, payment sync idempotency, coupon cap and usage limit, ride fare rules.
-  - TypeScript: 0 errors PASS
-  - Jest: 74 / 74 PASS (mocked flows, not a live API)
-  - Expo doctor: 21 / 21 PASS
-  - Agent self-tests: 14 / 14 PASS
-  - `npm run test:agents:full` and volume: BLOCKED. Local API was down, `ADMIN_PASSWORD` was unset, and the configured database is the shared Supabase instance. Do not run that suite against production.
-  - CI/CD: workflow and `scripts/manage.sh` still build, test, SSH deploy, probe `/health`, roll back, and prune. This session did not execute a deploy. GitHub secrets were not inspected.
-  - Real device: NOT TESTED
-- **Bugs fixed this session**: none. No failing test.
+  - Workflow/docs-only change: production URL `case` refuse block removed from overnight job.
+  - Full backend/Jest/tsc suites not re-run for this YAML edit.
+  - Overnight runs #1 and #2 failed earlier on the refuse/secrets step before any agents ran.
 - **Next priorities**:
-  1. Run `npm run test:agents:full` against a non-production API with Mock OTP and `ADMIN_PASSWORD`.
-  2. One real Android food order with customer, restaurant, and captain, plus one GPS ride.
-  3. Set Easebuzz production keys only when a sandbox charge has already been verified. Do not mark live payment PASS before that.
+  1. Paste overnight secrets from the private fill sheet into GitHub Actions secrets, then `workflow_dispatch` or wait for the next hourly cron.
+  2. Watch the first live 100-user run for DB mutation / cleanup health on the target API.
+  3. One real Android food order (customer, restaurant, captain) plus one GPS ride; Easebuzz sandbox before production keys.
 

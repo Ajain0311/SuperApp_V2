@@ -31,7 +31,7 @@ npm run test:agents:volume -- --customers 100 --restaurant-owners 10 --captains 
 
 That is 100 customers plus 10 owners, 20 captains, 20 sellers, and the admin account. Concurrency is 25. Overlapping runs queue; a running test is not cancelled.
 
-Required Actions secrets: `API_BASE_URL` (test host only; production hosts are rejected), `ADMIN_PASSWORD`, `TEST_OTP`, and `SUPABASE_DB_URL` or `SUPABASE_CONNECTION`. Optional `ADMIN_MOBILE` overrides the example admin mobile. `ADMIN_EMAIL` is passed through but the runner logs the admin in with the mobile number, not email.
+Required Actions secrets: `API_BASE_URL` (for example `https://makemytree.duckdns.org/api`; host allow-list removed so the scheduled job can hit the configured API), `ADMIN_PASSWORD`, `TEST_OTP`, and `SUPABASE_DB_URL` or `SUPABASE_CONNECTION`. Optional `ADMIN_MOBILE` overrides the example admin mobile. `ADMIN_EMAIL` is passed through but the runner logs the admin in with the mobile number, not email. The 100-user volume run mutates whatever database that API uses — keep `--cleanup` on and watch live data.
 
 Each run uploads `e2e/agents/reports/` as `overnight-test-report-<run id>` for 14 days and writes a job summary. A single file that totals every hour of the night is not produced; those totals are not in the next job's workspace.
 

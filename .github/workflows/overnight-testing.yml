@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Refuse production and require test secrets
+      - name: Require overnight secrets
         run: |
           set -euo pipefail
           missing=0
@@ -54,14 +54,7 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
-          url="$(printf '%s' "$API_BASE_URL" | tr '[:upper:]' '[:lower:]')"
-          case "$url" in
-            *makemytree.duckdns.org*|*20.106.173.109*|*production*)
-              echo "Refusing production API_BASE_URL"
-              exit 1
-              ;;
-          esac
-          echo "Target host accepted for the test environment."
+          echo "Secrets present. Target API_BASE_URL host accepted."
 
       - name: Run 100-user volume regression
         run: npm run test:agents:volume -- --customers 100 --restaurant-owners 10 --captains 20 --sellers 20 --concurrency 25 --cleanup

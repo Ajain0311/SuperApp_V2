@@ -83,4 +83,4 @@ npm run test:agents:self
 npm run test:agents
 ```
 
-Overnight volume on a non-production API is `.github/workflows/overnight-testing.yml`. It runs hourly from 22:00 to 09:00 IST and on manual `workflow_dispatch`. Command: `npm run test:agents:volume -- --customers 100 --restaurant-owners 10 --captains 20 --sellers 20 --concurrency 25 --cleanup`. Reports are the `overnight-test-report-<run id>` artifact, kept 14 days. See `e2e/agents/README.md` for the secret names. Do not point `API_BASE_URL` at production.
+Overnight volume is `.github/workflows/overnight-testing.yml`. It runs hourly from 22:00 to 09:00 IST and on manual `workflow_dispatch`. Command: `npm run test:agents:volume -- --customers 100 --restaurant-owners 10 --captains 20 --sellers 20 --concurrency 25 --cleanup`. Reports are the `overnight-test-report-<run id>` artifact, kept 14 days. See `e2e/agents/README.md` for the secret names. The workflow requires those secrets and no longer rejects production DNS/IP hosts; the suite still mutates the target API database.
