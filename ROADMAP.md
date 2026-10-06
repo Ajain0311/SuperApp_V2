@@ -25,7 +25,7 @@
 
 | Verification Dimension | Health / Coverage | Status |
 |---|---|:---:|
-| **Live multi-agent API** | Not run on 5 Oct 2026. Needs a non-production API, `ADMIN_PASSWORD`, and Mock OTP. Do not point `test:agents` at production. | BLOCKED |
+| **Live multi-agent API** | 6 Oct 2026 one-shot overnight-shaped volume on live DNS (`100/10/20/20`, c25, ~233s): PASS 72 / FAIL 79 / BLOCKED 3 / ERROR 43 (`run-muw72g1u`). Many OTP `500` and transport `0` under load; API health recovered. GitHub overnight secrets still need UI paste. | FAIL |
 | **Agent self-tests** | 14 / 14 (`npm run test:agents:self`, 5 Oct 2026) | PASS |
 | **Backend Tests (.NET 10)** | 105 / 105 (`dotnet test`, 5 Oct 2026) | PASS |
 | **Frontend Tests (Jest)** | 74 / 74 (`npm test -- --watchAll=false`, 5 Oct 2026) | PASS |
@@ -117,14 +117,14 @@ The tasks below represent the logical sequence of work remaining for production 
 ## 📝 Last Session Handoff
 
 - **Date**: October 6, 2026
-- **Status**: Overnight workflow production host guard removed so scheduled volume can use `API_BASE_URL` such as `https://makemytree.duckdns.org/api`. Secret presence checks remain. Private secrets fill sheet lives outside the repo at `Desktop/SuperApp_V2/GITHUB_ACTIONS_SECRETS.md` (do not commit). GitHub Actions secrets must still be pasted in the repo Settings UI.
-- **See**: `.github/workflows/overnight-testing.yml`, `e2e/agents/README.md`, `docs/TESTING.md`
+- **Status**: Local one-shot overnight-shaped volume against live `https://makemytree.duckdns.org` completed in ~4 minutes (hard cap was 10). Run `run-muw72g1u`: 151 agents, concurrency 25, `--cleanup`. Result **FAIL** — PASS 72, FAIL 79, BLOCKED 3, ERROR 43. Dominant failures: OTP `send-otp`/`verify-otp` HTTP 500 and transport status 0 under burst load; DB verifier `ENOTFOUND` at end (cleanup blocked). Post-run `/health` still 200. `API_BASE_URL` for agents must be host-only (no `/api` suffix); secrets sheet + `e2e/agents/README.md` updated accordingly. GitHub Actions overnight secrets still need pasting in the UI before scheduled CI runs count.
+- **See**: `e2e/agents/reports/latest.md` (`run-muw72g1u`), `.github/workflows/overnight-testing.yml`, `Desktop/SuperApp_V2/GITHUB_ACTIONS_SECRETS.md` (private, do not commit)
 - **Verification Matrix (this session)**:
-  - Workflow/docs-only change: production URL `case` refuse block removed from overnight job.
-  - Full backend/Jest/tsc suites not re-run for this YAML edit.
-  - Overnight runs #1 and #2 failed earlier on the refuse/secrets step before any agents ran.
+  - Live volume one-shot: FAIL (load/OTP/transport), AUTOMATED TESTED against production DNS by explicit user request.
+  - Mini probe earlier (`1/1/1/1`): mostly PASS until session pooler `5432` max clients; transaction pooler `6543` used for volume DB env.
+  - Full backend/Jest/tsc not re-run for this ops/docs pass.
 - **Next priorities**:
-  1. Paste overnight secrets from the private fill sheet into GitHub Actions secrets, then `workflow_dispatch` or wait for the next hourly cron.
-  2. Watch the first live 100-user run for DB mutation / cleanup health on the target API.
+  1. Paste overnight secrets (`API_BASE_URL=https://makemytree.duckdns.org` host-only) into GitHub Actions, then `workflow_dispatch` off-peak or with lower concurrency if live host stays the target.
+  2. Investigate production OTP 500s / pooler pressure under concurrent `send-otp` (PunjabGov + DB).
   3. One real Android food order (customer, restaurant, captain) plus one GPS ride; Easebuzz sandbox before production keys.
 
