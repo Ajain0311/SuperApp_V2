@@ -55,7 +55,6 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   const [fullName, setFullName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
-  // Forgot Password State
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -154,7 +153,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
         routes: [{ name: 'AdminPortal' }],
       });
     } catch (err: any) {
-      setErrorMessage(err.message || 'Invalid admin credentials or OTP. Please check and try again.');
+      setErrorMessage(err.message || 'Invalid admin credentials or OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -178,7 +177,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
         routes: [{ name: 'MainTabs' }],
       });
     } catch (err: any) {
-      setErrorMessage(err.message || 'Invalid or expired OTP. Please enter the correct code.');
+      setErrorMessage(err.message || 'Invalid or expired OTP.');
     } finally {
       setIsLoading(false);
     }
@@ -247,7 +246,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
           setNewPassword('');
           setConfirmPassword('');
           setOtpDigits(['', '', '', '', '', '']);
-          handleResend(); // Resend OTP for normal login flow
+          handleResend();
         }}
       ]);
     } catch (err: any) {
@@ -267,14 +266,13 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0E21" />
+      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
       <LinearGradient
-        colors={['#1E1738', '#141829', '#0A0E21']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.6 }}
+        colors={['#0B0F19', '#1A1D2E', '#0B0F19']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -285,68 +283,66 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
             if (isResettingPassword) setIsResettingPassword(false);
             else navigation.goBack();
           }}>
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={20} color="#F8FAFC" />
           </TouchableOpacity>
 
-          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-            
-            <View style={styles.headerBox}>
-              <Text style={styles.title}>
-                {isResettingPassword ? 'Reset Password' : isAdmin ? 'Admin Auth' : 'Verify Phone'}
-              </Text>
-              <Text style={styles.subtitle}>
-                {isResettingPassword
-                  ? 'Create a new password for your admin account.'
-                  : `Code sent to `}
-                {!isResettingPassword && (
-                  <Text style={styles.phoneHighlight}>+91 {mobileNumber}</Text>
-                )}
-              </Text>
-            </View>
-
-            {displayedOtp && showTestOtp && (
-              <View style={styles.testOtpCard}>
-                <View style={styles.testOtpHeader}>
-                  <View style={styles.testOtpBadge}>
-                    <Ionicons name="flask-outline" size={14} color="#0F766E" style={{ marginRight: 4 }} />
-                    <Text style={styles.testOtpBadgeText}>DEV MODE</Text>
-                  </View>
-                  <TouchableOpacity style={styles.autoFillBtn} onPress={() => handleAutoFill(displayedOtp)}>
-                    <Text style={styles.autoFillBtnText}>Auto-Fill</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.testOtpCode}>TEST OTP: {displayedOtp}</Text>
-              </View>
-            )}
-
-            {errorMessage && (
-              <View style={styles.errorBanner}>
-                <Ionicons name="alert-circle" size={20} color="#DC2626" style={{ marginRight: 8 }} />
-                <Text style={styles.errorBannerText}>{errorMessage}</Text>
-              </View>
-            )}
-
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], width: '100%', alignItems: 'center' }}>
             <View style={styles.cardContainer}>
-              
+              <View style={styles.headerBox}>
+                <Text style={styles.title}>
+                  {isResettingPassword ? 'Reset Password' : isAdmin ? 'Admin Auth' : 'Verify Code'}
+                </Text>
+                <Text style={styles.subtitle}>
+                  {isResettingPassword
+                    ? 'Create a new admin password.'
+                    : `Sent to `}
+                  {!isResettingPassword && (
+                    <Text style={styles.phoneHighlight}>+91 {mobileNumber}</Text>
+                  )}
+                </Text>
+              </View>
+
+              {displayedOtp && showTestOtp && (
+                <View style={styles.testOtpCard}>
+                  <View style={styles.testOtpHeader}>
+                    <View style={styles.testOtpBadge}>
+                      <Ionicons name="flask" size={12} color="#0F766E" style={{ marginRight: 4 }} />
+                      <Text style={styles.testOtpBadgeText}>DEV</Text>
+                    </View>
+                    <TouchableOpacity style={styles.autoFillBtn} onPress={() => handleAutoFill(displayedOtp)}>
+                      <Text style={styles.autoFillBtnText}>Auto-Fill</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.testOtpCode}>{displayedOtp}</Text>
+                </View>
+              )}
+
+              {errorMessage && (
+                <View style={styles.errorBanner}>
+                  <Ionicons name="alert-circle" size={16} color="#F87171" style={{ marginRight: 6 }} />
+                  <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                </View>
+              )}
+
               {isResettingPassword ? (
                 <>
                   <View style={styles.inputCard}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                    <Ionicons name="lock-closed" size={18} color="#475569" style={styles.inputIcon} />
                     <TextInput
                       style={styles.textInput}
                       placeholder="New Password"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor="#475569"
                       secureTextEntry
                       value={newPassword}
                       onChangeText={(val) => { setErrorMessage(null); setNewPassword(val); }}
                     />
                   </View>
                   <View style={styles.inputCard}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                    <Ionicons name="lock-closed" size={18} color="#475569" style={styles.inputIcon} />
                     <TextInput
                       style={styles.textInput}
                       placeholder="Confirm New Password"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor="#475569"
                       secureTextEntry
                       value={confirmPassword}
                       onChangeText={(val) => { setErrorMessage(null); setConfirmPassword(val); }}
@@ -356,11 +352,11 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
               ) : isAdmin ? (
                 <>
                   <View style={styles.inputCard}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                    <Ionicons name="shield-checkmark" size={18} color="#475569" style={styles.inputIcon} />
                     <TextInput
                       style={styles.textInput}
                       placeholder="Admin Password"
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor="#475569"
                       secureTextEntry
                       value={adminPassword}
                       onChangeText={(val) => { setErrorMessage(null); setAdminPassword(val); }}
@@ -373,18 +369,18 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                 </>
               ) : isNewUser ? (
                 <View style={styles.inputCard}>
-                  <Ionicons name="person-outline" size={20} color="#64748B" style={styles.inputIcon} />
+                  <Ionicons name="person" size={18} color="#475569" style={styles.inputIcon} />
                   <TextInput
                     style={styles.textInput}
                     placeholder="Full Name (Optional)"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor="#475569"
                     value={fullName}
                     onChangeText={(val) => { setErrorMessage(null); setFullName(val); }}
                   />
                 </View>
               ) : null}
 
-              <Text style={styles.otpLabel}>{isResettingPassword ? 'Enter Verification Code' : '6-Digit Code'}</Text>
+              <Text style={styles.otpLabel}>{isResettingPassword ? 'Enter OTP' : '6-Digit Code'}</Text>
               
               <View style={styles.otpRow}>
                 {otpDigits.map((digit, idx) => (
@@ -402,7 +398,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                     onChangeText={(val) => handleDigitChange(val, idx)}
                     onKeyPress={(e) => handleKeyPress(e, idx)}
                     textAlign="center"
-                    selectionColor="#FF6B35"
+                    selectionColor="#3B82F6"
                   />
                 ))}
               </View>
@@ -410,11 +406,11 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
               <View style={styles.resendContainer}>
                 {timerSeconds > 0 ? (
                   <Text style={styles.timerText}>
-                    Resend code in <Text style={styles.timerCountdown}>{formatTimer()}</Text>
+                    Resend in <Text style={styles.timerCountdown}>{formatTimer()}</Text>
                   </Text>
                 ) : (
                   <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
-                    <Text style={styles.resendAction}>Resend OTP Now</Text>
+                    <Text style={styles.resendAction}>Resend OTP</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -426,27 +422,24 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
                 activeOpacity={0.85}
               >
                 <LinearGradient
-                  colors={fullOtpEntered && !isLoading ? ['#FF6B35', '#E55A2B'] : ['#334155', '#1E293B']}
+                  colors={fullOtpEntered && !isLoading ? ['#2563EB', '#1D4ED8'] : ['#1E293B', '#0F172A']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.continueBtnGradient}
                 >
                   {isLoading ? (
-                    <View style={styles.loadingRow}>
-                      <Text style={styles.continueBtnText}>Processing...</Text>
-                    </View>
+                    <Text style={styles.continueBtnText}>Processing...</Text>
                   ) : (
                     <View style={styles.btnContentRow}>
                       <Text style={[styles.continueBtnText, !fullOtpEntered && styles.continueBtnTextDisabled]}>
                         {isResettingPassword ? 'Reset Password' : 'Verify & Continue'}
                       </Text>
-                      <Ionicons name="checkmark-done" size={20} color={fullOtpEntered ? '#FFFFFF' : '#64748B'} />
+                      <Ionicons name="checkmark-done" size={18} color={fullOtpEntered ? '#FFFFFF' : '#475569'} />
                     </View>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -455,66 +448,84 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0A0E21' },
+  safeArea: { flex: 1, backgroundColor: '#0B0F19' },
   container: { flex: 1 },
-  scrollContent: { paddingHorizontal: 22, paddingTop: 10, paddingBottom: 40 },
+  scrollContent: { 
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16, 
+    paddingVertical: 40 
+  },
   backButton: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#141829',
+    alignSelf: 'flex-start',
+    width: 40, height: 40, borderRadius: 20, 
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#2A2D3E', marginBottom: 24,
+    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', 
+    marginBottom: 20,
+    marginLeft: 8,
   },
-  headerBox: { marginBottom: 24 },
-  title: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5, marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#94A3B8', lineHeight: 22 },
-  phoneHighlight: { color: '#FF6B35', fontWeight: '800' },
-  testOtpCard: {
-    backgroundColor: '#0A2020', borderColor: '#0D9488', borderWidth: 1,
-    borderRadius: 16, padding: 14, marginBottom: 20,
-  },
-  testOtpHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  testOtpBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F766E', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  testOtpBadgeText: { fontSize: 11, fontWeight: '800', color: '#CCFBF1', letterSpacing: 0.5 },
-  autoFillBtn: { backgroundColor: '#14b8a6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  autoFillBtnText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
-  testOtpCode: { fontSize: 24, fontWeight: '900', color: '#5eead4', letterSpacing: 3 },
-  errorBanner: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(220, 38, 38, 0.1)',
-    borderColor: 'rgba(220, 38, 38, 0.3)', borderWidth: 1, borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20,
-  },
-  errorBannerText: { flex: 1, color: '#F87171', fontSize: 13, fontWeight: '600' },
   cardContainer: {
-    backgroundColor: '#141829', borderRadius: 24, padding: 22,
-    borderWidth: 1, borderColor: '#2A2D3E',
-    shadowColor: '#000000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 6,
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: 'rgba(30, 41, 59, 0.7)', 
+    borderRadius: 24, 
+    padding: 24,
+    borderWidth: 1, 
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 20 }, 
+    shadowOpacity: 0.5, 
+    shadowRadius: 30, 
+    elevation: 10,
   },
+  headerBox: { marginBottom: 24, alignItems: 'center' },
+  title: { fontSize: 22, fontWeight: '800', color: '#F8FAFC', marginBottom: 6 },
+  subtitle: { fontSize: 13, color: '#94A3B8', textAlign: 'center' },
+  phoneHighlight: { color: '#3B82F6', fontWeight: '700' },
+  testOtpCard: {
+    backgroundColor: 'rgba(13, 148, 136, 0.1)', borderColor: 'rgba(13, 148, 136, 0.3)', borderWidth: 1,
+    borderRadius: 16, padding: 12, marginBottom: 20,
+  },
+  testOtpHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  testOtpBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F766E', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  testOtpBadgeText: { fontSize: 10, fontWeight: '700', color: '#CCFBF1' },
+  autoFillBtn: { backgroundColor: '#14B8A6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  autoFillBtnText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
+  testOtpCode: { fontSize: 20, fontWeight: '800', color: '#5EEAD4', letterSpacing: 2, textAlign: 'center' },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 20,
+  },
+  errorBannerText: { flex: 1, color: '#F87171', fontSize: 12, fontWeight: '600' },
   inputCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0E21',
-    borderRadius: 14, borderWidth: 1.5, borderColor: '#2A2D3E',
-    paddingHorizontal: 14, height: 56, marginBottom: 16,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A',
+    borderRadius: 16, borderWidth: 1, borderColor: '#334155',
+    paddingHorizontal: 16, height: 52, marginBottom: 16,
   },
-  inputIcon: { marginRight: 12 },
-  textInput: { flex: 1, color: '#FFFFFF', fontSize: 16, fontWeight: '600', height: '100%' },
-  forgotBtn: { alignSelf: 'flex-end', marginBottom: 16, marginTop: -6 },
-  forgotBtnText: { color: '#FF6B35', fontSize: 13, fontWeight: '700' },
-  otpLabel: { fontSize: 13, fontWeight: '700', color: '#94A3B8', marginBottom: 12, alignSelf: 'center' },
-  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+  inputIcon: { marginRight: 10 },
+  textInput: { flex: 1, color: '#F8FAFC', fontSize: 15, fontWeight: '500', height: '100%' },
+  forgotBtn: { alignSelf: 'flex-end', marginBottom: 16, marginTop: -8 },
+  forgotBtnText: { color: '#3B82F6', fontSize: 12, fontWeight: '600' },
+  otpLabel: { fontSize: 12, fontWeight: '600', color: '#94A3B8', marginBottom: 12, textAlign: 'center' },
+  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, gap: 6 },
   otpBox: {
-    width: 44, height: 54, backgroundColor: '#0A0E21',
-    borderRadius: 12, borderWidth: 1.5, borderColor: '#2A2D3E',
-    color: '#FFFFFF', fontSize: 22, fontWeight: '800',
+    flex: 1, height: 50, backgroundColor: '#0F172A',
+    borderRadius: 12, borderWidth: 1, borderColor: '#334155',
+    color: '#F8FAFC', fontSize: 20, fontWeight: '700',
   },
-  otpBoxFilled: { borderColor: '#FF6B35', backgroundColor: '#120f1e' },
+  otpBoxFilled: { borderColor: '#3B82F6', backgroundColor: '#0B1120' },
   otpBoxError: { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.1)' },
   resendContainer: { alignItems: 'center', marginBottom: 24 },
-  timerText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
-  timerCountdown: { color: '#FF6B35', fontWeight: '800' },
-  resendAction: { color: '#FF6B35', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
-  continueBtn: { borderRadius: 14, overflow: 'hidden' },
-  continueBtnDisabled: { opacity: 0.75 },
+  timerText: { color: '#64748B', fontSize: 12, fontWeight: '500' },
+  timerCountdown: { color: '#3B82F6', fontWeight: '700' },
+  resendAction: { color: '#3B82F6', fontWeight: '700', fontSize: 13 },
+  continueBtn: { borderRadius: 16, overflow: 'hidden' },
+  continueBtnDisabled: { opacity: 0.6 },
   continueBtnGradient: { paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
   btnContentRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  continueBtnText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 },
-  continueBtnTextDisabled: { color: '#94A3B8' },
-  loadingRow: { flexDirection: 'row', alignItems: 'center' },
+  continueBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.5 },
+  continueBtnTextDisabled: { color: '#475569' },
 });
