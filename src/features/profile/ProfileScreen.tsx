@@ -63,17 +63,6 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // RN Web Alert.alert does not run button callbacks, so confirm() is required on web.
-    if (Platform.OS === 'web') {
-      const confirmed =
-        typeof window === 'undefined' ||
-        window.confirm('Are you sure you want to log out?');
-      if (confirmed) {
-        void performLogout();
-      }
-      return;
-    }
-
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {

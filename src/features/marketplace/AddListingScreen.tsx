@@ -54,39 +54,74 @@ export const AddListingScreen: React.FC = () => {
   const [description, setDescription] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(1);
   const [selectedCondition, setSelectedCondition] = useState('LIKE_NEW');
-  const [photos, setPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600',
-  ]);
-  const [isAddingPhoto, setIsAddingPhoto] = useState(false);
-  const [photoUrlInput, setPhotoUrlInput] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handlePickPhoto = async () => {
     try {
       const ImagePicker = await import('expo-image-picker');
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Photos', 'Allow photo access to upload a listing image.');
-        return;
-      }
-      const picked = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-      });
-      if (picked.canceled || !picked.assets?.[0]?.uri) return;
-      const asset = picked.assets[0];
-      const stored = await documentService.upload(asset.uri, asset.fileName || 'photo.jpg');
-      setPhotos((current) => [...current.filter((url) => !url.includes('unsplash.com')), stored.imageUrl]);
+
+      Alert.alert(
+        'Add Photo',
+        'Choose a source for your photo',
+        [
+          {
+            text: 'Camera',
+            onPress: async () => {
+              const camPermission = await ImagePicker.requestCameraPermissionsAsync();
+              if (!camPermission.granted) {
+                Alert.alert('Permission needed', 'Allow camera access to take photos.');
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets?.[0]?.uri) {
+                await uploadPhoto(result.assets[0]);
+              }
+            }
+          },
+          {
+            text: 'Gallery',
+            onPress: async () => {
+              const libPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (!libPermission.granted) {
+                Alert.alert('Permission needed', 'Allow photo access to select images.');
+                return;
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsMultipleSelection: true,
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets) {
+                for (const asset of result.assets) {
+                  if (asset.uri) {
+                    await uploadPhoto(asset);
+                  }
+                }
+              }
+            }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]
+      );
     } catch (err: any) {
-      Alert.alert('Upload failed', err?.message || 'Could not store the photo');
+      Alert.alert('Picker failed', err?.message || 'Could not open image picker');
     }
   };
 
-  const handleAddPhoto = () => {
-    if (!photoUrlInput.trim()) return;
-    setPhotos([...photos, photoUrlInput.trim()]);
-    setPhotoUrlInput('');
-    setIsAddingPhoto(false);
+  const uploadPhoto = async (asset: any) => {
+    try {
+      const stored = await documentService.upload(asset.uri, asset.fileName || 'photo.jpg');
+      setPhotos((current) => [...current, stored.imageUrl]);
+    } catch (err: any) {
+      Alert.alert('Upload failed', err?.message || 'Could not store the photo');
+    }
   };
 
   const handleRemovePhoto = (index: number) => {
@@ -190,13 +225,10 @@ export const AddListingScreen: React.FC = () => {
           Clear photos with good lighting attract 3x more buyers.
         </Text>
 
-        <TouchableOpacity onPress={handlePickPhoto} style={{ marginBottom: 8 }}>
-          <Text style={{ color: colors.primary, fontWeight: '700' }}>Upload photo from gallery</Text>
-        </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
           <TouchableOpacity
             style={styles.addPhotoBox}
-            onPress={() => setIsAddingPhoto(true)}
+            onPress={handlePickPhoto}
           >
             <MaterialIcons name="add-a-photo" size={26} color={colors.primary} />
             <Text style={styles.addPhotoText}>Add Photo</Text>
@@ -219,7 +251,7 @@ export const AddListingScreen: React.FC = () => {
         <Text style={styles.inputLabel}>Item Title *</Text>
         <TextInput
           testID="add-listing-title-input"
-          placeholder="e.g. MacBook Pro M2 16GB / 512GB"
+          placeholder="e.g. Samsung Galaxy S23 Ultra"
           placeholderTextColor={colors.textTertiary}
           value={title}
           onChangeText={setTitle}
@@ -334,37 +366,6 @@ export const AddListingScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Add Photo Modal */}
-      <Modal visible={isAddingPhoto} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalCardTitle}>Add Photo URL</Text>
-            <TextInput
-              placeholder="Paste image link (https://...)"
-              placeholderTextColor={colors.textTertiary}
-              value={photoUrlInput}
-              onChangeText={setPhotoUrlInput}
-              style={styles.modalInput}
-              autoCapitalize="none"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsAddingPhoto(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalAddBtn}
-                onPress={handleAddPhoto}
-              >
-                <Text style={styles.modalAddText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };

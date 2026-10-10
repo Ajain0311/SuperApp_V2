@@ -36,16 +36,6 @@ export const AdminPortalScreen: React.FC<AdminPortalScreenProps> = ({ navigation
   };
 
   const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      const confirmed =
-        typeof window === 'undefined' ||
-        window.confirm('Are you sure you want to log out of Admin Portal?');
-      if (confirmed) {
-        void performLogout();
-      }
-      return;
-    }
-
     Alert.alert('Admin Logout', 'Are you sure you want to log out of Admin Portal?', [
       { text: 'Cancel', style: 'cancel' },
       {

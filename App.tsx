@@ -9,6 +9,9 @@ import { colors } from './src/theme/colors';
 import { notificationService } from './src/services/notificationService';
 import { AppEnvironment } from './src/config/environment';
 import { mapboxService } from './src/services/mapboxService';
+import { polyfillAlert } from './src/utils/alertPolyfill';
+
+polyfillAlert();
 
 const CustomDarkTheme = {
   ...DarkTheme,
@@ -22,6 +25,8 @@ const CustomDarkTheme = {
     notification: colors.primary,
   },
 };
+
+import { AppAlert } from './src/components/common/AppAlert';
 
 export default function App() {
   useEffect(() => {
@@ -71,6 +76,7 @@ export default function App() {
         <StatusBar style="light" />
         <RootNavigator />
       </NavigationContainer>
+      <AppAlert />
     </SafeAreaProvider>
   );
 }

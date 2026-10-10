@@ -198,10 +198,6 @@ export const SavedAddressesScreen: React.FC = () => {
         Alert.alert('Could not delete', e instanceof ApiError ? e.message : 'Try again.');
       }
     };
-    if (Platform.OS === 'web') {
-      if (typeof window === 'undefined' || window.confirm('Remove this address?')) void run();
-      return;
-    }
     Alert.alert('Remove address', 'Remove this saved address?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => void run() },

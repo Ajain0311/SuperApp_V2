@@ -47,10 +47,6 @@ export const PaymentTestScreen: React.FC<PaymentTestScreenProps> = ({ navigation
   }, []);
 
   const notify = (title: string, message: string) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.alert(`${title}\n${message}`);
-      return;
-    }
     Alert.alert(title, message);
   };
 

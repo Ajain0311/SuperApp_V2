@@ -22,11 +22,16 @@
 - Proactively handle all setup, package installation, debugging, execution, and verification steps until the task goal is fully achieved.
 
 ## 3. Mandatory Task Tracking & AI Handoff Protocol
-- **BEFORE starting any work**: Every AI agent MUST inspect [`ROADMAP.md`](ROADMAP.md) to understand current project health, completed milestones, and the immediate next priority tasks.
-- **DURING work**: Adhere strictly to the zero-cost architecture guidelines and canonical documentation in `docs/`.
+- **BEFORE starting any work**: Every AI agent MUST inspect [`ROADMAP.md`](ROADMAP.md) and [`PENDING_FIXES.md`](PENDING_FIXES.md).
+- **DEVELOPER INTERACTION PROTOCOL**:
+  - When greeting or receiving any new instruction from a developer, check [`PENDING_FIXES.md`](PENDING_FIXES.md).
+  - Ask: *"Would you like to queue this issue or work on the top-priority stabilization fixes first?"*
+  - If the user/developer insists on their own prompt, **user prompt is always top priority**.
+- **NO NEW FUNCTIONALITY**: Strictly focus on stabilizing existing features, fixing bugs, and production readiness as outlined in `PENDING_FIXES.md`.
+- **DURING work**: Adhere strictly to zero-cost architecture guidelines and canonical documentation in `docs/`.
 - **AFTER completing work**:
   1. Run the full verification suite (`dotnet test`, `npx tsc --noEmit`, `npm test`, `npx expo-doctor`, `npm run test:agents:self`).
-  2. You MUST update [`ROADMAP.md`](ROADMAP.md):
-     - Mark completed tasks as `[x]`.
-     - Add any newly identified tasks or blockers to the appropriate phase.
+  2. You MUST update [`ROADMAP.md`](ROADMAP.md) and [`PENDING_FIXES.md`](PENDING_FIXES.md):
+     - Mark completed tasks as `[x]` or remove fixed items from the backlog.
+     - Add any newly identified tasks or blockers.
      - Update the **Last Session Handoff** section with date, status, and what the next agent should do.

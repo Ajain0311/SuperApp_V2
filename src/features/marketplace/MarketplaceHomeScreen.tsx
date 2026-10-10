@@ -78,97 +78,9 @@ export const MarketplaceHomeScreen: React.FC = () => {
     }, [loadListings])
   );
 
-  const initialListings: ListingSummary[] = useMemo(() => [
-    {
-      id: 101,
-      title: 'iPhone 14 Pro Max 256GB Deep Purple (Like New)',
-      price: 68000,
-      condition: 'LIKE_NEW',
-      location: 'Koramangala, Bengaluru',
-      primaryImageUrl: 'https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=500',
-      isFeatured: true,
-      viewCount: 142,
-      createdAt: new Date().toISOString(),
-      categoryId: 1,
-      categoryName: 'Mobiles',
-      isFavorite: false,
-    },
-    {
-      id: 102,
-      title: 'Royal Enfield Classic 350 (2022 Stealth Black)',
-      price: 145000,
-      condition: 'USED',
-      location: 'Indiranagar, Bengaluru',
-      primaryImageUrl: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=500',
-      isFeatured: true,
-      viewCount: 310,
-      createdAt: new Date().toISOString(),
-      categoryId: 2,
-      categoryName: 'Vehicles',
-      isFavorite: true,
-    },
-    {
-      id: 103,
-      title: 'Sony PlayStation 5 Disc Edition + 2 Controllers',
-      price: 38500,
-      condition: 'LIKE_NEW',
-      location: 'HSR Layout, Bengaluru',
-      primaryImageUrl: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=500',
-      isFeatured: false,
-      viewCount: 98,
-      createdAt: new Date().toISOString(),
-      categoryId: 3,
-      categoryName: 'Electronics',
-      isFavorite: false,
-    },
-    {
-      id: 104,
-      title: 'Solid Sheesham Teak Wood 6-Seater Dining Table',
-      price: 22000,
-      condition: 'USED',
-      location: 'Whitefield, Bengaluru',
-      primaryImageUrl: 'https://images.unsplash.com/photo-1617806118233-18e1de247200?w=500',
-      isFeatured: false,
-      viewCount: 74,
-      createdAt: new Date().toISOString(),
-      categoryId: 4,
-      categoryName: 'Furniture',
-      isFavorite: false,
-    },
-    {
-      id: 105,
-      title: 'Canon EOS 200D II DSLR with 18-55mm IS STM Lens',
-      price: 32000,
-      condition: 'LIKE_NEW',
-      location: 'Jayanagar, Bengaluru',
-      primaryImageUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=500',
-      isFeatured: false,
-      viewCount: 112,
-      createdAt: new Date().toISOString(),
-      categoryId: 3,
-      categoryName: 'Electronics',
-      isFavorite: false,
-    },
-    {
-      id: 106,
-      title: 'Zara Genuine Leather Biker Jacket (Black - Size M)',
-      price: 3999,
-      condition: 'NEW',
-      location: 'MG Road, Bengaluru',
-      primaryImageUrl: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500',
-      isFeatured: false,
-      viewCount: 65,
-      createdAt: new Date().toISOString(),
-      categoryId: 5,
-      categoryName: 'Fashion',
-      isFavorite: false,
-    },
-  ], []);
-
   const allListings = useMemo(() => {
-    const base = serverListings.length > 0 ? serverListings : initialListings;
-    return [...customListings, ...base];
-  }, [customListings, serverListings, initialListings]);
+    return [...customListings, ...serverListings];
+  }, [customListings, serverListings]);
 
   const filteredListings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
