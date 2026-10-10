@@ -442,7 +442,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: 1.5,
-    height: '100%',
+    marginLeft: 10,
+    paddingVertical: 0,
+    includeFontPadding: false,
   },
   verifiedIconBox: {
     marginLeft: 8,
@@ -503,8 +505,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 24,
+    paddingHorizontal: 8,
   },
   trustItem: {
     flexDirection: 'row',
