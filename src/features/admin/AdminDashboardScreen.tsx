@@ -793,8 +793,8 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
             style={styles.webPortalBtn}
             onPress={() => navigation.navigate('AdminPortal')}
           >
-            <Ionicons name="globe-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.webPortalText}>Web</Text>
+            <Ionicons name="apps-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.webPortalText}>Portal</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
             <Ionicons name="log-out-outline" size={18} color="#EF4444" />
