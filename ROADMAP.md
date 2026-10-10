@@ -25,14 +25,14 @@
 ## 📌 Last Session Handoff
 
 - **Date**: October 10, 2026
-- **Status**: Completed FIX-04 (Image Compression & Thumbnail Pipeline). The backend EF Core migration was generated and git auto-commit/push rule applied. Verified with `npx tsc --noEmit`, `npm test`, and `dotnet test`.
+- **Status**: Completed FIX-05 (Ride Cancellation & Food Order State Integrity). Updated backend to correctly unassign drivers/captains instead of cancelling/deleting orders, allowing them to return to the `SEARCHING`/`READY` pool. Updated frontend API service to support `unassignFoodOrder`. Verified with unit tests, TypeScript compilation, and pushed changes.
 - **Active Bug Backlog**: Detailed task list with executable prompts created in [`PENDING_FIXES.md`](PENDING_FIXES.md). No new features allowed until existing bugs are resolved.
 - **Priority Tasks in `PENDING_FIXES.md`**:
   1. ~~FIX-01: Marketplace Item Sell Native Image Upload (replace URL input)~~ [CLOSED]
   2. ~~FIX-02: Remove hardcoded sample/default data (default MacBook listing)~~ [CLOSED]
   3. ~~FIX-03: Replace browser alerts (`"makemytree.duckdns.org says"`) with custom app modals~~ [CLOSED]
   4. ~~FIX-04: Image compression & thumbnail generation pipeline~~ [CLOSED]
-  5. FIX-05: Ride cancellation & food order state machine audit (prevent ghost deletions)
+  5. ~~FIX-05: Ride cancellation & food order state machine audit (prevent ghost deletions)~~ [CLOSED]
   6. FIX-06: Admin dashboard mobile/tablet responsive layout overhaul
   7. FIX-07: Automated push notifications scheduler (2-3 times daily)
   8. FIX-08: Production hardening (disable mock OTP & sandbox payment bypass)
