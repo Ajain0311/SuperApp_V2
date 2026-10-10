@@ -74,6 +74,7 @@ export const ApiEndpoints = {
     availableFood: '/driver/available-food-orders',
     activeFood: '/driver/active-food-order',
     acceptFood: (id: string | number) => `/driver/food-orders/${id}/accept`,
+    unassignFood: (id: string | number) => `/driver/food-orders/${id}/unassign`,
     pickupFood: (id: string | number) => `/driver/food-orders/${id}/pickup`,
     deliverFood: (id: string | number) => `/driver/food-orders/${id}/deliver`,
   },

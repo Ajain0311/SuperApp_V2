@@ -508,12 +508,14 @@ public class DriverController : ControllerBase
         if (ride.Status == RideStatus.Started || ride.Status == RideStatus.Completed)
             return BadRequest(ApiResponse.Fail("Active started or completed rides cannot be cancelled"));
 
-        ride.Status = RideStatus.Cancelled;
-        ride.CancelledAt = DateTime.UtcNow;
-        ride.CancellationReason = request.Reason ?? "Cancelled by driver";
+        // Do not delete or permanently cancel the ride. Unassign driver so others can pick it up.
+        ride.DriverId = null;
+        ride.Status = RideStatus.Searching;
         ride.UpdatedAt = DateTime.UtcNow;
+        ride.CancellationReason = request.Reason; // Audit trail of last unassign reason
         await _db.SaveChangesAsync();
 
+        // Notify rider
         await _hub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
         {
             rideId = ride.Id,
@@ -526,13 +528,59 @@ public class DriverController : ControllerBase
         {
             await _notificationService.SendPushNotificationAsync(
                 ride.UserId,
-                "Ride Cancelled by Driver ❌",
-                $"Your ride {ride.RideNumber} was cancelled by driver. Reason: {ride.CancellationReason}",
+                "Driver Unassigned 🔄",
+                "Your driver had to cancel. We are searching for another driver.",
                 "RIDE",
                 ride.Id.ToString());
         }
 
-        return Ok(ApiResponse.Ok("Ride cancelled"));
+        // Return to driver pool
+        await _hub.Clients.Group("drivers-pool").SendAsync("RideRequested", new
+        {
+            id = ride.Id,
+            rideNumber = ride.RideNumber,
+            pickupAddress = ride.PickupAddress,
+            dropoffAddress = ride.DropoffAddress,
+            fare = ride.EstimatedFare,
+            status = ride.Status,
+            createdAt = ride.CreatedAt
+        });
+
+        return Ok(ApiResponse.Ok("Ride unassigned and returned to pool"));
+    }
+
+    /// <summary>
+    /// Driver unassigns from an accepted food order
+    /// </summary>
+    [HttpPost("food-orders/{id:long}/unassign")]
+    public async Task<ActionResult<ApiResponse>> UnassignFoodOrder(long id)
+    {
+        var driver = await GetAuthorizedDriverAsync();
+        if (driver == null)
+            return Forbid();
+
+        var order = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == id && o.DriverId == driver.Id);
+        if (order == null)
+            return NotFound(ApiResponse.Fail("Food order not found for this driver"));
+
+        if (order.Status == OrderStatus.PickedUp || order.Status == OrderStatus.Delivered)
+            return BadRequest(ApiResponse.Fail("Picked up or delivered orders cannot be unassigned"));
+
+        order.DriverId = null;
+        order.DriverAssignedAt = null;
+        order.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var payload = new
+        {
+            orderId = order.Id,
+            orderNumber = order.OrderNumber,
+            status = order.Status, // Keeps its current state, likely Ready
+            updatedAt = DateTime.UtcNow
+        };
+        await _hub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAccepted", payload);
+
+        return Ok(ApiResponse.Ok("Food order unassigned and returned to pool"));
     }
 
     /// <summary>

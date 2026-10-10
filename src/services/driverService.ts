@@ -127,6 +127,10 @@ class DriverService {
     return res.data;
   }
 
+  async unassignFoodOrder(id: number | string): Promise<void> {
+    await apiClient.post(ApiEndpoints.driver.unassignFood(id));
+  }
+
   async pickupFoodOrder(id: number | string): Promise<void> {
     await apiClient.post(ApiEndpoints.driver.pickupFood(id));
   }
