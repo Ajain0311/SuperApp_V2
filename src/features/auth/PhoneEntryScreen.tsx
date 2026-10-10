@@ -150,15 +150,12 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
                 isValidLength && styles.phoneInputCardValid,
               ]}
             >
-              <View style={styles.countryCodeBox}>
-                <Text style={styles.flagIcon}>🇮🇳</Text>
-                <Text style={styles.countryCodeText}>+91</Text>
-                <View style={styles.inputDivider} />
-              </View>
-
+              <Text style={styles.flagIcon}>🇮🇳</Text>
+              <Text style={styles.countryCodeText}>+91</Text>
+              <View style={styles.inputDivider} />
               <TextInput
                 style={styles.phoneNumberInput}
-                placeholder="Enter Mobile Number"
+                placeholder="Mobile Number"
                 placeholderTextColor="#64748B"
                 keyboardType="phone-pad"
                 maxLength={10}
@@ -168,8 +165,6 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
                 onBlur={() => setIsFocused(false)}
                 autoFocus
               />
-
-              {/* Status or Clear Icon */}
               {phoneNumber.length > 0 ? (
                 isValidLength ? (
                   <View style={styles.verifiedIconBox}>
@@ -405,11 +400,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#2A2D3E',
-    paddingLeft: 10,
-    paddingRight: 12,
-    height: 56,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     marginBottom: 8,
-    overflow: 'hidden',
   },
   phoneInputCardFocused: {
     borderColor: '#FF6B35',
@@ -418,40 +411,32 @@ const styles = StyleSheet.create({
   phoneInputCardValid: {
     borderColor: '#10B981',
   },
-  countryCodeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 0,
-  },
   flagIcon: {
     fontSize: 18,
     marginRight: 4,
   },
   countryCodeText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+    marginRight: 0,
   },
   inputDivider: {
     width: 1,
-    height: 22,
+    height: 20,
     backgroundColor: '#2A2D3E',
-    marginLeft: 8,
-    marginRight: 2,
+    marginHorizontal: 10,
   },
   phoneNumberInput: {
     flex: 1,
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    letterSpacing: 1.5,
-    paddingVertical: 0,
-    paddingHorizontal: 8,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
+    padding: 0,
+    margin: 0,
   },
   verifiedIconBox: {
-    marginLeft: 8,
+    marginLeft: 6,
   },
   helperRow: {
     flexDirection: 'row',
