@@ -176,7 +176,7 @@ npm test.
 
 ---
 
-### FIX-15: SignalR Real-Time Testing & Hardening
+### [x] CLOSED FIX-15: SignalR Real-Time Testing & Hardening
 - **Problem:** SignalR real-time connections (Ride tracking, Order status, Chat) need rigorous testing and stabilization to prevent dropped connections or missed events.
 - **Goal:** Harden the SignalR hubs and client services. Ensure automatic reconnections work smoothly, state is synchronized upon reconnect, and comprehensive unit/integration tests cover real-time edge cases.
 - **Execution Prompt:**
