@@ -41,3 +41,5 @@
   11. ~~FIX-14: Vendor Dashboards UX & QA~~ [CLOSED]
 - **Protocol for Developers/Agents**: Check `PENDING_FIXES.md` first; prompt developer before taking new requests to confirm queue vs. major fixes.
 
+
+

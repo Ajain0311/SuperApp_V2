@@ -111,7 +111,7 @@
 
 ---
 
-### FIX-06: Admin Dashboard Mobile & Tablet Responsive UI Overhaul
+### [x] CLOSED FIX-06: Admin Dashboard Mobile & Tablet Responsive UI Overhaul
 - **Problem:** Admin dashboard pages (located in `backend/SuperApp.API/wwwroot/admin/` or React Admin) are broken on mobile/tablet viewports; tables overflow horizontally without scrolling, cards stack awkwardly, and buttons overlap.
 - **Goal:** Overhaul CSS/styles with mobile-first responsive design, touch-friendly navigation drawer, scrollable data tables, and adaptive stat cards.
 - **Execution Prompt:**
@@ -217,7 +217,7 @@ When anyone joins this project:
 
 ---
 
-### FIX-10: Admin Dashboard Premium UI/UX Overhaul
+### [x] CLOSED FIX-10: Admin Dashboard Premium UI/UX Overhaul
 - **Problem:** While basic mobile responsiveness was added (FIX-06), the admin dashboard still lacks a premium, polished professional aesthetic. The design feels basic, components lack proper elevation/shadows, and color contrast needs improvement for a modern web app.
 - **Goal:** Perform a premium UI/UX overhaul of the admin portal (`backend/SuperApp.API/wwwroot/admin/`).
 - **Execution Prompt:**
