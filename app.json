@@ -1,11 +1,16 @@
 {
   "expo": {
-    "name": "HTTP-EXPNAT-NET",
-    "slug": "HTTP-EXPNAT-NET",
+    "name": "SuperApp",
+    "slug": "SuperApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0E21"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.superapp.v2",
@@ -16,7 +21,7 @@
     "android": {
       "package": "com.superapp.v2",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0A0E21",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
