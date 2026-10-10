@@ -25,6 +25,7 @@
 | **FIX-09** | Remove Admin Password Prompt for Demoted Admins | P1 (High) | `[x] CLOSED` |
 | **FIX-10** | Admin Dashboard Premium UI/UX Overhaul | P2 (Medium) | `[ ] OPEN` |
 | **FIX-14** | Vendor Dashboards UX & QA | P1 (High) | `[x] CLOSED` |
+| **FIX-15** | SignalR Real-Time Testing & Hardening | P1 (High) | `[x] CLOSED` |
 
 ---
 
