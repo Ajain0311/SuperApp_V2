@@ -228,6 +228,9 @@ builder.Services.AddScoped<INotificationService, MockNotificationService>();
 // 6. Security & Identity Tokens
 builder.Services.AddScoped<ITokenService, TokenService>();
 
+// 7. Background Services
+builder.Services.AddHostedService<PushNotificationSchedulerService>();
+
 // --- SignalR Real-Time Hubs ---
 builder.Services.AddSignalR();
 
@@ -429,11 +432,12 @@ ALTER TABLE banners ADD COLUMN IF NOT EXISTS subtitle VARCHAR(300) NULL;
 ALTER TABLE banners ADD COLUMN IF NOT EXISTS cta_text VARCHAR(80) NULL;
 ALTER TABLE coupons DROP CONSTRAINT IF EXISTS chk_coupons_module;
 ALTER TABLE coupons ADD CONSTRAINT chk_coupons_module CHECK (applicable_module IN ('FOOD', 'RIDE', 'MARKETPLACE', 'ALL'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 ");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Schema Check] coupons/banners: {ex.Message}");
+            Console.WriteLine($"[Schema Check] coupons/banners/users: {ex.Message}");
         }
     }
 }
