@@ -120,6 +120,13 @@ public class PaymentsController : ControllerBase
     public async Task<ActionResult<ApiResponse<PaymentVerificationResult>>> MockComplete(
         [FromBody] MockCompletePaymentRequest request)
     {
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+        if (isProd)
+        {
+            return BadRequest(ApiResponse<PaymentVerificationResult>.Fail(
+                "Mock payments are disabled in Production."));
+        }
+
         var (_, active, _, _, _) = ResolveKit();
         if (!string.Equals(active, "Mock", StringComparison.OrdinalIgnoreCase))
         {
@@ -215,13 +222,28 @@ setTimeout(function(){{ window.close(); }}, 1200);
                 fields[kv.Key] = kv.Value.ToString();
         }
 
-        if (_paymentService is EasebuzzPaymentService ease && !ease.VerifyCallbackHash(fields))
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+        bool hashVerified = false;
+
+        if (_paymentService is EasebuzzPaymentService ease)
+        {
+            if (!ease.VerifyCallbackHash(fields))
+                return Unauthorized();
+            hashVerified = true;
+        }
+        else if (isProd)
+        {
             return Unauthorized();
+        }
+        else
+        {
+            hashVerified = true;
+        }
 
         fields.TryGetValue("txnid", out var txnid);
         fields.TryGetValue("status", out var status);
         if (!string.IsNullOrWhiteSpace(txnid))
-            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified: true);
+            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified);
 
         return Ok(new { received = true });
     }

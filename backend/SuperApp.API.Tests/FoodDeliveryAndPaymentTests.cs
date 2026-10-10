@@ -190,4 +190,30 @@ public class FoodDeliveryAndPaymentTests
         Assert.Equal(OrderStatus.Pending, paid.Status);
         Assert.Equal(1, await db.FoodOrders.CountAsync(o => o.Id == 80));
     }
+
+    [Fact]
+    public async Task PaymentsController_MockComplete_IsBlockedInProduction()
+    {
+        var db = NewDb();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var controller = new SuperApp.API.Controllers.PaymentsController(
+            new MockPaymentService(db), db, config);
+
+        var origEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        try
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+
+            var request = new SuperApp.API.DTOs.MockCompletePaymentRequest { TransactionId = "test", Success = true };
+            var result = await controller.MockComplete(request);
+
+            var badRequest = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result.Result);
+            var response = Assert.IsType<SuperApp.API.DTOs.ApiResponse<SuperApp.API.Services.PaymentVerificationResult>>(badRequest.Value);
+            Assert.Contains("disabled in Production", response.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", origEnv);
+        }
+    }
 }

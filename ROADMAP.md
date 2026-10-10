@@ -35,7 +35,7 @@
   5. ~~FIX-05: Ride cancellation & food order state machine audit (prevent ghost deletions)~~ [CLOSED]
   6. ~~FIX-06: Admin dashboard mobile/tablet responsive layout overhaul~~ [CLOSED]
   7. ~~FIX-07: Automated push notifications scheduler (2-3 times daily)~~ [CLOSED]
-  8. FIX-08: Production hardening (disable mock OTP & sandbox payment bypass)
+  8. ~~FIX-08: Production hardening (disable mock OTP & sandbox payment bypass)~~ [CLOSED]
 - **Protocol for Developers/Agents**: Check `PENDING_FIXES.md` first; prompt developer before taking new requests to confirm queue vs. major fixes.
 
 

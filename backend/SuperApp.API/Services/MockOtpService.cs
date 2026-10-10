@@ -32,10 +32,11 @@ public class MockOtpService : IOtpService
         }
 
         var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
         var testOtp = Environment.GetEnvironmentVariable("TEST_OTP");
-        var otpCode = (isTestMode && !string.IsNullOrWhiteSpace(testOtp))
+        var otpCode = (!isProd && isTestMode && !string.IsNullOrWhiteSpace(testOtp))
             ? testOtp
-            : (isTestMode ? "123456" : Random.Shared.Next(100000, 1000000).ToString());
+            : ((!isProd && isTestMode) ? "123456" : Random.Shared.Next(100000, 1000000).ToString());
 
         var otpRequest = new OtpRequest
         {
@@ -79,8 +80,9 @@ public class MockOtpService : IOtpService
         if (otpRequest.OtpCode != cleanInputOtp)
         {
             var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
+            var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
             var configuredTestOtp = Environment.GetEnvironmentVariable("TEST_OTP") ?? "123456";
-            if (isTestMode && (cleanInputOtp == configuredTestOtp || cleanInputOtp == "123456"))
+            if (!isProd && isTestMode && (cleanInputOtp == configuredTestOtp || cleanInputOtp == "123456"))
             {
                 otpRequest.IsUsed = true;
                 await _db.SaveChangesAsync();

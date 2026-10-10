@@ -21,7 +21,7 @@
 | **FIX-05** | Ride Cancellation & Food Order State Integrity (Prevent Ghost Deletion) | P1 (High) | `[x] CLOSED` |
 | **FIX-06** | Admin Dashboard Mobile & Tablet Responsive UI Overhaul | P2 (Medium) | `[x] CLOSED` |
 | **FIX-07** | Automated Push Notifications (2-3 times daily engagement broadcast) | P2 (Medium) | `[x] CLOSED` |
-| **FIX-08** | Production Hardening: Disable Mock OTP & Test Payment Gateways | P0 (Critical) | `[ ] OPEN` |
+| **FIX-08** | Production Hardening: Disable Mock OTP & Test Payment Gateways | P0 (Critical) | `[x] CLOSED` |
 
 ---
 
