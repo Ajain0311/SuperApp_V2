@@ -60,9 +60,12 @@ public class DocumentsController : ControllerBase
         }
 
         byte[] compressed;
+        byte[] thumb;
         try
         {
-            compressed = ImageByteProcessor.Compress(raw);
+            var result = ImageByteProcessor.CompressAndThumb(raw);
+            compressed = result.Main;
+            thumb = result.Thumbnail;
         }
         catch (InvalidImageException ex)
         {
@@ -78,6 +81,7 @@ public class DocumentsController : ControllerBase
             DocumentNo = "DOC-" + Guid.NewGuid().ToString("N")[..16],
             DocumentName = safeName,
             BlobObject = compressed,
+            ThumbObject = thumb,
             OwnerUserId = userId.Value,
             CreatedAt = DateTime.UtcNow
         };
@@ -112,6 +116,21 @@ public class DocumentsController : ControllerBase
 
         Response.Headers.CacheControl = "public,max-age=86400";
         return File(row.BlobObject, "image/jpeg");
+    }
+
+    [AllowAnonymous]
+    [HttpGet("{documentNo}/thumb")]
+    public async Task<IActionResult> Thumb(string documentNo)
+    {
+        var row = await _db.Documents.AsNoTracking()
+            .Where(d => d.DocumentNo == documentNo)
+            .Select(d => new { d.ThumbObject, d.BlobObject })
+            .FirstOrDefaultAsync();
+        if (row == null)
+            return NotFound();
+
+        Response.Headers.CacheControl = "public,max-age=86400";
+        return File(row.ThumbObject ?? row.BlobObject, "image/jpeg");
     }
 
     [Authorize]

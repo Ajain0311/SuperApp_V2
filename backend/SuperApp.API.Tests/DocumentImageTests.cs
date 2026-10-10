@@ -89,14 +89,14 @@ public class DocumentImageTests
     [Fact]
     public async Task Rejects_NonImage_Corrupt_And_HugeDimension()
     {
-        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.Compress("not-an-image"u8.ToArray()));
-        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.Compress(new byte[] { 0xFF, 0xD8, 0xFF, 0x00 }));
-        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.Compress(new byte[ImageByteProcessor.MaxUploadBytes + 1]));
+        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.CompressAndThumb("not-an-image"u8.ToArray()));
+        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.CompressAndThumb(new byte[] { 0xFF, 0xD8, 0xFF, 0x00 }));
+        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.CompressAndThumb(new byte[ImageByteProcessor.MaxUploadBytes + 1]));
 
         using var huge = new Image<Rgb24>(8001, 10);
         using var ms = new MemoryStream();
         huge.SaveAsJpeg(ms);
-        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.Compress(ms.ToArray()));
+        Assert.Throws<InvalidImageException>(() => ImageByteProcessor.CompressAndThumb(ms.ToArray()));
     }
 
     [Fact]

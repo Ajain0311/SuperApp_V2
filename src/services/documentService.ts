@@ -15,11 +15,19 @@ function absoluteImageUrl(path: string): string {
   return `${origin}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
+import * as ImageManipulator from 'expo-image-manipulator';
+
 class DocumentService {
   async upload(uri: string, fileName = 'photo.jpg', assign?: 'profile'): Promise<StoredDocument> {
+    const manipResult = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1200 } }],
+      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+    );
+
     const form = new FormData();
     form.append('file', {
-      uri,
+      uri: manipResult.uri,
       name: fileName,
       type: 'image/jpeg',
     } as any);

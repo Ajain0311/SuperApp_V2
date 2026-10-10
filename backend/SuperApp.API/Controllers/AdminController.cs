@@ -694,9 +694,12 @@ public class AdminController : ControllerBase
                     using var buffer = new MemoryStream();
                     await stream.CopyToAsync(buffer);
                     byte[] compressed;
+                    byte[] thumb;
                     try
                     {
-                        compressed = ImageByteProcessor.Compress(buffer.ToArray());
+                        var result = ImageByteProcessor.CompressAndThumb(buffer.ToArray());
+                        compressed = result.Main;
+                        thumb = result.Thumbnail;
                     }
                     catch (InvalidImageException ex)
                     {
@@ -709,6 +712,7 @@ public class AdminController : ControllerBase
                         DocumentNo = "DOC-" + Guid.NewGuid().ToString("N")[..16],
                         DocumentName = string.IsNullOrWhiteSpace(image.FileName) ? "banner.jpg" : Path.GetFileName(image.FileName),
                         BlobObject = compressed,
+                        ThumbObject = thumb,
                         OwnerUserId = owner,
                         CreatedAt = DateTime.UtcNow
                     };

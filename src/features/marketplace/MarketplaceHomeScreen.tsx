@@ -156,7 +156,7 @@ export const MarketplaceHomeScreen: React.FC = () => {
       >
         <View style={styles.imageWrapper}>
           <Image
-            source={{ uri: item.primaryImageUrl || undefined }}
+            source={{ uri: item.primaryImageUrl?.replace('/image', '/thumb') || undefined }}
             style={styles.productImage}
             resizeMode="cover"
           />

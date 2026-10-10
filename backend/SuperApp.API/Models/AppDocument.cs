@@ -20,6 +20,8 @@ public class AppDocument
     [Required]
     public byte[] BlobObject { get; set; } = Array.Empty<byte>();
 
+    public byte[]? ThumbObject { get; set; }
+
     public long OwnerUserId { get; set; }
 
     [ForeignKey(nameof(OwnerUserId))]

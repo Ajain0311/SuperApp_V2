@@ -11,7 +11,7 @@ public static class ImageByteProcessor
     public const int MaxOutputEdge = 1280;
     public const int JpegQuality = 70;
 
-    public static byte[] Compress(byte[] original)
+    public static (byte[] Main, byte[] Thumbnail) CompressAndThumb(byte[] original)
     {
         if (original == null || original.Length == 0)
             throw new InvalidImageException("Empty file");
@@ -22,23 +22,41 @@ public static class ImageByteProcessor
         {
             using var image = Image.Load(original);
             image.Mutate(x => x.AutoOrient());
+            
+            // Strip metadata to reduce size
+            image.Metadata.ExifProfile = null;
+            image.Metadata.XmpProfile = null;
+            image.Metadata.IptcProfile = null;
+
             if (image.Width > MaxInputEdge || image.Height > MaxInputEdge)
                 throw new InvalidImageException("Image dimensions are too large");
             if (image.Width < 1 || image.Height < 1)
                 throw new InvalidImageException("Image has no pixels");
 
-            if (image.Width > MaxOutputEdge || image.Height > MaxOutputEdge)
-            {
-                image.Mutate(x => x.Resize(new ResizeOptions
+            using var mainImage = image.Clone(x => {
+                if (image.Width > MaxOutputEdge || image.Height > MaxOutputEdge)
                 {
-                    Mode = ResizeMode.Max,
-                    Size = new Size(MaxOutputEdge, MaxOutputEdge)
-                }));
-            }
+                    x.Resize(new ResizeOptions
+                    {
+                        Mode = ResizeMode.Max,
+                        Size = new Size(MaxOutputEdge, MaxOutputEdge)
+                    });
+                }
+            });
 
-            using var output = new MemoryStream();
-            image.SaveAsJpeg(output, new JpegEncoder { Quality = JpegQuality });
-            return output.ToArray();
+            using var thumbImage = image.Clone(x => x.Resize(new ResizeOptions
+            {
+                Mode = ResizeMode.Crop,
+                Size = new Size(300, 300)
+            }));
+
+            using var mainOutput = new MemoryStream();
+            mainImage.SaveAsJpeg(mainOutput, new JpegEncoder { Quality = JpegQuality });
+            
+            using var thumbOutput = new MemoryStream();
+            thumbImage.SaveAsJpeg(thumbOutput, new JpegEncoder { Quality = 60 });
+
+            return (mainOutput.ToArray(), thumbOutput.ToArray());
         }
         catch (InvalidImageException)
         {

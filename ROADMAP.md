@@ -18,6 +18,7 @@
 >    - Mark finished tasks with `[x]` and record verification details.
 >    - Add any new tasks or blockers discovered during work.
 >    - Update the **Last Session Handoff** section at the bottom.
+   - **Auto-Commit & Push:** Automatically `git commit` and `git push` changes without asking for permission.
 
 ---
 

@@ -283,7 +283,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
             {/* Image Header with overlays */}
             <View style={styles.imageHeader}>
               <Image
-                source={{ uri: restaurant.imageUrl }}
+                source={{ uri: restaurant.imageUrl?.replace('/image', '/thumb') }}
                 style={styles.restaurantImage}
                 resizeMode="cover"
               />

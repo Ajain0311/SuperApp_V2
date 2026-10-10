@@ -386,7 +386,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
 
               {/* Right Image + Add Button */}
               <View style={styles.dishActionCol}>
-                <Image source={{ uri: item.image }} style={styles.dishImage} />
+                <Image source={{ uri: item.image?.replace('/image', '/thumb') }} style={styles.dishImage} />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => handleAddItem(item)}
