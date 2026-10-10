@@ -25,7 +25,7 @@
 ## 📌 Last Session Handoff
 
 - **Date**: October 10, 2026
-- **Status**: Completed FIX-07 (Automated Push Notifications). Implemented PushNotificationSchedulerService as a BackgroundService to broadcast engagement notifications, fetched valid push tokens, filtered out opted-out users via NotificationsEnabled, and dynamically added schema migration on startup.
+- **Status**: Completed FIX-11 (Mobile Login & OTP UX), FIX-12 (Forgot Password UI), and FIX-13 (Banner Redirection Bug). Added dark mode premium redesign to `OtpVerificationScreen.tsx`, implemented forgot/reset password API in `authStore` and UI, and fixed `openBanner` logic prioritizing `targetType` over `module` in `HomeScreen.tsx`.
 - **Active Bug Backlog**: Detailed task list with executable prompts created in [`PENDING_FIXES.md`](PENDING_FIXES.md). No new features allowed until existing bugs are resolved.
 - **Priority Tasks in `PENDING_FIXES.md`**:
   1. ~~FIX-01: Marketplace Item Sell Native Image Upload (replace URL input)~~ [CLOSED]
@@ -38,5 +38,6 @@
   8. ~~FIX-08: Production hardening (disable mock OTP & sandbox payment bypass)~~ [CLOSED]
   9. ~~FIX-09: Remove admin password prompt for demoted admins~~ [CLOSED]
   10. ~~FIX-12: Added forgot/reset password endpoints for admin~~ [CLOSED]
+  11. ~~FIX-14: Vendor Dashboards UX & QA~~ [CLOSED]
 - **Protocol for Developers/Agents**: Check `PENDING_FIXES.md` first; prompt developer before taking new requests to confirm queue vs. major fixes.
 

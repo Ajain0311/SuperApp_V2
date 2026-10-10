@@ -569,6 +569,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+      android: { elevation: 4 },
+      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.05)' } as any,
+    }),
   },
   profileRow: {
     flexDirection: 'row',
@@ -628,6 +633,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1.5,
     borderColor: '#3B82F6',
+    ...Platform.select({
+      ios: { shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
+      android: { elevation: 6 },
+      web: { boxShadow: '0 4px 16px rgba(59,130,246,0.15)' } as any,
+    }),
   },
   activeRideHeader: {
     flexDirection: 'row',
@@ -855,6 +865,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 },
+      android: { elevation: 2 },
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.03)' } as any,
+    }),
   },
   requestCardHeader: {
     flexDirection: 'row',

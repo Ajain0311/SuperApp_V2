@@ -24,6 +24,7 @@
 | **FIX-08** | Production Hardening: Disable Mock OTP & Test Payment Gateways | P0 (Critical) | `[x] CLOSED` |
 | **FIX-09** | Remove Admin Password Prompt for Demoted Admins | P1 (High) | `[x] CLOSED` |
 | **FIX-10** | Admin Dashboard Premium UI/UX Overhaul | P2 (Medium) | `[ ] OPEN` |
+| **FIX-14** | Vendor Dashboards UX & QA | P1 (High) | `[x] CLOSED` |
 
 ---
 
@@ -163,14 +164,14 @@
 - **Problem:** The pages for Restaurant Owners, Ride Captains, and Marketplace Sellers need a UX audit and polish to match the new premium feel.
 - **Goal:** Audit and overhaul the vendor/seller interfaces (both in-app and web dashboards) to ensure they are highly responsive, intuitive, and bug-free.
 - **Execution Prompt:**
-  ``text
+  ```text
   Overhaul vendor/seller UX:
   1. Inspect the screens/components for Restaurant Owners, Ride Captains, and Marketplace Sellers.
   2. Upgrade the styling, fix any layout bugs, and ensure a premium "heavy developer" feel.
   3. Verify with 
-px tsc --noEmit or 
-pm test.
-  ``
+npx tsc --noEmit or 
+npm test.
+  ```
 
 ---
 

@@ -37,8 +37,9 @@ jest.mock('@microsoft/signalr', () => {
 });
 
 describe('SignalRService - Connection, Event Subscriptions, and Teardown', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    await signalRService.disconnectAll();
   });
 
   it('should configure automatic reconnect intervals [0, 2000, 5000, 10000, 30000]', async () => {
@@ -86,5 +87,31 @@ describe('SignalRService - Connection, Event Subscriptions, and Teardown', () =>
 
     unsubscribe();
     expect(conn.off).toHaveBeenCalledWith('OrderStatusUpdated', mockCallback);
+  });
+
+  it('should resync active ride state on reconnect', async () => {
+    // Re-instantiate service to clear state, or just call joinRide
+    const conn = await signalRService.connectRideHub();
+    await signalRService.joinRide(303);
+    expect(conn.invoke).toHaveBeenCalledWith('JoinRide', 303);
+
+    // Trigger onreconnected
+    const onreconnectedCallback = (conn.onreconnected as jest.Mock).mock.calls[0][0];
+    await onreconnectedCallback();
+
+    // Should call JoinRide again
+    expect(conn.invoke).toHaveBeenCalledWith('JoinRide', 303);
+  });
+
+  it('should resync order and restaurant state on reconnect', async () => {
+    const conn = await signalRService.connectOrderHub();
+    await signalRService.joinOrder(404);
+    await signalRService.joinRestaurantKitchen(505);
+
+    const onreconnectedCallback = (conn.onreconnected as jest.Mock).mock.calls[0][0];
+    await onreconnectedCallback();
+
+    expect(conn.invoke).toHaveBeenCalledWith('JoinOrder', 404);
+    expect(conn.invoke).toHaveBeenCalledWith('JoinRestaurantKitchen', 505);
   });
 });

@@ -274,11 +274,24 @@ class SignalRService {
       return this.chatHubConnection;
     }
 
-    this.chatHubConnection = this.createConnection(AppEnvironment.chatHubUrl);
+    if (!this.chatHubConnection) {
+      this.chatHubConnection = this.createConnection(AppEnvironment.chatHubUrl);
+      this.chatHubConnection.onreconnected(async () => {
+        if (AppEnvironment.enableLogging) {
+          console.log('[SignalR] Reconnected to ChatHub. Syncing state...');
+        }
+        if (this.activeChatConversationId !== null) {
+          await this.chatHubConnection?.invoke('JoinChat', this.activeChatConversationId).catch(() => {});
+        }
+      });
+    }
+
     try {
-      await this.chatHubConnection.start();
-      if (AppEnvironment.enableLogging) {
-        console.log('[SignalR] Connected to ChatHub at', AppEnvironment.chatHubUrl);
+      if (this.chatHubConnection.state === signalR.HubConnectionState.Disconnected) {
+        await this.chatHubConnection.start();
+        if (AppEnvironment.enableLogging) {
+          console.log('[SignalR] Connected to ChatHub at', AppEnvironment.chatHubUrl);
+        }
       }
     } catch (err) {
       if (AppEnvironment.enableLogging) {
@@ -289,6 +302,7 @@ class SignalRService {
   }
 
   async joinChat(conversationId: string): Promise<void> {
+    this.activeChatConversationId = conversationId;
     const conn = await this.connectChatHub();
     if (conn.state === signalR.HubConnectionState.Connected) {
       await conn.invoke('JoinChat', conversationId);
@@ -296,6 +310,9 @@ class SignalRService {
   }
 
   async leaveChat(conversationId: string): Promise<void> {
+    if (this.activeChatConversationId === conversationId) {
+      this.activeChatConversationId = null;
+    }
     if (this.chatHubConnection && this.chatHubConnection.state === signalR.HubConnectionState.Connected) {
       await this.chatHubConnection.invoke('LeaveChat', conversationId);
     }
