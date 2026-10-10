@@ -90,6 +90,11 @@ export const RideBookingScreen: React.FC = () => {
   const [placeQuery, setPlaceQuery] = useState('');
   const [placeHits, setPlaceHits] = useState<{ label: string; latitude: number; longitude: number }[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [isMapModalVisible, setIsMapModalVisible] = useState(false);
+  const [modalPoint, setModalPoint] = useState<'pickup' | 'dropoff'>('pickup');
+  const [pickupInput, setPickupInput] = useState('');
+  const [dropoffInput, setDropoffInput] = useState('');
+  const [activeInput, setActiveInput] = useState<'pickup' | 'dropoff' | null>(null);
 
   const fetchEstimate = (
     pickup: { latitude: number; longitude: number } | null,
@@ -187,11 +192,18 @@ export const RideBookingScreen: React.FC = () => {
     }
   };
 
+  const openMapModal = (point: 'pickup' | 'dropoff') => {
+    setModalPoint(point);
+    setActivePoint(point);
+    setIsMapModalVisible(true);
+  };
+
   const handlePlaceSelect = (place: SelectedMapPlace) => {
     const coords = { latitude: place.latitude, longitude: place.longitude };
     if (activePoint === 'pickup') {
       setPickupCoords(coords);
       setPickupAddress(place.address || `${coords.latitude.toFixed(4)}°, ${coords.longitude.toFixed(4)}°`);
+      setPickupInput(place.address || '');
       if (dropoffCoords) {
         fetchEstimate(coords, place.address, dropoffCoords, dropoffAddress);
       }
@@ -199,6 +211,7 @@ export const RideBookingScreen: React.FC = () => {
     }
     setDropoffCoords(coords);
     setDropoffAddress(place.address || `${coords.latitude.toFixed(4)}°, ${coords.longitude.toFixed(4)}°`);
+    setDropoffInput(place.address || '');
     if (pickupCoords) {
       fetchEstimate(pickupCoords, pickupAddress, coords, place.address);
     }
@@ -214,8 +227,13 @@ export const RideBookingScreen: React.FC = () => {
     }
   }, [selectedOptions.join('|')]);
 
-  const searchPlaces = async (text: string) => {
-    setPlaceQuery(text);
+  const searchPlaces = async (text: string, point: 'pickup' | 'dropoff') => {
+    setActiveInput(point);
+    if (point === 'pickup') {
+      setPickupInput(text);
+    } else {
+      setDropoffInput(text);
+    }
     setSearchError(null);
     if (text.trim().length < 2) {
       setPlaceHits([]);
@@ -225,7 +243,7 @@ export const RideBookingScreen: React.FC = () => {
       const hits = await mapboxService.searchPlaces(text.trim(), pickupCoords || undefined);
       setPlaceHits(hits.map((hit) => ({ label: hit.address || hit.name, latitude: hit.latitude, longitude: hit.longitude })));
     } catch {
-      setSearchError('Address search failed. Move the map pin or try again.');
+      setSearchError('Address search failed. Use map pin or try again.');
       setPlaceHits([]);
     }
   };
@@ -236,11 +254,13 @@ export const RideBookingScreen: React.FC = () => {
       const reversed = await mapboxService.reverseGeocode(hit.latitude, hit.longitude);
       if (reversed.address) address = reversed.address;
     } catch {
-      setSearchError('Could not read that address. The pin is still placed.');
+      // Fallback to hit.label
     }
+    const currentPoint = activeInput || activePoint;
+    setActivePoint(currentPoint);
     handlePlaceSelect({ latitude: hit.latitude, longitude: hit.longitude, address });
     setPlaceHits([]);
-    setPlaceQuery('');
+    setActiveInput(null);
   };
 
   const selectedVehicle = vehicles[selectedIndex] || vehicles[0];
@@ -330,34 +350,15 @@ export const RideBookingScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <TextInput
-          value={placeQuery}
-          onChangeText={searchPlaces}
-          placeholder={activePoint === 'pickup' ? 'Search pickup location' : 'Search destination'}
-          placeholderTextColor={colors.textSecondary}
-          style={{ backgroundColor: colors.surface, color: colors.textPrimary, borderRadius: 12, padding: 12, marginBottom: 8 }}
-        />
-        {searchError ? <Text style={{ color: colors.error, marginBottom: 8 }}>{searchError}</Text> : null}
-        {placeHits.map((hit) => (
-          <TouchableOpacity key={`${hit.latitude}-${hit.longitude}`} onPress={() => chooseSearchHit(hit)} style={{ paddingVertical: 8 }}>
-            <Text style={{ color: colors.textPrimary }}>{hit.label}</Text>
-          </TouchableOpacity>
-        ))}
-
-        {/* Pickup / Dropoff Card */}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Rapido-Style Location Inputs Card */}
         <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.locationRow}
-            activeOpacity={0.85}
-            onPress={() => setActivePoint('pickup')}
-          >
+          {/* Pickup Row */}
+          <View style={styles.inputRow}>
             <View style={[styles.dot, { backgroundColor: colors.secondary }]} />
-            <View style={styles.locationTextGroup}>
+            <View style={styles.inputWrapper}>
               <View style={styles.pickupHeaderRow}>
-                <Text style={styles.locationLabel}>
-                  PICKUP LOCATION{activePoint === 'pickup' ? ' · EDITING' : ''}
-                </Text>
+                <Text style={styles.locationLabel}>PICKUP LOCATION</Text>
                 <TouchableOpacity
                   onPress={handleLocateMe}
                   disabled={isLocating}
@@ -365,41 +366,84 @@ export const RideBookingScreen: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <MaterialIcons name="my-location" size={12} color={colors.primary} />
-                  <Text style={styles.locateMeText}>{isLocating ? 'Locating...' : 'Use Current GPS'}</Text>
+                  <Text style={styles.locateMeText}>{isLocating ? 'Locating...' : 'Use GPS'}</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.locationValue} numberOfLines={2}>{pickupAddress}</Text>
-              {pickupCoords && (
-                <Text style={styles.coordsSubtitle}>
-                  GPS: {pickupCoords.latitude.toFixed(4)}°, {pickupCoords.longitude.toFixed(4)}°
-                </Text>
-              )}
+              <TextInput
+                value={activeInput === 'pickup' ? pickupInput : (pickupAddress || '')}
+                onChangeText={(t) => searchPlaces(t, 'pickup')}
+                onFocus={() => {
+                  setActiveInput('pickup');
+                  setActivePoint('pickup');
+                  setPickupInput(pickupAddress.startsWith('Locating') ? '' : pickupAddress);
+                }}
+                placeholder="Where to pick you up?"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.textInput}
+              />
             </View>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.pinMapBtn}
+              onPress={() => openMapModal('pickup')}
+              accessibilityLabel="Pin pickup on map"
+            >
+              <MaterialIcons name="map" size={20} color={colors.secondary} />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.dividerRow}>
             <View style={styles.dividerLineVertical} />
             <View style={styles.dividerHorizontal} />
           </View>
 
-          <TouchableOpacity
-            style={styles.locationRow}
-            activeOpacity={0.85}
-            onPress={() => setActivePoint('dropoff')}
-          >
+          {/* Destination Row */}
+          <View style={styles.inputRow}>
             <View style={[styles.dot, { backgroundColor: colors.error }]} />
-            <View style={styles.locationTextGroup}>
-              <Text style={styles.locationLabel}>
-                DESTINATION{activePoint === 'dropoff' ? ' · EDITING' : ''}
-              </Text>
-              <Text style={styles.locationValue} numberOfLines={2}>{dropoffAddress}</Text>
-              {dropoffCoords && (
-                <Text style={styles.coordsSubtitle}>
-                  {dropoffCoords.latitude.toFixed(4)}°, {dropoffCoords.longitude.toFixed(4)}°
-                </Text>
-              )}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.locationLabel}>WHERE TO?</Text>
+              <TextInput
+                value={activeInput === 'dropoff' ? dropoffInput : (dropoffAddress.startsWith('Tap map') ? '' : dropoffAddress)}
+                onChangeText={(t) => searchPlaces(t, 'dropoff')}
+                onFocus={() => {
+                  setActiveInput('dropoff');
+                  setActivePoint('dropoff');
+                  setDropoffInput(dropoffAddress.startsWith('Tap map') ? '' : dropoffAddress);
+                }}
+                placeholder="Enter drop destination"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.textInput}
+              />
             </View>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.pinMapBtn}
+              onPress={() => openMapModal('dropoff')}
+              accessibilityLabel="Pin destination on map"
+            >
+              <MaterialIcons name="map" size={20} color={colors.error} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Autocomplete Dropdown List */}
+          {placeHits.length > 0 && (
+            <View style={styles.autocompleteContainer}>
+              {placeHits.map((hit, idx) => (
+                <TouchableOpacity
+                  key={`${hit.latitude}-${hit.longitude}-${idx}`}
+                  onPress={() => chooseSearchHit(hit)}
+                  style={styles.autocompleteItem}
+                >
+                  <MaterialIcons name="place" size={18} color={colors.primary} />
+                  <Text style={styles.autocompleteText} numberOfLines={2}>
+                    {hit.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {searchError ? (
+            <Text style={{ color: colors.error, fontSize: 12, marginTop: 6 }}>{searchError}</Text>
+          ) : null}
         </View>
 
         {/* Route Metrics / Guidance Badge */}
@@ -414,70 +458,10 @@ export const RideBookingScreen: React.FC = () => {
             <Text style={[styles.metricsText, { color: colors.textSecondary }]}>
               {dropoffCoords
                 ? 'Calculating route & fares...'
-                : 'Select destination on the map below to view fares'}
+                : 'Type drop location or tap 🗺️ map icon to set on map'}
             </Text>
           </View>
         )}
-
-        {/* Map Front and Center - Direct Selection, No redundant search dropdown underneath */}
-        <View style={styles.mapPickerCard}>
-          <View style={styles.mapToggleHeader}>
-            <TouchableOpacity
-              style={[
-                styles.mapToggleBtn,
-                activePoint === 'pickup' && styles.mapToggleBtnActivePickup,
-              ]}
-              onPress={() => setActivePoint('pickup')}
-            >
-              <MaterialIcons
-                name="place"
-                size={14}
-                color={activePoint === 'pickup' ? '#fff' : colors.secondary}
-              />
-              <Text
-                style={[
-                  styles.mapToggleText,
-                  activePoint === 'pickup' && styles.mapToggleTextActive,
-                ]}
-              >
-                Pin Pickup
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.mapToggleBtn,
-                activePoint === 'dropoff' && styles.mapToggleBtnActiveDropoff,
-              ]}
-              onPress={() => setActivePoint('dropoff')}
-            >
-              <MaterialIcons
-                name="navigation"
-                size={14}
-                color={activePoint === 'dropoff' ? '#fff' : colors.error}
-              />
-              <Text
-                style={[
-                  styles.mapToggleText,
-                  activePoint === 'dropoff' && styles.mapToggleTextActive,
-                ]}
-              >
-                Pin Destination
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <LocationMapPicker
-            key={activePoint}
-            label={activePoint === 'pickup' ? 'Tap map to drop pickup pin' : 'Tap map to drop destination pin'}
-            initialCoordinate={activePoint === 'pickup' ? pickupCoords || undefined : dropoffCoords || undefined}
-            initialAddress={activePoint === 'pickup' ? pickupAddress : dropoffAddress}
-            proximity={pickupCoords || undefined}
-            height={220}
-            hideSearchInput={true}
-            onSelect={handlePlaceSelect}
-          />
-        </View>
 
         {/* Available Vehicles Section Header */}
         {optionCatalog.length > 0 && (
@@ -528,7 +512,7 @@ export const RideBookingScreen: React.FC = () => {
                   { backgroundColor: `${vehicle.tagColor}26` },
                 ]}
               >
-                <MaterialIcons name={vehicle.icon} size={24} color={vehicle.tagColor} />
+                <MaterialIcons name={vehicle.icon as any} size={24} color={vehicle.tagColor} />
               </View>
 
               <View style={styles.vehicleInfo}>
@@ -589,12 +573,53 @@ export const RideBookingScreen: React.FC = () => {
               {isBooking
                 ? 'Booking Ride...'
                 : !dropoffCoords
-                ? 'Select Destination on Map'
+                ? 'Select Destination to Book'
                 : `Confirm ride · estimated ₹${selectedVehicle.fare.toFixed(0)}`}
             </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Pin on Map Modal */}
+      {isMapModalVisible && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Pin {modalPoint === 'pickup' ? 'Pickup' : 'Destination'} on Map
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsMapModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <MaterialIcons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalMapContent}>
+              <LocationMapPicker
+                key={modalPoint}
+                label={modalPoint === 'pickup' ? 'Drag or tap map to set pickup' : 'Drag or tap map to set destination'}
+                initialCoordinate={modalPoint === 'pickup' ? pickupCoords || undefined : dropoffCoords || undefined}
+                initialAddress={modalPoint === 'pickup' ? pickupAddress : dropoffAddress}
+                proximity={pickupCoords || undefined}
+                height={300}
+                hideSearchInput={false}
+                onSelect={(place) => {
+                  handlePlaceSelect(place);
+                }}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalDoneBtn}
+              onPress={() => setIsMapModalVisible(false)}
+            >
+              <Text style={styles.modalDoneBtnText}>Confirm Location</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -737,46 +762,96 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '600',
   },
-  mapPickerCard: {
-    marginTop: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-  },
-  mapToggleHeader: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: spacing.sm,
-  },
-  mapToggleBtn: {
-    flex: 1,
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
+    gap: 8,
+  },
+  inputWrapper: {
+    flex: 1,
+  },
+  textInput: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 4,
+    marginTop: 2,
+  },
+  pinMapBtn: {
+    padding: 8,
+    borderRadius: 10,
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  mapToggleBtnActivePickup: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
+  autocompleteContainer: {
+    marginTop: 10,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    maxHeight: 180,
   },
-  mapToggleBtnActiveDropoff: {
-    backgroundColor: colors.error,
-    borderColor: colors.error,
+  autocompleteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
-  mapToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary,
+  autocompleteText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 13,
   },
-  mapToggleTextActive: {
-    color: '#fff',
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+    zIndex: 999,
+  },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderColor: colors.border,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.textPrimary,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalMapContent: {
+    marginVertical: 4,
+  },
+  modalDoneBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  modalDoneBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 15,
   },
   sectionHeader: {
     fontSize: 11,

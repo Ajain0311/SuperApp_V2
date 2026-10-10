@@ -31,11 +31,11 @@
 | **FIX-18** | Security & Auth: Strict OTP rejection & URL / Database route hardening | P0 (Critical) | `[x] CLOSED` |
 | **FIX-19** | Easebuzz Live Dashboard & Webhook Setup Guide & Hardening | P0 (Critical) | `[ ] OPEN` |
 | **FIX-20** | Google Play Store Upload Checklist (.aab, Keystore, Permissions, Privacy Policy) | P1 (High) | `[ ] OPEN` |
-| **FIX-21** | Ride Section: Rapido-style Minimalist UI, Fast Location Autocomplete & Pin-on-Map Modal | P0 (Critical) | `[ ] OPEN` |
-| **FIX-22** | Marketplace Image Upload: Fix "Upload failed server encountered an error" | P0 (Critical) | `[ ] OPEN` |
-| **FIX-23** | Remove Test Payment / Banners section from User Flow | P1 (High) | `[ ] OPEN` |
-| **FIX-24** | Food Section: Fix missing food & restaurant images | P0 (Critical) | `[ ] OPEN` |
-| **FIX-25** | Mapbox Dev Client Build Guard & Fallback | P1 (High) | `[ ] OPEN` |
+| **FIX-21** | Ride Section: Rapido-style Minimalist UI, Fast Location Autocomplete & Pin-on-Map Modal | P0 (Critical) | `[x] CLOSED` |
+| **FIX-22** | Marketplace Image Upload: Fix "Upload failed server encountered an error" | P0 (Critical) | `[x] CLOSED` |
+| **FIX-23** | Remove Test Payment / Banners section from User Flow | P1 (High) | `[x] CLOSED` |
+| **FIX-24** | Food Section: Fix missing food & restaurant images | P0 (Critical) | `[x] CLOSED` |
+| **FIX-25** | Mapbox Dev Client Build Guard & Fallback | P1 (High) | `[x] CLOSED` |
 
 ---
 

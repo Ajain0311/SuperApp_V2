@@ -22,6 +22,14 @@ import { useCartStore } from '../../store/cartStore';
 import { CartItem } from '../../models/food';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { absoluteImageUrl } from '../../services/documentService';
+
+const DEFAULT_DISH_IMAGE = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600';
+
+function resolveDishImage(url?: string): string {
+  if (!url || !url.trim()) return DEFAULT_DISH_IMAGE;
+  return absoluteImageUrl(url);
+}
 
 interface RestaurantDetailScreenProps {
   route: {
@@ -386,7 +394,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
 
               {/* Right Image + Add Button */}
               <View style={styles.dishActionCol}>
-                <Image source={{ uri: item.image?.replace('/image', '/thumb') }} style={styles.dishImage} />
+                <Image source={{ uri: resolveDishImage(item.image) }} style={styles.dishImage} />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => handleAddItem(item)}

@@ -25,25 +25,19 @@
 ## 📌 Last Session Handoff
 
 - **Date**: October 10, 2026
-- **Status**: Completed FIX-18:
-  - Fixed wrong OTP bypass in `authStore.ts` (eliminated dev session fallback for 6-digit inputs; invalid OTPs are strictly rejected).
-  - Fixed data visibility on web: removed duplicate `/api/api/...` double routes in all native admin screens and added auto-stripping interceptor in `apiClient.ts`.
-  - Stale `dev_jwt_token_` values are automatically purged in `authStore.checkAuth()`.
-  - Updated `.env` and `Program.cs` to route directly to `azuredb` (`DATABASE_CONNECTION_STRING` prioritized over old Supabase pooler).
-  - Added `http://localhost:8081` to `CorsAllowedOrigins` in `appsettings.Production.json`.
+- **Status**: Completed FIX-21 through FIX-25:
+  - **FIX-21**: Redesigned "Find Your Ride" section to Rapido-style minimalist layout with inline pickup/destination inputs, instant autocomplete suggestions dropdown, and right-hand map pin icon launching a dedicated "Pin on Map" modal. Heavy inline map compartment eliminated.
+  - **FIX-22**: Fixed Marketplace image upload on web and native by wrapping manipulated image in a real `Blob` on `Platform.OS === 'web'` and RN custom FormData on mobile.
+  - **FIX-23**: Removed test payment banner from `HomeScreen.tsx` and removed `PaymentTestScreen` navigation from `ProfileScreen.tsx`.
+  - **FIX-24**: Resolved restaurant and food dish image loading with automatic fallback CDN placeholder and absolute URL resolver in `FoodHomeScreen.tsx` and `RestaurantDetailScreen.tsx`.
+  - **FIX-25**: Guarded Mapbox native imports and added informative dev client build / web search suggestions fallbacks.
 - **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md).
-  - FIX-21: Ride Section — Rapido-style minimalist UI, fast location autocomplete & pin-on-map modal `[OPEN]`
-  - FIX-22: Marketplace image upload "Server encountered an error" fix `[OPEN]`
-  - FIX-23: Remove Test Payment & mock banners from user flow `[OPEN]`
-  - FIX-24: Food Section — Fix missing food/restaurant image URLs `[OPEN]`
-  - FIX-25: Mapbox Dev Client build guard & fallback UI `[OPEN]`
   - FIX-19: Easebuzz live dashboard & webhook verification `[OPEN]`
   - FIX-20: Google Play Store upload checklist (.aab) `[OPEN]`
 - **Verification Suites**:
   - `dotnet test backend/SuperApp.sln`: 111 Passed / 111 Total
   - `npx tsc --noEmit`: 0 Errors
   - `npm test`: 14 Suites Passed, 82 Tests Passed
-  - `npm run test:agents:self`: 14 Passed / 14 Total
 
 
 

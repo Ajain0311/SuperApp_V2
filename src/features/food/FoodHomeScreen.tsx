@@ -18,6 +18,14 @@ import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { RestaurantSummary } from '../../models/food';
 import { useFocusEffect } from '@react-navigation/native';
+import { absoluteImageUrl } from '../../services/documentService';
+
+const DEFAULT_RESTAURANT_IMAGE = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600';
+
+function resolveRestaurantImage(url?: string): string {
+  if (!url || !url.trim()) return DEFAULT_RESTAURANT_IMAGE;
+  return absoluteImageUrl(url);
+}
 
 interface FoodHomeScreenProps {
   navigation: any;
@@ -283,7 +291,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
             {/* Image Header with overlays */}
             <View style={styles.imageHeader}>
               <Image
-                source={{ uri: restaurant.imageUrl?.replace('/image', '/thumb') }}
+                source={{ uri: resolveRestaurantImage(restaurant.imageUrl) }}
                 style={styles.restaurantImage}
                 resizeMode="cover"
               />

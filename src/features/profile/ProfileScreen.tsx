@@ -196,9 +196,9 @@ export const ProfileScreen: React.FC = () => {
           <MenuItem
             icon="credit-card"
             title="Payment Methods"
-            subtitle="Cards, UPI, & Wallet balance"
+            subtitle="Cards, UPI, & Netbanking via Easebuzz"
             color={colors.secondary}
-            onPress={() => navigation.navigate('PaymentTest')}
+            onPress={() => Alert.alert('Payment Methods', 'UPI, Cards, and Netbanking are available directly at checkout via Easebuzz.')}
           />
           <View style={styles.itemDivider} />
           <MenuItem

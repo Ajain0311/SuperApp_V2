@@ -153,24 +153,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         </View>
 
-        <TouchableOpacity
-          style={styles.payTestBanner}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('PaymentTest')}
-          accessibilityRole="button"
-          accessibilityLabel="Test Payment"
-          testID="payment-test-banner"
-        >
-          <View style={styles.payTestIcon}>
-            <Ionicons name="card" size={22} color="#FFFFFF" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.payTestKicker}>TEST PAYMENT</Text>
-            <Text style={styles.payTestTitle}>Pay ₹1 now (no real money)</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={AppColors.textPrimary} />
-        </TouchableOpacity>
-
         {/* Live Ride Card (Rendered only when a real ride is active/in-transit) */}
         {activeRide ? (
           <View style={styles.liveRideCard}>

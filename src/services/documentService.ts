@@ -15,6 +15,7 @@ function absoluteImageUrl(path: string): string {
   return `${origin}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
+import { Platform } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 class DocumentService {
@@ -26,11 +27,17 @@ class DocumentService {
     );
 
     const form = new FormData();
-    form.append('file', {
-      uri: manipResult.uri,
-      name: fileName,
-      type: 'image/jpeg',
-    } as any);
+    if (Platform.OS === 'web') {
+      const response = await fetch(manipResult.uri);
+      const blob = await response.blob();
+      form.append('file', blob, fileName);
+    } else {
+      form.append('file', {
+        uri: manipResult.uri,
+        name: fileName,
+        type: 'image/jpeg',
+      } as any);
+    }
     const query = assign === 'profile' ? '?assign=profile' : '';
     const res = await apiClient.post<any>(`/documents${query}`, form);
     const data = res.data?.data || res.data;
