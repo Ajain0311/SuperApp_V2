@@ -41,7 +41,7 @@ export const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ navigation }
       if (search.trim()) params.search = search.trim();
       if (selectedRole) params.role = selectedRole;
 
-      const res = await apiClient.get<any>('/api/admin/users', { params });
+      const res = await apiClient.get<any>('/admin/users', { params });
       const payload = res.data?.data || res.data;
       const list = payload?.items || payload || [];
       setUsers(list);

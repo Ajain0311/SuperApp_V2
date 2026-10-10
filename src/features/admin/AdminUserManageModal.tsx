@@ -55,7 +55,7 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
 
     setLoadingRole(roleName);
     try {
-      await apiClient.post('/api/admin/users', {
+      await apiClient.post('/admin/users', {
         action,
         userId: user.id,
         roleName,
@@ -84,7 +84,7 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
     setLoadingStatus(true);
     const newStatus = !user.isActive;
     try {
-      await apiClient.post('/api/admin/users', {
+      await apiClient.post('/admin/users', {
         action: 'STATUS',
         userId: user.id,
         isActive: newStatus,
@@ -108,7 +108,7 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
 
     setIsResettingPassword(true);
     try {
-      await apiClient.post('/api/admin/users/assign', {
+      await apiClient.post('/admin/users/assign', {
         mobileNumber: user.mobileNumber,
         fullName: user.fullName || 'Admin User',
         role: 'ADMIN',

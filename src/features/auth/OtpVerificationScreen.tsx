@@ -41,8 +41,8 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     devOtp: initialDevOtp,
   } = route.params;
 
-  const showTestOtp = process.env.EXPO_PUBLIC_SHOW_TEST_OTP !== 'false';
-  const defaultTestOtp = process.env.EXPO_PUBLIC_TEST_OTP || '123456';
+  const showTestOtp = process.env.EXPO_PUBLIC_SHOW_TEST_OTP === 'true';
+  const defaultTestOtp = process.env.EXPO_PUBLIC_TEST_OTP;
   const [displayedOtp, setDisplayedOtp] = useState<string | undefined>(
     initialDevOtp || (showTestOtp ? defaultTestOtp : undefined)
   );
@@ -193,11 +193,11 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       } else {
         response = await sendOtp(mobileNumber);
       }
-      const newOtp = response.devOtp || '123456';
-      setDisplayedOtp(newOtp);
+      const newOtp = response.devOtp;
+      if (newOtp) setDisplayedOtp(newOtp);
       setOtpDigits(['', '', '', '', '', '']);
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
-      Alert.alert('Success', `New OTP sent: ${newOtp}`);
+      Alert.alert('Success', 'A new OTP has been sent to your mobile number.');
     } catch (err: any) {
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
       setErrorMessage(err.message || 'Could not resend OTP');

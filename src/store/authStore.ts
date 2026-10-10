@@ -27,8 +27,6 @@ interface AuthState {
   clearError: () => void;
 }
 
-let lastOfflineOtp: string | null = null;
-
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: null,
@@ -53,17 +51,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Proactively fetch updated profile from backend if reachable
       try {
+        if (token.startsWith('dev_')) {
+          await storage.clearAll();
+          set({ user: null, token: null, isAuthenticated: false, isLoading: false, isFallbackSession: false });
+          return false;
+        }
+
         const res = await apiClient.get<{ success: boolean; data: User }>(ApiEndpoints.auth.profile);
         if (res.success && res.data) {
           await storage.setUserData(res.data);
           set({ user: res.data, token, isAuthenticated: true, isLoading: false, isFallbackSession: false });
         }
-      } catch {
-        // If profile endpoint fails, keep cached session ONLY if cachedUser exists
-        if (cachedUser) {
-          set({ user: cachedUser, token, isAuthenticated: true, isLoading: false, isFallbackSession: token.startsWith('dev_') });
+      } catch (err: any) {
+        if (err?.statusCode === 401 || err?.isUnauthorized) {
+          await storage.clearAll();
+          set({ user: null, token: null, isAuthenticated: false, isLoading: false, isFallbackSession: false });
+          return false;
+        }
+        if (cachedUser && !token.startsWith('dev_')) {
+          set({ user: cachedUser, token, isAuthenticated: true, isLoading: false, isFallbackSession: false });
         } else {
-          // Token is invalid/stale with no valid user; clear session
           await storage.clearAll();
           set({ user: null, token: null, isAuthenticated: false, isLoading: false, isFallbackSession: false });
           return false;
@@ -90,22 +97,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return response;
     } catch (e: any) {
-      // In development fallback mode, permit seamless OTP entry
-      const isDev = process.env.EXPO_PUBLIC_ENV !== 'production';
-      if (isDev) {
-        const offlineOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        lastOfflineOtp = offlineOtp;
-        const isAdmin = mobileNumber === '9999999999' || mobileNumber.endsWith('9999');
-        console.warn('[Auth] Backend OTP endpoint unreachable or error. Using development mock OTP.');
-        return {
-          success: true,
-          message: isAdmin ? 'Admin detected (offline). Enter password.' : `Development Mock OTP: ${offlineOtp}`,
-          isNewUser: !isAdmin,
-          isAdmin,
-          devOtp: isAdmin ? undefined : offlineOtp,
-        };
-      }
-      const msg = e.message || 'Failed to send OTP';
+      const msg = e.response?.data?.message || e.message || 'Failed to send OTP';
       set({ error: msg });
       throw e;
     }
@@ -140,40 +132,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       return response;
     } catch (e: any) {
-      // If backend verification fails in dev, allow development session if OTP matches test code or any 6-digit dev input
-      const isDev = process.env.EXPO_PUBLIC_ENV !== 'production';
-      const isAcceptableDevOtp = isDev && (
-        otpCode === '123456' ||
-        otpCode === lastOfflineOtp ||
-        (typeof otpCode === 'string' && otpCode.length === 6)
-      );
-      if (isAcceptableDevOtp) {
-        console.warn(`[Auth] Using development session fallback for dev OTP ${otpCode}.`);
-        const devToken = `dev_jwt_token_${Date.now()}`;
-        const devUser: User = {
-          id: 1,
-          mobileNumber,
-          fullName: fullName?.trim() || 'John Doe',
-          roles: ['Customer'],
-        };
-        await storage.setToken(devToken);
-        await storage.setUserData(devUser);
-        set({
-          user: devUser,
-          token: devToken,
-          isAuthenticated: true,
-          error: null,
-          isFallbackSession: true,
-        });
-        return {
-          success: true,
-          token: devToken,
-          user: devUser,
-          message: 'Development session established',
-        };
-      }
-
-      const msg = e.message || 'Verification failed';
+      const msg = e.response?.data?.message || e.message || 'Verification failed';
       set({ error: msg });
       throw e;
     }

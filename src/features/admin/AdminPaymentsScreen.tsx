@@ -25,7 +25,7 @@ export const AdminPaymentsScreen: React.FC<AdminPaymentsScreenProps> = ({ naviga
 
   const fetchPayments = useCallback(async () => {
     try {
-      const res = await apiClient.get<any>('/api/admin/dashboard');
+      const res = await apiClient.get<any>('/admin/dashboard');
       const payload = res.data?.data || res.data;
       setDashboardData(payload);
     } catch (err: any) {

@@ -60,16 +60,17 @@ describe('AuthStore - State Transitions & Fallback Hardening', () => {
     expect(savedToken).toBe('jwt_test_token_123');
   });
 
-  it('should activate fallback dev session when backend fails with dev OTP 123456', async () => {
-    (apiClient.post as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+  it('should reject authentication when backend verification fails (no fallback session)', async () => {
+    (apiClient.post as jest.Mock).mockRejectedValueOnce(new Error('Invalid or expired OTP'));
 
-    const res = await useAuthStore.getState().verifyOtp('+919876543210', '123456');
-    expect(res.success).toBe(true);
+    await expect(
+      useAuthStore.getState().verifyOtp('+919876543210', '123456')
+    ).rejects.toThrow('Invalid or expired OTP');
 
     const state = useAuthStore.getState();
-    expect(state.isAuthenticated).toBe(true);
-    expect(state.isFallbackSession).toBe(true);
-    expect(state.user?.mobileNumber).toBe('+919876543210');
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.token).toBeNull();
+    expect(state.user).toBeNull();
   });
 
   it('should authenticate admin directly via admin-login endpoint', async () => {

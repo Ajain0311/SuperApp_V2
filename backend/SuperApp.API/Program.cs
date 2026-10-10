@@ -57,11 +57,13 @@ else if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCas
          string.Equals(dbProvider, "Supabase", StringComparison.OrdinalIgnoreCase) ||
          string.Equals(dbProvider, "Npgsql", StringComparison.OrdinalIgnoreCase))
 {
-    var pgConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__SupabaseConnection")
-        ?? Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
-        ?? builder.Configuration.GetConnectionString("SupabaseConnection")
-        ?? builder.Configuration.GetConnectionString("PostgresConnection")
+    var pgConnectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
+        ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+        ?? Environment.GetEnvironmentVariable("ConnectionStrings__PostgresConnection")
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? builder.Configuration.GetConnectionString("PostgresConnection")
+        ?? Environment.GetEnvironmentVariable("ConnectionStrings__SupabaseConnection")
+        ?? builder.Configuration.GetConnectionString("SupabaseConnection")
         ?? "Host=localhost;Database=SuperAppDB;Username=postgres;Password=postgres;";
 
     if (pgConnectionString.Contains("<LOCAL_SECRET>") || pgConnectionString.Contains("<SUPABASE_DB_PASSWORD>"))

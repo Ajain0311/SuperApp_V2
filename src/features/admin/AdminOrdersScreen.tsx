@@ -31,13 +31,13 @@ export const AdminOrdersScreen: React.FC<AdminOrdersScreenProps> = ({ navigation
   const fetchOrders = useCallback(async () => {
     try {
       if (orderType === 'FOOD') {
-        const res = await apiClient.get<any>('/api/admin/food-orders', {
+        const res = await apiClient.get<any>('/admin/food-orders', {
           params: { search: search.trim() || undefined },
         });
         const payload = res.data?.data || res.data || [];
         setFoodOrders(payload);
       } else {
-        const res = await apiClient.get<any>('/api/admin/rides', {
+        const res = await apiClient.get<any>('/admin/rides', {
           params: { search: search.trim() || undefined },
         });
         const payload = res.data?.data || res.data || [];

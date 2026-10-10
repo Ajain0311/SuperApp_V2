@@ -57,6 +57,15 @@ class ApiClient {
         // Dynamically ensure baseURL matches environment in case of runtime change
         config.baseURL = AppEnvironment.baseUrl;
 
+        // Prevent double '/api/api/' if caller provides '/api/...'
+        if (config.url && config.baseURL && config.baseURL.endsWith('/api')) {
+          if (config.url.startsWith('/api/')) {
+            config.url = config.url.substring(4);
+          } else if (config.url.startsWith('api/')) {
+            config.url = '/' + config.url.substring(4);
+          }
+        }
+
         if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
           delete config.headers['Content-Type'];
         }

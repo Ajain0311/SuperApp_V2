@@ -45,7 +45,7 @@ export const AdminRestaurantsScreen: React.FC<AdminRestaurantsScreenProps> = ({ 
       const params: any = {};
       if (search.trim()) params.search = search.trim();
 
-      const res = await apiClient.get<any>('/api/admin/restaurants', { params });
+      const res = await apiClient.get<any>('/admin/restaurants', { params });
       const payload = res.data?.data || res.data || [];
       setRestaurants(payload);
     } catch (err: any) {
@@ -67,7 +67,7 @@ export const AdminRestaurantsScreen: React.FC<AdminRestaurantsScreenProps> = ({ 
   const handleToggleStatus = async (item: AdminRestaurant) => {
     const updatedStatus = !item.isActive;
     try {
-      await apiClient.post('/api/admin/restaurants', {
+      await apiClient.post('/admin/restaurants', {
         action: 'STATUS',
         id: item.id,
         isActive: updatedStatus,
@@ -90,7 +90,7 @@ export const AdminRestaurantsScreen: React.FC<AdminRestaurantsScreenProps> = ({ 
 
     setIsSaving(true);
     try {
-      const res = await apiClient.post<any>('/api/admin/restaurants', {
+      const res = await apiClient.post<any>('/admin/restaurants', {
         action: 'ADD',
         name: name.trim(),
         description: description.trim() || name.trim(),

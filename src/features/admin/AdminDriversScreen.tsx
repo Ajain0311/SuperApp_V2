@@ -29,7 +29,7 @@ export const AdminDriversScreen: React.FC<AdminDriversScreenProps> = ({ navigati
 
   const fetchDrivers = useCallback(async () => {
     try {
-      const res = await apiClient.get<any>('/api/admin/drivers');
+      const res = await apiClient.get<any>('/admin/drivers');
       const payload = res.data?.data || res.data || [];
       setDrivers(payload);
     } catch (err: any) {
@@ -47,7 +47,7 @@ export const AdminDriversScreen: React.FC<AdminDriversScreenProps> = ({ navigati
   const handleToggleVerification = async (driver: AdminDriver) => {
     const updated = !driver.isVerified;
     try {
-      await apiClient.post('/api/admin/drivers', {
+      await apiClient.post('/admin/drivers', {
         action: 'VERIFY',
         driverId: driver.id,
         isVerified: updated,
@@ -68,7 +68,7 @@ export const AdminDriversScreen: React.FC<AdminDriversScreenProps> = ({ navigati
   const handleToggleActive = async (driver: AdminDriver) => {
     const updated = !driver.isActive;
     try {
-      await apiClient.post('/api/admin/drivers', {
+      await apiClient.post('/admin/drivers', {
         action: 'STATUS',
         driverId: driver.id,
         isActive: updated,

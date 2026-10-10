@@ -60,26 +60,26 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const loadData = useCallback(async () => {
     try {
       if (activeTab === 'OVERVIEW') {
-        const res = await apiClient.get<any>('/api/admin/dashboard');
+        const res = await apiClient.get<any>('/admin/dashboard');
         setOverview(res.data?.data || res.data);
       } else if (activeTab === 'ORDERS') {
-        const res = await apiClient.get<any>('/api/admin/food-orders');
+        const res = await apiClient.get<any>('/admin/food-orders');
         setFoodOrders(res.data?.data || res.data || []);
       } else if (activeTab === 'RIDES') {
-        const res = await apiClient.get<any>('/api/admin/rides');
+        const res = await apiClient.get<any>('/admin/rides');
         setRides(res.data?.data || res.data || []);
       } else if (activeTab === 'USERS') {
-        const res = await apiClient.get<any>('/api/admin/users');
+        const res = await apiClient.get<any>('/admin/users');
         const data = res.data?.data || res.data;
         setUsers(data?.items || data || []);
       } else if (activeTab === 'RESTAURANTS') {
-        const res = await apiClient.get<any>('/api/admin/restaurants');
+        const res = await apiClient.get<any>('/admin/restaurants');
         setRestaurants(res.data?.data || res.data || []);
       } else if (activeTab === 'BAZAAR') {
-        const res = await apiClient.get<any>('/api/admin/marketplace/listings');
+        const res = await apiClient.get<any>('/admin/marketplace/listings');
         setListings(res.data?.data || res.data || []);
       } else if (activeTab === 'CONFIG') {
-        const res = await apiClient.get<any>('/api/admin/settings');
+        const res = await apiClient.get<any>('/admin/settings');
         setSettings(res.data?.data || res.data || []);
       }
     } catch (e: any) {
@@ -97,7 +97,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
   const handleToggleUserStatus = async (userId: number, currentActive: boolean) => {
     try {
-      await apiClient.post('/api/admin/users', {
+      await apiClient.post('/admin/users', {
         action: 'STATUS',
         userId,
         isActive: !currentActive,
@@ -114,7 +114,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const handleToggleUserRole = async (userId: number, roleName: string, currentRoles: string[] = []) => {
     const hasRole = currentRoles.includes(roleName);
     try {
-      await apiClient.post('/api/admin/users', {
+      await apiClient.post('/admin/users', {
         action: 'ROLE',
         userId,
         roleName,
@@ -144,7 +144,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
     }
     setIsSavingRest(true);
     try {
-      const res = await apiClient.post<any>('/api/admin/restaurants', {
+      const res = await apiClient.post<any>('/admin/restaurants', {
         action: 'ADD',
         name: restName.trim(),
         description: restDesc.trim() || restName.trim(),
@@ -175,7 +175,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
   const handleToggleRestaurantStatus = async (id: number, currentActive: boolean) => {
     try {
-      await apiClient.post('/api/admin/restaurants', {
+      await apiClient.post('/admin/restaurants', {
         action: 'STATUS',
         id,
         isActive: !currentActive,
@@ -191,7 +191,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
   const handleListingAction = async (listingId: number, action: 'STATUS' | 'FEATURED' | 'DELETE', value?: any) => {
     try {
-      await apiClient.post('/api/admin/marketplace/listings', {
+      await apiClient.post('/admin/marketplace/listings', {
         action,
         listingId,
         status: action === 'STATUS' ? value : undefined,
@@ -219,7 +219,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
             onPress: async (val?: string) => {
               if (val !== undefined) {
                 try {
-                  await apiClient.post('/api/admin/settings', { key, value: val });
+                  await apiClient.post('/admin/settings', { key, value: val });
                   setSettings((prev) =>
                     prev.map((s) => (s.key === key ? { ...s, value: val } : s))
                   );
@@ -241,7 +241,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
     }
     setIsSendingBroadcast(true);
     try {
-      await apiClient.post('/api/admin/notifications/broadcast', {
+      await apiClient.post('/admin/notifications/broadcast', {
         title: broadcastTitle.trim(),
         message: broadcastMsg.trim(),
         targetRole: broadcastRole === 'ALL' ? null : broadcastRole,

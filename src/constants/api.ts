@@ -91,6 +91,20 @@ export const ApiEndpoints = {
     earnings: '/vendor/earnings',
   },
 
+  // Admin Mode
+  admin: {
+    dashboard: '/admin/dashboard',
+    users: '/admin/users',
+    assignRole: '/admin/users/assign',
+    restaurants: '/admin/restaurants',
+    foodOrders: '/admin/food-orders',
+    rides: '/admin/rides',
+    drivers: '/admin/drivers',
+    marketplaceListings: '/admin/marketplace/listings',
+    settings: '/admin/settings',
+    broadcastNotification: '/admin/notifications/broadcast',
+  },
+
   // SignalR Hub Paths
   hubs: {
     ride: '/hubs/ride',

@@ -28,7 +28,7 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({ navigati
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const res = await apiClient.get<any>('/api/admin/dashboard');
+      const res = await apiClient.get<any>('/admin/dashboard');
       const payload = res.data?.data || res.data;
       setData(payload);
     } catch (err: any) {

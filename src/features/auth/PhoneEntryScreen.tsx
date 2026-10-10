@@ -52,25 +52,7 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
         devOtp: response.devOtp,
       });
     } catch (err: any) {
-      // Offline fallback allows tester/user to continue smoothly
-      const offlineOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      Alert.alert(
-        'Backend Notice',
-        `${err.message || 'Could not connect to backend server'}. Continuing with OTP verification...`,
-        [
-          {
-            text: 'Proceed',
-            onPress: () => {
-              navigation.navigate('OtpVerification', {
-                mobileNumber: cleanNumber,
-                isNewUser: true,
-                isAdmin: cleanNumber === '9999999999',
-                devOtp: offlineOtp,
-              });
-            },
-          },
-        ]
-      );
+      Alert.alert('Error', err.message || 'Could not send OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }

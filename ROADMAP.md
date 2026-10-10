@@ -25,23 +25,13 @@
 ## 📌 Last Session Handoff
 
 - **Date**: October 10, 2026
-- **Status**: Completed FIX-17 (Lock down production environment, OTP_PROVIDER=PunjabGov, PAYMENT_PROVIDER=Easebuzz, blocked MockComplete in non-mock env with 403, hard check in MockOtpService) and FIX-16 (Replaced WebView Admin Panel with 100% Native React Native suite: AdminNavigator, AdminDashboardHome, AdminUsersScreen, AdminUserManageModal, AdminRestaurantsScreen, AdminDriversScreen, AdminOrdersScreen, AdminPaymentsScreen, and AdminSettingsScreen).
-- **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md). All stabilization issues (FIX-01 to FIX-17) are now CLOSED.
-- **Priority Tasks in `PENDING_FIXES.md`**:
-  1. ~~FIX-01: Marketplace Item Sell Native Image Upload~~ [CLOSED]
-  2. ~~FIX-02: Remove hardcoded sample/default data~~ [CLOSED]
-  3. ~~FIX-03: Replace browser alerts with custom app modals~~ [CLOSED]
-  4. ~~FIX-04: Image compression & thumbnail generation pipeline~~ [CLOSED]
-  5. ~~FIX-05: Ride cancellation & food order state machine audit~~ [CLOSED]
-  6. ~~FIX-06: Admin dashboard mobile/tablet responsive layout overhaul~~ [CLOSED]
-  7. ~~FIX-07: Automated push notifications scheduler~~ [CLOSED]
-  8. ~~FIX-08: Production hardening~~ [CLOSED]
-  9. ~~FIX-09: Remove admin password prompt for demoted admins~~ [CLOSED]
-  10. ~~FIX-12: Added forgot/reset password endpoints for admin~~ [CLOSED]
-  11. ~~FIX-14: Vendor Dashboards UX & QA~~ [CLOSED]
-  12. ~~FIX-15: SignalR Real-Time Testing & Hardening~~ [CLOSED]
-  13. ~~FIX-16: Convert Admin Panel from WebView/HTML to Native React Native UI~~ [CLOSED]
-  14. ~~FIX-17: .env & Backend runtime lockdown (OTP_PROVIDER=PunjabGov, PAYMENT_PROVIDER=Easebuzz)~~ [CLOSED]
+- **Status**: Completed FIX-18:
+  - Fixed wrong OTP bypass in `authStore.ts` (eliminated dev session fallback for 6-digit inputs; invalid OTPs are strictly rejected).
+  - Fixed data visibility on web: removed duplicate `/api/api/...` double routes in all native admin screens and added auto-stripping interceptor in `apiClient.ts`.
+  - Stale `dev_jwt_token_` values are automatically purged in `authStore.checkAuth()`.
+  - Updated `.env` and `Program.cs` to route directly to `azuredb` (`DATABASE_CONNECTION_STRING` prioritized over old Supabase pooler).
+  - Added `http://localhost:8081` to `CorsAllowedOrigins` in `appsettings.Production.json`.
+- **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md). All stabilization issues (FIX-01 to FIX-18) are CLOSED.
 - **Verification Suites**:
   - `dotnet test backend/SuperApp.sln`: 111 Passed / 111 Total
   - `npx tsc --noEmit`: 0 Errors

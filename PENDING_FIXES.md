@@ -28,6 +28,7 @@
 | **FIX-15** | SignalR Real-Time Testing & Hardening | P1 (High) | `[x] CLOSED` |
 | **FIX-16** | Convert Admin Panel from WebView/HTML to Native React Native UI | P0 (Critical) | `[x] CLOSED` |
 | **FIX-17** | .env & Backend: Remove ALL test/mock OTP and payment at runtime (production locked) | P0 (Critical) | `[x] CLOSED` |
+| **FIX-18** | Security & Auth: Strict OTP rejection & URL / Database route hardening | P0 (Critical) | `[x] CLOSED` |
 
 ---
 
@@ -285,3 +286,18 @@ When anyone joins this project:
   5. Run `dotnet test` and confirm all production security tests pass.
   6. Commit and push.
   ```
+
+---
+
+### FIX-18: Security & Auth — Strict OTP Rejection & Database / URL Route Hardening
+- **Problem:**
+  1. Entering a wrong 6-digit OTP allowed entry into the application via a client-side dev fallback in `authStore.ts` creating a fake session (`dev_jwt_token_...`, `John Doe`).
+  2. Because the fake session held an invalid JWT token, subsequent requests to protected routes failed with 401 Unauthorized, resulting in blank screens on web.
+  3. All native Admin Portal screens had `/api/admin/...` paths while `apiClient.baseURL` already ended in `/api`, causing redundant `/api/api/...` double-path requests that returned HTTP 404 Not Found.
+  4. Local `.env` still had `ConnectionStrings__SupabaseConnection` pointing to legacy Supabase pooler rather than migrated `azuredb`.
+- **Solution:**
+  1. Removed dev fallback in `authStore.ts` (`verifyOtp` and `sendOtp`); invalid OTPs now strictly reject and throw error.
+  2. Added interceptor in `apiClient.ts` to automatically strip redundant `/api` prefixes, and updated all admin screen calls to `/admin/...`.
+  3. Added stale dev token eviction in `authStore.checkAuth()` so invalid or dev tokens are immediately purged from storage.
+  4. Updated `.env` and `Program.cs` PostgreSQL connection string resolution to prioritize `DATABASE_CONNECTION_STRING` and `DefaultConnection` pointing to `azuredb`.
+  5. Added `localhost:8081` to production CORS allowed origins in `appsettings.Production.json`.

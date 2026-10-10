@@ -45,7 +45,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
 
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await apiClient.get<any>('/api/admin/settings');
+      const res = await apiClient.get<any>('/admin/settings');
       const payload = res.data?.data || res.data || [];
       setSettings(payload);
     } catch (err: any) {
@@ -68,7 +68,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
 
     setIsBroadcasting(true);
     try {
-      await apiClient.post('/api/admin/notifications/broadcast', {
+      await apiClient.post('/admin/notifications/broadcast', {
         title: broadcastTitle.trim(),
         message: broadcastMessage.trim(),
         targetRole: targetRole === 'ALL' ? null : targetRole,
@@ -93,7 +93,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
     if (!editingSetting) return;
     setIsSavingSetting(true);
     try {
-      await apiClient.post('/api/admin/settings', {
+      await apiClient.post('/admin/settings', {
         key: editingSetting.key,
         value: editValue.trim(),
       });

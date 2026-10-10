@@ -106,7 +106,7 @@ export const ListingDetailScreen: React.FC = () => {
     if (!reportReason) return;
     setIsSubmittingReport(true);
     try {
-      await apiClient.post(`/api/marketplace/listings/${listingId}/report`, {
+      await apiClient.post(`/marketplace/listings/${listingId}/report`, {
         reason: reportReason,
         details: reportDetails,
       });
