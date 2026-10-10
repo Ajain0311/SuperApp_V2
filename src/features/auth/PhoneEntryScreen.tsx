@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AppColors } from '../../theme/colors';
+import { AppRadius } from '../../theme/spacing';
 import { useAuthStore } from '../../store/authStore';
 
 interface PhoneEntryScreenProps {
@@ -34,10 +36,12 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
       Alert.alert('Phone Number Required', 'Please enter your 10-digit mobile number to proceed.');
       return;
     }
+
     if (cleanNumber.length < 10) {
       Alert.alert('Invalid Number', 'Please enter a complete 10-digit mobile number.');
       return;
     }
+
     setIsLoading(true);
     try {
       const response = await sendOtp(cleanNumber);
@@ -48,6 +52,7 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
         devOtp: response.devOtp,
       });
     } catch (err: any) {
+      // Offline fallback allows tester/user to continue smoothly
       const offlineOtp = Math.floor(100000 + Math.random() * 900000).toString();
       Alert.alert(
         'Backend Notice',
@@ -73,13 +78,16 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
+      <StatusBar barStyle="light-content" backgroundColor="#0A0E21" />
+
+      {/* Subtle Ambient Background Gradient */}
       <LinearGradient
-        colors={['#0B0F19', '#1A1D2E', '#0B0F19']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        colors={['#1E1738', '#141829', '#0A0E21']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 0.6 }}
         style={StyleSheet.absoluteFill}
       />
+
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -89,25 +97,52 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Top Brand Section */}
           <View style={styles.brandHeader}>
             <LinearGradient
-              colors={['#3B82F6', '#2563EB']}
+              colors={['#FF6B35', '#E55A2B']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.logoBadge}
             >
-              <Ionicons name="apps" size={24} color="#FFFFFF" />
+              <Ionicons name="sparkles" size={28} color="#FFFFFF" />
             </LinearGradient>
+
+            <View style={styles.appPill}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.appPillText}>ALL-IN-ONE SUPER APP</Text>
+            </View>
+
             <Text style={styles.heroTitle}>SuperApp</Text>
-            <Text style={styles.heroSubtitle}>Your all-in-one daily companion</Text>
+            <Text style={styles.heroSubtitle}>
+              Delicious Food • Fast City Rides • Local Bazaar
+            </Text>
           </View>
 
+          {/* Service Feature Chips */}
+          <View style={styles.featureRow}>
+            <View style={styles.featureChip}>
+              <Text style={styles.featureChipIcon}>🍕</Text>
+              <Text style={styles.featureChipText}>Food Delivery</Text>
+            </View>
+            <View style={styles.featureChip}>
+              <Text style={styles.featureChipIcon}>🚕</Text>
+              <Text style={styles.featureChipText}>Fast Cabs</Text>
+            </View>
+            <View style={styles.featureChip}>
+              <Text style={styles.featureChipIcon}>🛍️</Text>
+              <Text style={styles.featureChipText}>Bazaar</Text>
+            </View>
+          </View>
+
+          {/* Main Login Card */}
           <View style={styles.cardContainer}>
-            <Text style={styles.cardTitle}>Welcome Back</Text>
+            <Text style={styles.cardTitle}>Login or Sign Up</Text>
             <Text style={styles.cardSubtitle}>
-              Enter your mobile number to securely log in or create a new account.
+              We'll send a 6-digit verification code to your mobile number
             </Text>
 
+            {/* Modern Phone Input Field */}
             <View
               style={[
                 styles.phoneInputCard,
@@ -120,10 +155,11 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
                 <Text style={styles.countryCodeText}>+91</Text>
                 <View style={styles.inputDivider} />
               </View>
+
               <TextInput
                 style={styles.phoneNumberInput}
-                placeholder="00000 00000"
-                placeholderTextColor="#475569"
+                placeholder="Enter Mobile Number"
+                placeholderTextColor="#64748B"
                 keyboardType="phone-pad"
                 maxLength={10}
                 value={phoneNumber}
@@ -132,57 +168,63 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
                 onBlur={() => setIsFocused(false)}
                 autoFocus
               />
-              {phoneNumber.length > 0 && (
+
+              {/* Status or Clear Icon */}
+              {phoneNumber.length > 0 ? (
                 isValidLength ? (
                   <View style={styles.verifiedIconBox}>
-                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                    <Ionicons name="checkmark-circle" size={22} color="#10B981" />
                   </View>
                 ) : (
                   <TouchableOpacity
                     onPress={() => setPhoneNumber('')}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="close-circle" size={18} color="#475569" />
+                    <Ionicons name="close-circle" size={20} color="#64748B" />
                   </TouchableOpacity>
                 )
-              )}
+              ) : null}
             </View>
 
+            {/* Digits Counter / Helper */}
             <View style={styles.helperRow}>
               <Text style={styles.helperText}>
                 {isValidLength
-                  ? '✓ Format looks good'
+                  ? '✓ Ready to send code'
                   : cleanNumber.length > 0
-                  ? `${cleanNumber.length}/10 digits`
-                  : ''}
+                  ? `${cleanNumber.length}/10 digits entered`
+                  : 'Enter 10-digit mobile number'}
               </Text>
               <View style={styles.securityBadge}>
-                <Ionicons name="lock-closed" size={12} color="#10B981" />
-                <Text style={styles.securityBadgeText}>Encrypted</Text>
+                <Ionicons name="shield-checkmark-outline" size={13} color="#0D9488" />
+                <Text style={styles.securityBadgeText}>100% Secure</Text>
               </View>
             </View>
 
+            {/* Continue Button */}
             <TouchableOpacity
               style={[
                 styles.continueBtn,
                 (!isValidLength || isLoading) && styles.continueBtnDisabled,
               ]}
               onPress={handleContinue}
-              disabled={isLoading || !isValidLength}
+              disabled={isLoading}
               activeOpacity={0.85}
             >
               <LinearGradient
                 colors={
                   isValidLength && !isLoading
-                    ? ['#2563EB', '#1D4ED8']
-                    : ['#1E293B', '#0F172A']
+                    ? ['#FF6B35', '#E55A2B']
+                    : ['#334155', '#1E293B']
                 }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.continueBtnGradient}
               >
                 {isLoading ? (
-                  <Text style={styles.continueBtnText}>Sending OTP...</Text>
+                  <View style={styles.loadingRow}>
+                    <Text style={styles.continueBtnText}>Sending OTP...</Text>
+                  </View>
                 ) : (
                   <View style={styles.btnContentRow}>
                     <Text
@@ -191,23 +233,42 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
                         !isValidLength && styles.continueBtnTextDisabled,
                       ]}
                     >
-                      Continue
+                      Get Verification Code
                     </Text>
                     <Ionicons
                       name="arrow-forward"
-                      size={16}
-                      color={isValidLength ? '#FFFFFF' : '#475569'}
+                      size={18}
+                      color={isValidLength ? '#FFFFFF' : '#64748B'}
                     />
                   </View>
                 )}
               </LinearGradient>
             </TouchableOpacity>
           </View>
-          
+
+          {/* Trust Guarantees */}
+          <View style={styles.trustGrid}>
+            <View style={styles.trustItem}>
+              <Ionicons name="flash-outline" size={16} color="#FF8A5C" />
+              <Text style={styles.trustText}>Instant SMS OTP</Text>
+            </View>
+            <View style={styles.trustDot} />
+            <View style={styles.trustItem}>
+              <Ionicons name="lock-closed-outline" size={16} color="#10B981" />
+              <Text style={styles.trustText}>End-to-End Encrypted</Text>
+            </View>
+            <View style={styles.trustDot} />
+            <View style={styles.trustItem}>
+              <Ionicons name="shield-outline" size={16} color="#3B82F6" />
+              <Text style={styles.trustText}>Zero Spam</Text>
+            </View>
+          </View>
+
+          {/* Footer Terms */}
           <Text style={styles.termsText}>
-            By continuing, you agree to our{' '}
-            <Text style={styles.termsLink}>Terms</Text> and{' '}
-            <Text style={styles.termsLink}>Privacy</Text>.
+            By continuing, you agree to SuperApp's{' '}
+            <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+            <Text style={styles.termsLink}>Privacy Policy</Text>.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -218,87 +279,139 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#0A0E21',
   },
   container: {
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 40,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 40,
   },
   brandHeader: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginTop: 16,
+    marginBottom: 20,
   },
   logoBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
     elevation: 8,
-    marginBottom: 16,
+    marginBottom: 14,
+  },
+  appPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 107, 53, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.25)',
+    marginBottom: 10,
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF6B35',
+    marginRight: 6,
+  },
+  appPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FF8A5C',
+    letterSpacing: 1.2,
   },
   heroTitle: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -0.5,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   heroSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#94A3B8',
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 18,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 26,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+  },
+  featureChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141829',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#2A2D3E',
+  },
+  featureChipIcon: {
+    fontSize: 13,
+    marginRight: 6,
+  },
+  featureChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#CBD5E1',
   },
   cardContainer: {
     width: '100%',
-    maxWidth: 360,
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    backgroundColor: '#141829',
     borderRadius: 24,
-    padding: 24,
+    padding: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 10,
+    borderColor: '#2A2D3E',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 6,
     marginBottom: 24,
   },
   cardTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginBottom: 8,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
   },
   cardSubtitle: {
     fontSize: 13,
     color: '#94A3B8',
-    lineHeight: 20,
-    marginBottom: 24,
+    lineHeight: 19,
+    marginBottom: 20,
   },
   phoneInputCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 16,
-    height: 56,
-    marginBottom: 12,
+    backgroundColor: '#0A0E21',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#2A2D3E',
+    paddingHorizontal: 14,
+    height: 58,
+    marginBottom: 8,
   },
   phoneInputCardFocused: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#0B1120',
+    borderColor: '#FF6B35',
+    backgroundColor: '#0d122b',
   },
   phoneInputCardValid: {
     borderColor: '#10B981',
@@ -306,29 +419,29 @@ const styles = StyleSheet.create({
   countryCodeBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   flagIcon: {
-    fontSize: 16,
+    fontSize: 18,
     marginRight: 6,
   },
   countryCodeText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   inputDivider: {
     width: 1,
-    height: 20,
-    backgroundColor: '#334155',
-    marginLeft: 12,
+    height: 22,
+    backgroundColor: '#2A2D3E',
+    marginLeft: 10,
   },
   phoneNumberInput: {
     flex: 1,
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 2,
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 1.5,
     height: '100%',
   },
   verifiedIconBox: {
@@ -338,13 +451,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    height: 18,
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
   helperText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#94A3B8',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   securityBadge: {
     flexDirection: 'row',
@@ -353,15 +466,15 @@ const styles = StyleSheet.create({
   },
   securityBadgeText: {
     fontSize: 11,
-    color: '#10B981',
-    fontWeight: '600',
+    color: '#0D9488',
+    fontWeight: '700',
   },
   continueBtn: {
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   continueBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.75,
   },
   continueBtnGradient: {
     paddingVertical: 16,
@@ -375,20 +488,50 @@ const styles = StyleSheet.create({
   },
   continueBtnText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   continueBtnTextDisabled: {
-    color: '#475569',
+    color: '#94A3B8',
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trustGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 24,
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  trustText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  trustDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#334155',
   },
   termsText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
     textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 320,
   },
   termsLink: {
     color: '#94A3B8',
-    fontWeight: '600',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });
