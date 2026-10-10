@@ -20,6 +20,8 @@ interface AuthState {
   sendOtp: (mobileNumber: string) => Promise<SendOtpResponse>;
   verifyOtp: (mobileNumber: string, otpCode: string, fullName?: string) => Promise<AuthResponse>;
   adminLogin: (mobileNumber: string, password: string, otpCode: string) => Promise<AuthResponse>;
+  forgotPassword: (mobileNumber: string) => Promise<SendOtpResponse>;
+  resetPassword: (mobileNumber: string, otpCode: string, newPassword: string) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   updateUser: (user: Partial<User>) => void;
   clearError: () => void;
@@ -233,6 +235,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       const msg = e.message || 'Admin login failed';
+      set({ error: msg });
+      throw e;
+    }
+  },
+
+  forgotPassword: async (mobileNumber: string) => {
+    set({ error: null });
+    try {
+      const response = await apiClient.post<SendOtpResponse>('/auth/forgot-password', {
+        mobileNumber,
+      });
+      return response;
+    } catch (e: any) {
+      const msg = e.message || 'Failed to send OTP for password reset';
+      set({ error: msg });
+      throw e;
+    }
+  },
+
+  resetPassword: async (mobileNumber: string, otpCode: string, newPassword: string) => {
+    set({ error: null });
+    try {
+      const response = await apiClient.post<AuthResponse>('/auth/reset-password', {
+        mobileNumber,
+        otpCode,
+        newPassword
+      });
+      return response;
+    } catch (e: any) {
+      const msg = e.message || 'Password reset failed';
       set({ error: msg });
       throw e;
     }

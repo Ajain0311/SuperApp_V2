@@ -84,3 +84,27 @@ public class UpdateProfileRequest
     [MaxLength(500)]
     public string? ProfileImageUrl { get; set; }
 }
+
+public class ForgotPasswordRequest
+{
+    [Required]
+    [Phone]
+    [MaxLength(15)]
+    public string MobileNumber { get; set; } = string.Empty;
+}
+
+public class ResetPasswordRequest
+{
+    [Required]
+    [Phone]
+    [MaxLength(15)]
+    public string MobileNumber { get; set; } = string.Empty;
+    
+    [Required]
+    [MaxLength(10)]
+    public string OtpCode { get; set; } = string.Empty;
+    
+    [Required]
+    [MaxLength(255)]
+    public string NewPassword { get; set; } = string.Empty;
+}

@@ -220,6 +220,70 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Send OTP for password reset (Admin only).
+    /// </summary>
+    [HttpPost("forgot-password")]
+    public async Task<ActionResult<SendOtpResponse>> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new SendOtpResponse { Success = false, Message = "Invalid request" });
+
+        var user = await _db.Users
+            .Include(u => u.UserRoles)
+            .ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
+
+        if (user == null || !user.UserRoles.Any(ur => ur.Role.Name == RoleNames.Admin))
+            return BadRequest(new SendOtpResponse { Success = false, Message = "Admin account not found" });
+
+        if (!user.IsActive)
+            return BadRequest(new SendOtpResponse { Success = false, Message = "Account is deactivated" });
+
+        string devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
+        var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
+        bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
+
+        return Ok(new SendOtpResponse
+        {
+            Success = true,
+            Message = "OTP sent successfully for password reset",
+            IsAdmin = true,
+            DevOtp = isRealSms ? null : devOtp
+        });
+    }
+
+    /// <summary>
+    /// Verify OTP and reset admin password.
+    /// </summary>
+    [HttpPost("reset-password")]
+    public async Task<ActionResult<AuthResponse>> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new AuthResponse { Success = false, Message = "Invalid request" });
+
+        var user = await _db.Users
+            .Include(u => u.UserRoles)
+            .ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
+
+        if (user == null || !user.UserRoles.Any(ur => ur.Role.Name == RoleNames.Admin))
+            return BadRequest(new AuthResponse { Success = false, Message = "Admin account not found" });
+
+        var isOtpValid = await _otpService.VerifyOtpAsync(request.MobileNumber, request.OtpCode);
+        if (!isOtpValid)
+            return BadRequest(new AuthResponse { Success = false, Message = "Invalid or expired OTP" });
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        await _db.SaveChangesAsync();
+
+        return Ok(new AuthResponse
+        {
+            Success = true,
+            Message = "Password reset successfully. You can now login with your new password."
+        });
+    }
+
+    /// <summary>
     /// Get current user profile.
     /// </summary>
     [Authorize]

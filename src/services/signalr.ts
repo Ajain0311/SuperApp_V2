@@ -38,6 +38,13 @@ class SignalRService {
   private orderHubConnection: signalR.HubConnection | null = null;
   private chatHubConnection: signalR.HubConnection | null = null;
 
+  // Track active state for reconnect sync
+  private activeRideId: number | null = null;
+  private inDriversPool: boolean = false;
+  private activeOrderId: number | null = null;
+  private activeRestaurantKitchenId: number | null = null;
+  private activeChatConversationId: string | null = null;
+
   private createConnection(hubUrl: string): signalR.HubConnection {
     return new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
@@ -57,11 +64,27 @@ class SignalRService {
       return this.rideHubConnection;
     }
 
-    this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+    if (!this.rideHubConnection) {
+      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+      this.rideHubConnection.onreconnected(async () => {
+        if (AppEnvironment.enableLogging) {
+          console.log('[SignalR] Reconnected to RideTrackingHub. Syncing state...');
+        }
+        if (this.activeRideId !== null) {
+          await this.rideHubConnection?.invoke('JoinRide', this.activeRideId).catch(() => {});
+        }
+        if (this.inDriversPool) {
+          await this.rideHubConnection?.invoke('JoinDriversPool').catch(() => {});
+        }
+      });
+    }
+
     try {
-      await this.rideHubConnection.start();
-      if (AppEnvironment.enableLogging) {
-        console.log('[SignalR] Connected to RideTrackingHub at', AppEnvironment.rideHubUrl);
+      if (this.rideHubConnection.state === signalR.HubConnectionState.Disconnected) {
+        await this.rideHubConnection.start();
+        if (AppEnvironment.enableLogging) {
+          console.log('[SignalR] Connected to RideTrackingHub at', AppEnvironment.rideHubUrl);
+        }
       }
     } catch (err) {
       if (AppEnvironment.enableLogging) {
@@ -72,6 +95,7 @@ class SignalRService {
   }
 
   async joinRide(rideId: number): Promise<void> {
+    this.activeRideId = rideId;
     const conn = await this.connectRideHub();
     if (conn.state === signalR.HubConnectionState.Connected) {
       await conn.invoke('JoinRide', rideId);
@@ -79,6 +103,9 @@ class SignalRService {
   }
 
   async leaveRide(rideId: number): Promise<void> {
+    if (this.activeRideId === rideId) {
+      this.activeRideId = null;
+    }
     if (this.rideHubConnection && this.rideHubConnection.state === signalR.HubConnectionState.Connected) {
       await this.rideHubConnection.invoke('LeaveRide', rideId);
     }
@@ -109,6 +136,7 @@ class SignalRService {
   }
 
   async joinDriversPool(): Promise<void> {
+    this.inDriversPool = true;
     const conn = await this.connectRideHub();
     if (conn.state === signalR.HubConnectionState.Connected) {
       await conn.invoke('JoinDriversPool').catch(() => {});
@@ -116,6 +144,7 @@ class SignalRService {
   }
 
   async leaveDriversPool(): Promise<void> {
+    this.inDriversPool = false;
     if (this.rideHubConnection && this.rideHubConnection.state === signalR.HubConnectionState.Connected) {
       await this.rideHubConnection.invoke('LeaveDriversPool').catch(() => {});
     }
@@ -151,11 +180,27 @@ class SignalRService {
       return this.orderHubConnection;
     }
 
-    this.orderHubConnection = this.createConnection(AppEnvironment.orderHubUrl);
+    if (!this.orderHubConnection) {
+      this.orderHubConnection = this.createConnection(AppEnvironment.orderHubUrl);
+      this.orderHubConnection.onreconnected(async () => {
+        if (AppEnvironment.enableLogging) {
+          console.log('[SignalR] Reconnected to OrderStatusHub. Syncing state...');
+        }
+        if (this.activeOrderId !== null) {
+          await this.orderHubConnection?.invoke('JoinOrder', this.activeOrderId).catch(() => {});
+        }
+        if (this.activeRestaurantKitchenId !== null) {
+          await this.orderHubConnection?.invoke('JoinRestaurantKitchen', this.activeRestaurantKitchenId).catch(() => {});
+        }
+      });
+    }
+
     try {
-      await this.orderHubConnection.start();
-      if (AppEnvironment.enableLogging) {
-        console.log('[SignalR] Connected to OrderStatusHub at', AppEnvironment.orderHubUrl);
+      if (this.orderHubConnection.state === signalR.HubConnectionState.Disconnected) {
+        await this.orderHubConnection.start();
+        if (AppEnvironment.enableLogging) {
+          console.log('[SignalR] Connected to OrderStatusHub at', AppEnvironment.orderHubUrl);
+        }
       }
     } catch (err) {
       if (AppEnvironment.enableLogging) {
@@ -166,6 +211,7 @@ class SignalRService {
   }
 
   async joinOrder(orderId: number): Promise<void> {
+    this.activeOrderId = orderId;
     const conn = await this.connectOrderHub();
     if (conn.state === signalR.HubConnectionState.Connected) {
       await conn.invoke('JoinOrder', orderId);
@@ -173,6 +219,9 @@ class SignalRService {
   }
 
   async leaveOrder(orderId: number): Promise<void> {
+    if (this.activeOrderId === orderId) {
+      this.activeOrderId = null;
+    }
     if (this.orderHubConnection && this.orderHubConnection.state === signalR.HubConnectionState.Connected) {
       await this.orderHubConnection.invoke('LeaveOrder', orderId);
     }
@@ -187,6 +236,7 @@ class SignalRService {
   }
 
   async joinRestaurantKitchen(restaurantId: number): Promise<void> {
+    this.activeRestaurantKitchenId = restaurantId;
     const conn = await this.connectOrderHub();
     if (conn.state === signalR.HubConnectionState.Connected) {
       await conn.invoke('JoinRestaurantKitchen', restaurantId).catch(() => {});
@@ -194,6 +244,9 @@ class SignalRService {
   }
 
   async leaveRestaurantKitchen(restaurantId: number): Promise<void> {
+    if (this.activeRestaurantKitchenId === restaurantId) {
+      this.activeRestaurantKitchenId = null;
+    }
     if (this.orderHubConnection && this.orderHubConnection.state === signalR.HubConnectionState.Connected) {
       await this.orderHubConnection.invoke('LeaveRestaurantKitchen', restaurantId).catch(() => {});
     }

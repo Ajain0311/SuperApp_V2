@@ -36,7 +36,7 @@
   6. ~~FIX-06: Admin dashboard mobile/tablet responsive layout overhaul~~ [CLOSED]
   7. ~~FIX-07: Automated push notifications scheduler (2-3 times daily)~~ [CLOSED]
   8. ~~FIX-08: Production hardening (disable mock OTP & sandbox payment bypass)~~ [CLOSED]
+  9. ~~FIX-09: Remove admin password prompt for demoted admins~~ [CLOSED]
+  10. ~~FIX-12: Added forgot/reset password endpoints for admin~~ [CLOSED]
 - **Protocol for Developers/Agents**: Check `PENDING_FIXES.md` first; prompt developer before taking new requests to confirm queue vs. major fixes.
-
-
 

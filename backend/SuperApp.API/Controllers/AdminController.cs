@@ -201,6 +201,10 @@ public class AdminController : ControllerBase
                                 restMapping.IsActive = false;
                             }
                         }
+                        if (role.Name == RoleNames.Admin)
+                        {
+                            user.PasswordHash = null;
+                        }
                         await _db.SaveChangesAsync();
                         return Ok(ApiResponse.Ok($"Removed role {role.Name} from user #{user.Id}"));
                     }

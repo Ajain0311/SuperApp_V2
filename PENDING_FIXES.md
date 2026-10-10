@@ -22,7 +22,7 @@
 | **FIX-06** | Admin Dashboard Mobile & Tablet Responsive UI Overhaul | P2 (Medium) | `[x] CLOSED` |
 | **FIX-07** | Automated Push Notifications (2-3 times daily engagement broadcast) | P2 (Medium) | `[x] CLOSED` |
 | **FIX-08** | Production Hardening: Disable Mock OTP & Test Payment Gateways | P0 (Critical) | `[x] CLOSED` |
-| **FIX-09** | Remove Admin Password Prompt for Demoted Admins | P1 (High) | `[ ] OPEN` |
+| **FIX-09** | Remove Admin Password Prompt for Demoted Admins | P1 (High) | `[x] CLOSED` |
 | **FIX-10** | Admin Dashboard Premium UI/UX Overhaul | P2 (Medium) | `[ ] OPEN` |
 
 ---

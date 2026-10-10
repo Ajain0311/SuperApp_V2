@@ -69,21 +69,39 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   }, []);
 
   const openBanner = (banner: any) => {
-    const moduleName = String(banner.module || banner.targetType || '').toUpperCase();
-    if (moduleName === 'FOOD' || banner.targetType === 'RESTAURANT') {
-      if (banner.targetId) {
+    const targetType = String(banner.targetType || '').toUpperCase();
+    const moduleName = String(banner.module || '').toUpperCase();
+
+    // Prioritize explicit target types
+    if (targetType === 'RESTAURANT' || targetType === 'FOOD_ITEM' || targetType === 'FOOD') {
+      if (targetType === 'RESTAURANT' && banner.targetId) {
         navigation.navigate('RestaurantDetail', { restaurantId: Number(banner.targetId) });
         return;
       }
       navigation.navigate('Food');
       return;
     }
-    if (moduleName === 'RIDE') {
+    
+    if (targetType === 'LISTING' || targetType === 'MARKETPLACE' || targetType === 'BAZAAR') {
+      navigation.navigate('Bazaar');
+      return;
+    }
+    
+    if (targetType === 'RIDE' || targetType === 'RIDE_PROMO') {
       navigation.navigate('Rides');
       return;
     }
-    if (moduleName === 'MARKETPLACE' || moduleName === 'BAZAAR') {
+
+    // Fallbacks based on banner placement module (ignoring HOME)
+    if (moduleName === 'FOOD') {
+      navigation.navigate('Food');
+    } else if (moduleName === 'RIDE' || moduleName === 'RIDES') {
+      navigation.navigate('Rides');
+    } else if (moduleName === 'MARKETPLACE' || moduleName === 'BAZAAR') {
       navigation.navigate('Bazaar');
+    } else {
+      // Safest fallback if completely undefined, just do nothing or maybe Food as last resort
+      // but let's avoid wrong routing.
     }
   };
 
