@@ -29,6 +29,8 @@
 | **FIX-16** | Convert Admin Panel from WebView/HTML to Native React Native UI | P0 (Critical) | `[x] CLOSED` |
 | **FIX-17** | .env & Backend: Remove ALL test/mock OTP and payment at runtime (production locked) | P0 (Critical) | `[x] CLOSED` |
 | **FIX-18** | Security & Auth: Strict OTP rejection & URL / Database route hardening | P0 (Critical) | `[x] CLOSED` |
+| **FIX-19** | Easebuzz Live Dashboard & Webhook Setup Guide & Hardening | P0 (Critical) | `[ ] OPEN` |
+| **FIX-20** | Google Play Store Upload Checklist (.aab, Keystore, Permissions, Privacy Policy) | P1 (High) | `[ ] OPEN` |
 
 ---
 
@@ -301,3 +303,34 @@ When anyone joins this project:
   3. Added stale dev token eviction in `authStore.checkAuth()` so invalid or dev tokens are immediately purged from storage.
   4. Updated `.env` and `Program.cs` PostgreSQL connection string resolution to prioritize `DATABASE_CONNECTION_STRING` and `DefaultConnection` pointing to `azuredb`.
   5. Added `localhost:8081` to production CORS allowed origins in `appsettings.Production.json`.
+
+---
+
+### FIX-19: Easebuzz Live Dashboard & Webhook Setup Guide & Hardening
+- **Problem:** When customers pay via Easebuzz in live production, transactions must automatically mark orders/rides as `PAID` via server-to-server webhook callbacks. If the webhook URL or live API keys (`KEY` / `SALT`) are not configured on the Easebuzz merchant dashboard, money is deducted from user account but orders remain in `PENDING` state.
+- **Goal:**
+  1. Set up the exact Webhook callback URL in Easebuzz Merchant Dashboard (`https://dashboard.easebuzz.in`):
+     - **Webhook S2S URL:** `https://makemytree.duckdns.org/api/payments/webhook`
+     - **Browser Return URL (SURL / FURL):** `https://makemytree.duckdns.org/api/payments/easebuzz-return`
+  2. Verify Live Merchant Keys:
+     - Check `Key` (`92LYE7065`) and `Secret/Salt` (`9H758G8WF`) against live merchant portal.
+     - Webhook payload calculates reverse SHA-512 checksum: `hash = SHA512(salt|status|udf10...udf1|email|firstname|productinfo|amount|txnid|key)`.
+  3. All payment orders are currently capped at ₹1.00 (`finalAmount = 1.00m`) in `PaymentsController.cs` for safe real-money live testing without debiting full order amounts.
+
+---
+
+### FIX-20: Google Play Store Upload Checklist & Production Packaging (.aab)
+- **Problem:** Play Store does not accept standalone `.apk` files anymore; it requires an Android App Bundle (`.aab`) with target SDK 34/35, signed keystore, explicit privacy policy disclosures, and location permission declarations.
+- **Checklist & Implementation Steps:**
+  1. **Build Artifact:**
+     - Run `eas build -p android --profile production` to generate a production signed `.aab`.
+  2. **App Details & Identifiers:**
+     - Package name: `com.superapp.v2`
+     - Version code & Version string in `app.json`.
+  3. **Mandatory Store Policies & Consents:**
+     - **Location Permission:** Declare foreground location (`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`) for driver dispatch and ride tracking.
+     - **Push Notifications:** Declare `POST_NOTIFICATIONS` for live order alerts.
+     - **Privacy Policy URL:** Host a privacy policy (e.g. `https://makemytree.duckdns.org/privacy`) explaining phone number, GPS coordinates, and payment handling.
+  4. **Google Play Console Release Track:**
+     - Create app in Google Play Console.
+     - Upload `.aab` to **Internal Testing** track first, test on 2-3 devices, then promote to Closed Testing / Production.
