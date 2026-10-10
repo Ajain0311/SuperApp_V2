@@ -16,6 +16,11 @@ public class MockOtpService : IOtpService
 
     public MockOtpService(AppDbContext db)
     {
+        var provider = Environment.GetEnvironmentVariable("OTP_PROVIDER");
+        if (!string.IsNullOrEmpty(provider) && !string.Equals(provider, "Mock", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"MockOtpService is strictly disabled when OTP_PROVIDER is '{provider}'. Production OTP provider must be used.");
+        }
         _db = db;
     }
 

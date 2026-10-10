@@ -120,17 +120,21 @@ public class PaymentsController : ControllerBase
     public async Task<ActionResult<ApiResponse<PaymentVerificationResult>>> MockComplete(
         [FromBody] MockCompletePaymentRequest request)
     {
+        var paymentProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER")
+            ?? _configuration["Providers:Payment"]
+            ?? "Mock";
+
         var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
-        if (isProd)
+        if (isProd || !string.Equals(paymentProvider, "Mock", StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest(ApiResponse<PaymentVerificationResult>.Fail(
-                "Mock payments are disabled in Production."));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<PaymentVerificationResult>.Fail(
+                "Mock payments are forbidden when PAYMENT_PROVIDER is not Mock."));
         }
 
         var (_, active, _, _, _) = ResolveKit();
         if (!string.Equals(active, "Mock", StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest(ApiResponse<PaymentVerificationResult>.Fail(
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<PaymentVerificationResult>.Fail(
                 "Live gateway is active. Complete payment in Easebuzz Checkout."));
         }
 

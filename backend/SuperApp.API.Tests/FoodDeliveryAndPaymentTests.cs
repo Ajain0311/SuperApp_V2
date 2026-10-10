@@ -207,12 +207,43 @@ public class FoodDeliveryAndPaymentTests
             var request = new SuperApp.API.DTOs.MockCompletePaymentRequest { TransactionId = "test", Success = true };
             var result = await controller.MockComplete(request);
 
-            var badRequest = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result.Result);
-            var response = Assert.IsType<SuperApp.API.DTOs.ApiResponse<SuperApp.API.Services.PaymentVerificationResult>>(badRequest.Value);
-            Assert.Contains("disabled in Production", response.Message);
+            var objResult = Assert.IsType<Microsoft.AspNetCore.Mvc.ObjectResult>(result.Result);
+            Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status403Forbidden, objResult.StatusCode);
+            var response = Assert.IsType<SuperApp.API.DTOs.ApiResponse<SuperApp.API.Services.PaymentVerificationResult>>(objResult.Value);
+            Assert.Contains("forbidden", response.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", origEnv);
+        }
+    }
+
+    [Fact]
+    public async Task PaymentsController_MockComplete_Returns403_WhenPaymentProviderNotMock()
+    {
+        var db = NewDb();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var controller = new SuperApp.API.Controllers.PaymentsController(
+            new MockPaymentService(db), db, config);
+
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+        var origEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        try
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Easebuzz");
+
+            var request = new SuperApp.API.DTOs.MockCompletePaymentRequest { TransactionId = "test", Success = true };
+            var result = await controller.MockComplete(request);
+
+            var objResult = Assert.IsType<Microsoft.AspNetCore.Mvc.ObjectResult>(result.Result);
+            Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status403Forbidden, objResult.StatusCode);
+            var response = Assert.IsType<SuperApp.API.DTOs.ApiResponse<SuperApp.API.Services.PaymentVerificationResult>>(objResult.Value);
+            Assert.Contains("forbidden", response.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", origEnv);
         }
     }

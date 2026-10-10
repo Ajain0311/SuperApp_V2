@@ -46,42 +46,53 @@ public class AuthTests
     [Fact]
     public async Task MockOtpService_Accepts_GeneratedRandomOtp()
     {
-        // Arrange
-        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        using var db = new SuperApp.API.Data.AppDbContext(options);
-        var otpService = new MockOtpService(db);
-        var phone = "9876543210";
+        var origProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER");
+        try
+        {
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", "Mock");
+            // Arrange
+            var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var db = new SuperApp.API.Data.AppDbContext(options);
+            var otpService = new MockOtpService(db);
+            var phone = "9876543210";
 
-        // Act
-        var otp = await otpService.GenerateAndSendOtpAsync(phone, "LOGIN");
-        var isInvalid = await otpService.VerifyOtpAsync(phone, "000000", "LOGIN");
-        var isValid = await otpService.VerifyOtpAsync(phone, otp, "LOGIN");
+            // Act
+            var otp = await otpService.GenerateAndSendOtpAsync(phone, "LOGIN");
+            var isInvalid = await otpService.VerifyOtpAsync(phone, "000000", "LOGIN");
+            var isValid = await otpService.VerifyOtpAsync(phone, otp, "LOGIN");
 
-        // Assert
-        Assert.Equal(6, otp.Length);
-        Assert.True(int.TryParse(otp, out _));
-        Assert.False(isInvalid);
-        Assert.True(isValid);
+            // Assert
+            Assert.Equal(6, otp.Length);
+            Assert.True(int.TryParse(otp, out _));
+            Assert.False(isInvalid);
+            Assert.True(isValid);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", origProvider);
+        }
     }
 
     [Fact]
     public async Task MockOtpService_RejectsMasterOtp_InProduction()
     {
-        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        using var db = new SuperApp.API.Data.AppDbContext(options);
-        var otpService = new MockOtpService(db);
-        var phone = "9876543210";
-
+        var origProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER");
         var origEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
         var origTest = Environment.GetEnvironmentVariable("OTP_TEST_MODE");
         try
         {
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", "Mock");
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
             Environment.SetEnvironmentVariable("OTP_TEST_MODE", "true");
+
+            var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var db = new SuperApp.API.Data.AppDbContext(options);
+            var otpService = new MockOtpService(db);
+            var phone = "9876543210";
 
             await otpService.GenerateAndSendOtpAsync(phone, "LOGIN");
             var isValid = await otpService.VerifyOtpAsync(phone, "123456", "LOGIN");
@@ -90,8 +101,29 @@ public class AuthTests
         }
         finally
         {
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", origProvider);
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", origEnv);
             Environment.SetEnvironmentVariable("OTP_TEST_MODE", origTest);
+        }
+    }
+
+    [Fact]
+    public void MockOtpService_ThrowsException_WhenProviderIsNotMock()
+    {
+        var origProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER");
+        try
+        {
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", "PunjabGov");
+            var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var db = new SuperApp.API.Data.AppDbContext(options);
+
+            Assert.Throws<InvalidOperationException>(() => new MockOtpService(db));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", origProvider);
         }
     }
 }
