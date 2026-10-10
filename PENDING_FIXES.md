@@ -26,6 +26,8 @@
 | **FIX-10** | Admin Dashboard Premium UI/UX Overhaul | P2 (Medium) | `[x] CLOSED` |
 | **FIX-14** | Vendor Dashboards UX & QA | P1 (High) | `[x] CLOSED` |
 | **FIX-15** | SignalR Real-Time Testing & Hardening | P1 (High) | `[x] CLOSED` |
+| **FIX-16** | Convert Admin Panel from WebView/HTML to Native React Native UI | P0 (Critical) | `[ ] OPEN` |
+| **FIX-17** | .env & Backend: Remove ALL test/mock OTP and payment at runtime (production locked) | P0 (Critical) | `[ ] OPEN` |
 
 ---
 
@@ -217,7 +219,7 @@ When anyone joins this project:
 
 ---
 
-### [x] CLOSED FIX-10: Admin Dashboard Premium UI/UX Overhaul
+### FIX-10: Admin Dashboard Premium UI/UX Overhaul
 - **Problem:** While basic mobile responsiveness was added (FIX-06), the admin dashboard still lacks a premium, polished professional aesthetic. The design feels basic, components lack proper elevation/shadows, and color contrast needs improvement for a modern web app.
 - **Goal:** Perform a premium UI/UX overhaul of the admin portal (`backend/SuperApp.API/wwwroot/admin/`).
 - **Execution Prompt:**
@@ -231,3 +233,55 @@ When anyone joins this project:
   6. Ensure all inputs, buttons, and badges have a cohesive, premium brand language.
   ```
 
+---
+
+### FIX-16: Convert Admin Panel from WebView/HTML to Native React Native UI
+- **Problem:** The Admin Portal (`AdminPortalScreen.tsx`) currently loads a raw HTML page inside a `WebView` component. This makes it look and feel like a website, not a native mobile app. Users get a browser-like experience with no native touch gestures, no native navigation, and no native components.
+- **Goal:** Rebuild the entire Admin Panel as a **100% native React Native** app using the same API endpoints that the current HTML admin panel calls. Screens to build natively:
+  - Dashboard (stats cards: users, orders, rides, revenue)
+  - Users list + Manage user (roles, ban/unban)
+  - Restaurants list + manage
+  - Riders/Drivers list + manage
+  - Orders list (food + ride)
+  - Payments list
+  - App Settings
+  - Push notifications / Announcements
+- **Execution Prompt:**
+  ```text
+  Convert Admin Panel to native React Native UI:
+  1. Delete/repurpose `src/features/admin/AdminPortalScreen.tsx` — replace WebView with native screens.
+  2. Create `src/features/admin/` directory with dedicated native screens:
+     - AdminDashboardHome.tsx (KPI stats cards from /api/admin/analytics)
+     - AdminUsersScreen.tsx (FlatList of user cards, search, filter by role)
+     - AdminUserManageModal.tsx (role toggle, ban/unban, reset password)
+     - AdminRestaurantsScreen.tsx
+     - AdminDriversScreen.tsx
+     - AdminOrdersScreen.tsx
+     - AdminPaymentsScreen.tsx
+     - AdminSettingsScreen.tsx
+  3. All screens must use the existing backend REST API endpoints under `/api/admin/` with the Bearer token.
+  4. Use React Navigation Stack for admin sub-navigation.
+  5. Apply the existing AppColors theme (dark mode, #0A0E21 bg, #FF6B35 primary).
+  6. Small card components, FlatList for data tables, premium native touch feel.
+  7. Run `npx tsc --noEmit` and `npm test`.
+  8. Commit and push.
+  ```
+
+---
+
+### FIX-17: .env & Backend — Remove ALL Test/Mock OTP and Payment at Runtime
+- **Problem:** Even after setting `EXPO_PUBLIC_SHOW_TEST_OTP=false` in `.env`, the underlying backend `MockOtpService` and `MockPaymentService` are still active because the `.env` file's `OTP_PROVIDER=Mock` and `PAYMENT_PROVIDER=Mock` values were pointing to dev/mock providers.
+- **Goal:** Fully lock down the runtime to production-grade providers:
+  - OTP: `PunjabGov` real SMS only
+  - Payment: `Easebuzz` production gateway only
+  - `.env` must have zero trace of `123456` or `Mock`
+- **Execution Prompt:**
+  ```text
+  Lock down production environment completely:
+  1. In `.env`, ensure: OTP_PROVIDER=PunjabGov, PAYMENT_PROVIDER=Easebuzz, TEST_OTP=<empty>, EXPO_PUBLIC_SHOW_TEST_OTP=false.
+  2. In `backend/SuperApp.API/appsettings.json`, ensure Payment.Env=prod, Providers.Otp=PunjabGov, Providers.Payment=Easebuzz.
+  3. In `MockOtpService.cs`, add a hard check: if OTP_PROVIDER != "Mock", throw an exception at startup to prevent accidental use.
+  4. In `PaymentsController.cs`, verify MockComplete endpoint returns 403 when PAYMENT_PROVIDER != "Mock".
+  5. Run `dotnet test` and confirm all production security tests pass.
+  6. Commit and push.
+  ```
