@@ -31,7 +31,14 @@
   - Stale `dev_jwt_token_` values are automatically purged in `authStore.checkAuth()`.
   - Updated `.env` and `Program.cs` to route directly to `azuredb` (`DATABASE_CONNECTION_STRING` prioritized over old Supabase pooler).
   - Added `http://localhost:8081` to `CorsAllowedOrigins` in `appsettings.Production.json`.
-- **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md). All stabilization issues (FIX-01 to FIX-18) are CLOSED.
+- **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md).
+  - FIX-21: Ride Section — Rapido-style minimalist UI, fast location autocomplete & pin-on-map modal `[OPEN]`
+  - FIX-22: Marketplace image upload "Server encountered an error" fix `[OPEN]`
+  - FIX-23: Remove Test Payment & mock banners from user flow `[OPEN]`
+  - FIX-24: Food Section — Fix missing food/restaurant image URLs `[OPEN]`
+  - FIX-25: Mapbox Dev Client build guard & fallback UI `[OPEN]`
+  - FIX-19: Easebuzz live dashboard & webhook verification `[OPEN]`
+  - FIX-20: Google Play Store upload checklist (.aab) `[OPEN]`
 - **Verification Suites**:
   - `dotnet test backend/SuperApp.sln`: 111 Passed / 111 Total
   - `npx tsc --noEmit`: 0 Errors

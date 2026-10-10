@@ -31,6 +31,11 @@
 | **FIX-18** | Security & Auth: Strict OTP rejection & URL / Database route hardening | P0 (Critical) | `[x] CLOSED` |
 | **FIX-19** | Easebuzz Live Dashboard & Webhook Setup Guide & Hardening | P0 (Critical) | `[ ] OPEN` |
 | **FIX-20** | Google Play Store Upload Checklist (.aab, Keystore, Permissions, Privacy Policy) | P1 (High) | `[ ] OPEN` |
+| **FIX-21** | Ride Section: Rapido-style Minimalist UI, Fast Location Autocomplete & Pin-on-Map Modal | P0 (Critical) | `[ ] OPEN` |
+| **FIX-22** | Marketplace Image Upload: Fix "Upload failed server encountered an error" | P0 (Critical) | `[ ] OPEN` |
+| **FIX-23** | Remove Test Payment / Banners section from User Flow | P1 (High) | `[ ] OPEN` |
+| **FIX-24** | Food Section: Fix missing food & restaurant images | P0 (Critical) | `[ ] OPEN` |
+| **FIX-25** | Mapbox Dev Client Build Guard & Fallback | P1 (High) | `[ ] OPEN` |
 
 ---
 
@@ -334,3 +339,53 @@ When anyone joins this project:
   4. **Google Play Console Release Track:**
      - Create app in Google Play Console.
      - Upload `.aab` to **Internal Testing** track first, test on 2-3 devices, then promote to Closed Testing / Production.
+
+---
+
+### FIX-21: Ride Section — Rapido-Style Minimalist UI, Fast Location Autocomplete & Pin-on-Map Modal
+- **Problem:** "Find your ride" section feels heavy and cluttered. Inline map view slows down interaction and renders poorly without native dev client.
+- **Goal:**
+  1. Make the ride booking screen clean, lightweight, and fast like **Rapido**:
+     - Large, crisp "Pickup" and "Drop" inputs at the top.
+     - As user starts typing, display real-time autocomplete suggestions dropdown immediately.
+     - Add a clean Map pin icon on the right side of the input that opens a lightweight **"Pin on Map" Modal**.
+  2. In the modal:
+     - Show draggable map / center pin to let users pick their exact location.
+     - "Confirm Location" button updates the address text and coordinates and closes modal.
+  3. Move heavy map preview into this modal so the main screen remains fast and responsive.
+
+---
+
+### FIX-22: Marketplace Image Upload — Fix "Upload failed server encountered an error"
+- **Problem:** When trying to sell/list an item in Community Marketplace and uploading an image, user gets an error: *"Upload failed server encountered an error"*.
+- **Goal:**
+  1. Inspect the upload flow in `src/features/marketplace/AddListingScreen.tsx` and the backend `DocumentsController.cs` / `AzureBlobStorageService.cs`.
+  2. Verify if multipart form-data payload format, headers, file size limits, or storage directory permissions are causing 500 Internal Server Error.
+  3. Ensure images are resized/compressed via `expo-image-manipulator` before uploading so payloads stay under 2MB.
+  4. Ensure backend falls back gracefully to local disk `wwwroot/uploads` or DB blob storage if cloud storage is unconfigured.
+
+---
+
+### FIX-23: Remove Test Payment & Redundant Banners From User Flow
+- **Problem:** App still has Payment Test screen / banner entry points visible in user profile or settings.
+- **Goal:**
+  1. Remove `PaymentTestScreen` navigation entry points from `ProfileScreen.tsx` and user menus.
+  2. Remove mock payment banner shortcuts so end-users only see real checkout during actual food orders and ride completions.
+  3. Keep Easebuzz production flow active; merchant checks will be done directly in Easebuzz live portal (`https://dashboard.easebuzz.in`).
+
+---
+
+### FIX-24: Food Section — Fix Missing Food & Restaurant Images
+- **Problem:** Restaurant and dish images in Food section fail to load or show blank placeholders.
+- **Goal:**
+  1. Audit restaurant image URLs and food item image URLs returned from `/api/restaurants` and `/api/foodorders`.
+  2. Check for broken external Unsplash links, HTTP vs HTTPS mixed content blocks, or local `/uploads/` relative paths lacking the host prefix.
+  3. Implement automatic image URL resolver (`resolveImageUrl(url)`) with a high-reliability fallback CDN placeholder for broken links.
+
+---
+
+### FIX-25: Mapbox Dev Client Build Guard & Fallback
+- **Problem:** Native `@rnmapbox/maps` requires an Expo Dev Client / EAS Prebuild binary. Running in standard Expo Go or without native Mapbox framework crashes or renders blank.
+- **Goal:**
+  1. Guard Mapbox imports so app never crashes if native module is absent.
+  2. Display clear fallback UI ("Map requires native build") or standard OpenStreetMap / Web fallback when running outside native prebuild.
