@@ -19,6 +19,9 @@ jest.mock('@microsoft/signalr', () => {
         listeners[event] = listeners[event].filter((fn) => fn !== cb);
       }
     }),
+    onreconnecting: jest.fn(),
+    onreconnected: jest.fn(),
+    onclose: jest.fn(),
     state: 'Connected',
     _emit: (event: string, data: any) => {
       if (listeners[event]) {
