@@ -7,7 +7,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_ENV": "dev",
+        "EXPO_PUBLIC_ENV": "prod",
         "EXPO_PUBLIC_API_BASE_URL": "https://makemytree.duckdns.org/api",
         "EXPO_PUBLIC_SIGNALR_HUB_URL": "https://makemytree.duckdns.org",
         "EXPO_PUBLIC_SHOW_TEST_OTP": "false"
@@ -19,7 +19,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_ENV": "prod",
         "EXPO_PUBLIC_API_BASE_URL": "https://makemytree.duckdns.org/api",
         "EXPO_PUBLIC_SIGNALR_HUB_URL": "https://makemytree.duckdns.org",
         "EXPO_PUBLIC_SHOW_TEST_OTP": "false"
