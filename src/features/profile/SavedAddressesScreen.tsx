@@ -427,6 +427,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
+    maxHeight: '90%',
   },
   modalTitle: { ...typography.h2, color: colors.textPrimary, marginBottom: 12 },
   labelRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
