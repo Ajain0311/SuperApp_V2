@@ -23,7 +23,7 @@
 | **FIX-07** | Automated Push Notifications (2-3 times daily engagement broadcast) | P2 (Medium) | `[x] CLOSED` |
 | **FIX-08** | Production Hardening: Disable Mock OTP & Test Payment Gateways | P0 (Critical) | `[x] CLOSED` |
 | **FIX-09** | Remove Admin Password Prompt for Demoted Admins | P1 (High) | `[x] CLOSED` |
-| **FIX-10** | Admin Dashboard Premium UI/UX Overhaul | P2 (Medium) | `[ ] OPEN` |
+| **FIX-10** | Admin Dashboard Premium UI/UX Overhaul | P2 (Medium) | `[x] CLOSED` |
 | **FIX-14** | Vendor Dashboards UX & QA | P1 (High) | `[x] CLOSED` |
 | **FIX-15** | SignalR Real-Time Testing & Hardening | P1 (High) | `[x] CLOSED` |
 
@@ -195,10 +195,10 @@ When anyone joins this project:
 1. **Developer Greeting / Incoming Prompts:**
    - First ask: *"Hi! We have a curated list of existing production bug fixes in `PENDING_FIXES.md`. Would you like to fix the top-priority issues first, or should I queue your new task into the backlog?"*
 2. **Priority Rule:**
-   - If user/developer says "Fix top priority first" -> Pick the next `[ ] OPEN` task from `PENDING_FIXES.md`.
+   - If user/developer says "Fix top priority first" -> Pick the next `[x] CLOSED` task from `PENDING_FIXES.md`.
    - If user gives a direct command/preference -> **User request is always top priority**, execute immediately, and log any follow-ups in `PENDING_FIXES.md` and `ROADMAP.md`.
 3. **Completion Rule:**
-   - As soon as a task is fixed and all tests (`dotnet test`, `npx tsc --noEmit`, `npm test`) pass, change `[ ] OPEN` to `[x] CLOSED`, update `ROADMAP.md`, and clean the backlog.
+   - As soon as a task is fixed and all tests (`dotnet test`, `npx tsc --noEmit`, `npm test`) pass, change `[x] CLOSED` to `[x] CLOSED`, update `ROADMAP.md`, and clean the backlog.
 
 
 ---
@@ -230,3 +230,4 @@ When anyone joins this project:
   5. Add subtle CSS transitions/animations for hover states and modal dialogs.
   6. Ensure all inputs, buttons, and badges have a cohesive, premium brand language.
   ```
+
