@@ -53,7 +53,9 @@
     "test:agents:isolation": "node e2e/agents/runner.js --scenario isolation",
     "test:agents:full": "node e2e/agents/runner.js --scenario full-regression",
     "test:agents:volume": "node e2e/agents/runner.js --scenario full-regression --customers 20 --restaurant-owners 5 --captains 10 --sellers 10 --concurrency 8",
-    "test:agents:self": "node --test e2e/agents/selftest/framework.test.js e2e/agents/selftest/response-shape.test.js e2e/agents/selftest/db-jwt.test.js"
+    "test:agents:self": "node --test e2e/agents/selftest/framework.test.js e2e/agents/selftest/response-shape.test.js e2e/agents/selftest/db-jwt.test.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "expo": {
     "install": {

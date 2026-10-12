@@ -67,3 +67,8 @@ supabase/.temp/
 
 # E2E test screenshots
 e2e/screenshots/
+
+# Playwright test outputs
+playwright-report/
+test-results/
+e2e/playwright-results.json

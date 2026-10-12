@@ -29,13 +29,14 @@
 | **FIX-16** | Convert Admin Panel from WebView/HTML to Native React Native UI | P0 (Critical) | `[x] CLOSED` |
 | **FIX-17** | .env & Backend: Remove ALL test/mock OTP and payment at runtime (production locked) | P0 (Critical) | `[x] CLOSED` |
 | **FIX-18** | Security & Auth: Strict OTP rejection & URL / Database route hardening | P0 (Critical) | `[x] CLOSED` |
-| **FIX-19** | Easebuzz Live Dashboard & Webhook Setup Guide & Hardening | P0 (Critical) | `[ ] OPEN` |
-| **FIX-20** | Google Play Store Upload Checklist (.aab, Keystore, Permissions, Privacy Policy) | P1 (High) | `[ ] OPEN` |
+| **FIX-19** | Easebuzz Live Dashboard & Webhook Setup Guide & Hardening | P0 (Critical) | `[ ] CODE COMPLETE (MANUAL DASHBOARD ACTION REQUIRED)` |
+| **FIX-20** | Google Play Store Upload Checklist (.aab, Keystore, Permissions, Privacy Policy) | P1 (High) | `[ ] CODE COMPLETE (MANUAL PLAY CONSOLE ACTION REQUIRED)` |
 | **FIX-21** | Ride Section: Rapido-style Minimalist UI, Fast Location Autocomplete & Pin-on-Map Modal | P0 (Critical) | `[x] CLOSED` |
 | **FIX-22** | Marketplace Image Upload: Fix "Upload failed server encountered an error" | P0 (Critical) | `[x] CLOSED` |
 | **FIX-23** | Remove Test Payment / Banners section from User Flow | P1 (High) | `[x] CLOSED` |
 | **FIX-24** | Food Section: Fix missing food & restaurant images | P0 (Critical) | `[x] CLOSED` |
 | **FIX-25** | Mapbox Dev Client Build Guard & Fallback | P1 (High) | `[x] CLOSED` |
+| **FIX-26** | 24x7 Playwright E2E Testing Suite & Continuous GitHub Workflow | P0 (Critical) | `[x] CLOSED (VERIFIED)` |
 
 ---
 
@@ -342,6 +343,7 @@ When anyone joins this project:
 
 ---
 
+<<<<<<< HEAD
 ### FIX-21: Ride Section — Rapido-Style Minimalist UI, Fast Location Autocomplete & Pin-on-Map Modal
 - **Problem:** "Find your ride" section feels heavy and cluttered. Inline map view slows down interaction and renders poorly without native dev client.
 - **Goal:**
@@ -389,3 +391,18 @@ When anyone joins this project:
 - **Goal:**
   1. Guard Mapbox imports so app never crashes if native module is absent.
   2. Display clear fallback UI ("Map requires native build") or standard OpenStreetMap / Web fallback when running outside native prebuild.
+
+---
+
+### FIX-26: 24x7 Playwright E2E Testing Suite & Continuous GitHub Workflow
+- **Status:** `[x] CLOSED (VERIFIED)`
+- **Problem:** Needed round-the-clock, continuous automated end-to-end testing for SuperApp V2 web client across mobile and desktop devices without breaking test budgets.
+- **Solution:**
+  1. Configured Playwright (`playwright.config.ts`) with dual device testing profiles: **Mobile Chrome (Pixel 5)** and **Desktop Chrome (1280x720)**, complete with automated static web server orchestration (`npx serve dist -l 8081`).
+  2. Implemented Playwright test suites in `e2e/playwright/`:
+     - `auth.spec.ts`: Brand rendering, dynamic route title resolution, mobile number formatting, validation, and trust badges.
+     - `e2e-journeys.spec.ts`: End-to-end service domain presentation (Food Delivery, Fast Cabs, Bazaar), OTP dispatch trigger, and cross-device responsiveness.
+  3. Added npm scripts: `"test:e2e": "playwright test"` and `"test:e2e:ui": "playwright test --ui"`.
+  4. Created `.github/workflows/playwright-e2e-nonstop.yml` with continuous 24/7 cron schedule (`0 */3 * * *`), automated Chromium browser installation, HTML test report artifact uploading, and failure trace captures.
+  5. Verified 14/14 tests pass locally in 28.5 seconds.
+

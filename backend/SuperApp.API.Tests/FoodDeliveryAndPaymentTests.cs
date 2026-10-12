@@ -247,4 +247,268 @@ public class FoodDeliveryAndPaymentTests
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", origEnv);
         }
     }
+
+    [Fact]
+    public void EasebuzzHash_InitiateAndReverse_CalculateAccurateSha512()
+    {
+        var key = "2PBP7CABXZ";
+        var salt = "DAH88E3UWQ";
+        var txnid = "txnid12345";
+        var amount = "100.00";
+        var product = "FOOD";
+        var firstname = "TestUser";
+        var email = "test@superapp.local";
+
+        var initiateHash = EasebuzzHash.InitiatePayment(
+            key, txnid, amount, product, firstname, email, "", "", "", "", "", salt);
+        Assert.NotNull(initiateHash);
+        Assert.Equal(128, initiateHash.Length);
+
+        var reverseHash = EasebuzzHash.Reverse(
+            salt, "success", "", "", "", "", "", "", "", "", "", "",
+            email, firstname, product, amount, txnid, key);
+        Assert.NotNull(reverseHash);
+        Assert.Equal(128, reverseHash.Length);
+
+        // Verify invalid hash fails comparison
+        var tamperedAmountHash = EasebuzzHash.Reverse(
+            salt, "success", "", "", "", "", "", "", "", "", "", "",
+            email, firstname, product, "50.00", txnid, key);
+        Assert.NotEqual(reverseHash, tamperedAmountHash);
+    }
+
+    [Fact]
+    public async Task EasebuzzWebhook_WithValidHash_MarksPaymentPaidIdempotently()
+    {
+        var db = NewDb();
+        var key = "TESTKEY123";
+        var salt = "TESTSALT456";
+
+        var origKey = Environment.GetEnvironmentVariable("PAYMENT_KEY");
+        var origSalt = Environment.GetEnvironmentVariable("PAYMENT_SECRET");
+        var origEnv = Environment.GetEnvironmentVariable("PAYMENT_ENV");
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", key);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", salt);
+            Environment.SetEnvironmentVariable("PAYMENT_ENV", "test");
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Easebuzz");
+
+            var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+            var httpClient = new HttpClient();
+            var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EasebuzzPaymentService>.Instance;
+            var easebuzzService = new EasebuzzPaymentService(httpClient, db, config, logger);
+            var controller = new SuperApp.API.Controllers.PaymentsController(easebuzzService, db, config);
+
+            var user = new User { Id = 91, FullName = "Webhook Tester", MobileNumber = "9876543210", Email = "webhook@test.com" };
+            db.Users.Add(user);
+            var restaurant = new Restaurant { Id = 91, Name = "Webhook Diner", IsActive = true };
+            db.Restaurants.Add(restaurant);
+            var order = new FoodOrder
+            {
+                Id = 910,
+                OrderNumber = "FO-WH0001",
+                UserId = 91,
+                RestaurantId = 91,
+                Status = OrderStatus.Pending,
+                PaymentMethod = "ONLINE",
+                PaymentStatus = "PENDING_PAYMENT",
+                GrandTotal = 150.00m,
+                CreatedAt = DateTime.UtcNow
+            };
+            db.FoodOrders.Add(order);
+
+            var txnid = "txn-webhook-910";
+            var amountStr = "150.00";
+            var payment = new Payment
+            {
+                UserId = 91,
+                Module = "FOOD",
+                OrderId = 910,
+                Amount = 150.00m,
+                PaymentMethod = "EASEBUZZ",
+                TransactionId = txnid,
+                Status = "PENDING",
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Payments.Add(payment);
+            await db.SaveChangesAsync();
+
+            var validHash = EasebuzzHash.Reverse(
+                salt, "success", "", "", "", "", "", "", "", "", "", "",
+                "webhook@test.com", "Webhook Tester", "FOOD", amountStr, txnid, key);
+
+            var formDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = txnid,
+                ["status"] = "success",
+                ["amount"] = amountStr,
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "Webhook Tester",
+                ["email"] = "webhook@test.com",
+                ["key"] = key,
+                ["hash"] = validHash
+            };
+
+            var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(formDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext };
+
+            // 1. First webhook call -> should succeed and mark PAID
+            var result1 = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result1);
+
+            var storedPayment = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == txnid);
+            var storedOrder = await db.FoodOrders.AsNoTracking().SingleAsync(o => o.Id == 910);
+            Assert.Equal("PAID", storedPayment.Status);
+            Assert.Equal("PAID", storedOrder.PaymentStatus);
+
+            // 2. Duplicate webhook call -> must be idempotent without error
+            var result2 = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result2);
+
+            var countPayments = await db.Payments.CountAsync(p => p.TransactionId == txnid);
+            Assert.Equal(1, countPayments);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", origKey);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", origSalt);
+            Environment.SetEnvironmentVariable("PAYMENT_ENV", origEnv);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
+        }
+    }
+
+    [Fact]
+    public async Task EasebuzzWebhook_WithTamperedHash_RejectsUnauthorized()
+    {
+        var db = NewDb();
+        var key = "TESTKEY123";
+        var salt = "TESTSALT456";
+
+        var origKey = Environment.GetEnvironmentVariable("PAYMENT_KEY");
+        var origSalt = Environment.GetEnvironmentVariable("PAYMENT_SECRET");
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", key);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", salt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Easebuzz");
+
+            var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+            var httpClient = new HttpClient();
+            var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EasebuzzPaymentService>.Instance;
+            var easebuzzService = new EasebuzzPaymentService(httpClient, db, config, logger);
+            var controller = new SuperApp.API.Controllers.PaymentsController(easebuzzService, db, config);
+
+            var formDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-tampered-1",
+                ["status"] = "success",
+                ["amount"] = "500.00",
+                ["hash"] = "invalid_tampered_hash_value"
+            };
+
+            var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(formDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext };
+
+            var result = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.UnauthorizedResult>(result);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", origKey);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", origSalt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
+        }
+    }
+
+    [Fact]
+    public async Task EasebuzzWebhook_FailureOrCancellation_TransitionsStatusCorrectly()
+    {
+        var db = NewDb();
+        var key = "TESTKEY123";
+        var salt = "TESTSALT456";
+
+        var origKey = Environment.GetEnvironmentVariable("PAYMENT_KEY");
+        var origSalt = Environment.GetEnvironmentVariable("PAYMENT_SECRET");
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", key);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", salt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Easebuzz");
+
+            var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+            var httpClient = new HttpClient();
+            var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EasebuzzPaymentService>.Instance;
+            var easebuzzService = new EasebuzzPaymentService(httpClient, db, config, logger);
+            var controller = new SuperApp.API.Controllers.PaymentsController(easebuzzService, db, config);
+
+            var payment = new Payment
+            {
+                UserId = 1,
+                Module = "FOOD",
+                OrderId = 920,
+                Amount = 100.00m,
+                PaymentMethod = "EASEBUZZ",
+                TransactionId = "txn-fail-920",
+                Status = "PENDING"
+            };
+            db.Payments.Add(payment);
+            db.FoodOrders.Add(new FoodOrder
+            {
+                Id = 920,
+                OrderNumber = "FO-FAIL001",
+                UserId = 1,
+                RestaurantId = 1,
+                PaymentMethod = "ONLINE",
+                PaymentStatus = "PENDING_PAYMENT",
+                Status = OrderStatus.Pending
+            });
+            await db.SaveChangesAsync();
+
+            var failHash = EasebuzzHash.Reverse(
+                salt, "failure", "", "", "", "", "", "", "", "", "", "",
+                "user@test.com", "User", "FOOD", "100.00", "txn-fail-920", key);
+
+            var formDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-fail-920",
+                ["status"] = "failure",
+                ["amount"] = "100.00",
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "User",
+                ["email"] = "user@test.com",
+                ["key"] = key,
+                ["hash"] = failHash
+            };
+
+            var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(formDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext };
+
+            var result = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result);
+
+            var updatedPayment = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == "txn-fail-920");
+            var updatedOrder = await db.FoodOrders.AsNoTracking().SingleAsync(o => o.Id == 920);
+            Assert.Equal("FAILED", updatedPayment.Status);
+            Assert.Equal("FAILED", updatedOrder.PaymentStatus);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", origKey);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", origSalt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
+        }
+    }
 }

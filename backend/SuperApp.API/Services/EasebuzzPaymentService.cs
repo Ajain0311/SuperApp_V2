@@ -117,7 +117,7 @@ public class EasebuzzPaymentService : IPaymentService
         }
 
         var body = await response.Content.ReadAsStringAsync();
-        _logger.LogInformation("Easebuzz initiate {Status}: {Body}", response.StatusCode, body);
+        _logger.LogInformation("Easebuzz initiate HTTP status: {Status}", response.StatusCode);
 
         JsonDocument doc;
         try
@@ -247,15 +247,85 @@ public class EasebuzzPaymentService : IPaymentService
             };
         }
 
-        _logger.LogInformation("Easebuzz status: {Body}", body);
+        var paid = hashMatchesSuccess;
+        var explicitFailure = false;
 
-        var paid = hashMatchesSuccess
-            || body.Contains("\"status\":\"success\"", StringComparison.OrdinalIgnoreCase)
-            || body.Contains("\"txn_status\":\"success\"", StringComparison.OrdinalIgnoreCase)
-            || body.Contains("\"status\": \"success\"", StringComparison.OrdinalIgnoreCase);
-        var explicitFailure = body.Contains("\"status\":\"failure\"", StringComparison.OrdinalIgnoreCase)
-            || body.Contains("\"status\":\"dropped\"", StringComparison.OrdinalIgnoreCase)
-            || body.Contains("\"status\":\"usercancelled\"", StringComparison.OrdinalIgnoreCase);
+        // Parse official Easebuzz JSON status response: { status: 1, data: { status: "success", amount: "...", ... } }
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var rootStatus = root.TryGetProperty("status", out var sProp)
+                ? (sProp.ValueKind == JsonValueKind.Number ? sProp.GetInt32() : (int.TryParse(sProp.GetString(), out var sp) ? sp : 0))
+                : 0;
+
+            if (rootStatus == 1 && root.TryGetProperty("data", out var dataEl))
+            {
+                // In some API variations, data is an object or array of objects
+                JsonElement txnItem = dataEl;
+                if (dataEl.ValueKind == JsonValueKind.Array && dataEl.GetArrayLength() > 0)
+                {
+                    txnItem = dataEl[0];
+                }
+
+                if (txnItem.ValueKind == JsonValueKind.Object)
+                {
+                    var txnStatus = txnItem.TryGetProperty("status", out var ts) ? ts.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(txnStatus) && txnItem.TryGetProperty("txn_status", out var tts))
+                    {
+                        txnStatus = tts.GetString();
+                    }
+
+                    var normalizedTxnStatus = (txnStatus ?? "").Trim().ToLowerInvariant();
+                    if (normalizedTxnStatus == "success")
+                    {
+                        // Validate amount integrity if amount is returned in transaction object
+                        if (payment != null && txnItem.TryGetProperty("amount", out var amtEl))
+                        {
+                            var amtStr = amtEl.ToString().Trim('"', ' ');
+                            if (decimal.TryParse(amtStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var retrievedAmt))
+                            {
+                                if (Math.Abs(retrievedAmt - payment.Amount) < 0.01m)
+                                {
+                                    paid = true;
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("Easebuzz transaction {TxnId} amount mismatch. DB: {DbAmount}, Gateway: {GatAmount}", transactionId, payment.Amount, retrievedAmt);
+                                }
+                            }
+                            else
+                            {
+                                paid = true;
+                            }
+                        }
+                        else
+                        {
+                            paid = true;
+                        }
+                    }
+                    else if (normalizedTxnStatus is "failure" or "failed" or "dropped" or "bounced" or "usercancelled" or "user_cancelled")
+                    {
+                        explicitFailure = true;
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Non-JSON or unstructured response fallback
+            if (body.Contains("\"status\":\"success\"", StringComparison.OrdinalIgnoreCase) ||
+                body.Contains("\"txn_status\":\"success\"", StringComparison.OrdinalIgnoreCase))
+            {
+                paid = true;
+            }
+            else if (body.Contains("\"status\":\"failure\"", StringComparison.OrdinalIgnoreCase) ||
+                     body.Contains("\"status\":\"dropped\"", StringComparison.OrdinalIgnoreCase) ||
+                     body.Contains("\"status\":\"usercancelled\"", StringComparison.OrdinalIgnoreCase))
+            {
+                explicitFailure = true;
+            }
+        }
 
         if (payment != null && (paid || explicitFailure))
         {
