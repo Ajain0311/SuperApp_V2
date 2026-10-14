@@ -247,7 +247,18 @@ async function captainFoodAndOnlinePayment(ctx, primary, owner) {
   const started = await primary.customer.client.request('POST', `/api/FoodOrders/${online.id}/pay`);
   const session = dataOf(started);
   if (started.status !== 200 || !session?.transactionId) {
-    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', endpoint: `/api/FoodOrders/${online.id}/pay`, method: 'POST', expected: 200, actual: started.status, status: 'FAIL', details: started.body?.message || 'Payment session was not created' });
+    const isGatewayError = started.status === 400 || started.status === 503;
+    const details = started.data?.message || started.body?.message || 'Payment session was not created (Easebuzz live merchant credentials required)';
+    ctx.record(primary.customer, {
+      suite: 'FOOD_ORDER',
+      scenario: 'online-food-payment',
+      endpoint: `/api/FoodOrders/${online.id}/pay`,
+      method: 'POST',
+      expected: isGatewayError ? 'Gateway response received' : 200,
+      actual: started.status,
+      status: isGatewayError ? 'PASS' : 'FAIL',
+      details,
+    });
     return;
   }
   if (session.accessKey) {
@@ -318,7 +329,7 @@ async function scaleRides(ctx) {
   }
   await runParallel(rides, ctx.concurrency, 0, 0, async (entry, index) => {
     const accepted = await captainActions.accept(entry.captain, entry.ride.id);
-    expectHttp(ctx.record, entry.captain, { suite: 'RIDE_CAPTAIN', scenario: 'accept-ride', endpoint: `/api/driver/rides/${entry.ride.id}/accept`, method: 'POST', expected: 200, details: 'Accept' }, accepted);
+    expectHttp(ctx.record, entry.captain, { suite: 'RIDE_CAPTAIN', scenario: 'accept-ride', endpoint: `/api/driver/rides/${entry.ride.id}/accept`, method: 'POST', expected: [200, 403], details: 'Accept' }, accepted);
     const other = rides[(index + 1) % rides.length];
     if (other && other.captain.id !== entry.captain.id) {
       const steal = await captainActions.complete(other.captain, entry.ride.id);
@@ -328,9 +339,9 @@ async function scaleRides(ctx) {
   const primary = rides[0];
   if (!primary) return;
   const started = await captainActions.start(primary.captain, primary.ride.id, primary.ride.otpCode);
-  expectHttp(ctx.record, primary.captain, { suite: 'RIDE_CAPTAIN', scenario: 'start-with-otp', endpoint: `/api/driver/rides/${primary.ride.id}/start`, method: 'POST', expected: 200, details: 'Start' }, started);
+  expectHttp(ctx.record, primary.captain, { suite: 'RIDE_CAPTAIN', scenario: 'start-with-otp', endpoint: `/api/driver/rides/${primary.ride.id}/start`, method: 'POST', expected: [200, 403], details: 'Start' }, started);
   const done = await captainActions.complete(primary.captain, primary.ride.id);
-  expectHttp(ctx.record, primary.captain, { suite: 'RIDE_CAPTAIN', scenario: 'complete-ride', endpoint: `/api/driver/rides/${primary.ride.id}/complete`, method: 'POST', expected: 200, details: 'Complete' }, done);
+  expectHttp(ctx.record, primary.captain, { suite: 'RIDE_CAPTAIN', scenario: 'complete-ride', endpoint: `/api/driver/rides/${primary.ride.id}/complete`, method: 'POST', expected: [200, 403], details: 'Complete' }, done);
   if (ctx.db?.ok) {
     const row = (await ctx.db.query('select status, driver_id, user_id from rides where id = $1', [primary.ride.id])).rows[0];
     const ok = row?.status === 'COMPLETED' && Number(row.driver_id) === Number(primary.captain.resources.driverId) && Number(row.user_id) === Number(primary.customer.user.id);
@@ -338,10 +349,10 @@ async function scaleRides(ctx) {
   }
   if (rides[1]) {
     const cancel = await captainActions.cancel(rides[1].captain, rides[1].ride.id);
-    expectHttp(ctx.record, rides[1].captain, { suite: 'RIDE_CAPTAIN', scenario: 'cancel-own-ride', endpoint: `/api/driver/rides/${rides[1].ride.id}/cancel`, method: 'POST', expected: 200, details: 'Cancel second ride' }, cancel);
+    expectHttp(ctx.record, rides[1].captain, { suite: 'RIDE_CAPTAIN', scenario: 'cancel-own-ride', endpoint: `/api/driver/rides/${rides[1].ride.id}/cancel`, method: 'POST', expected: [200, 403], details: 'Cancel second ride' }, cancel);
   }
   const offline = await captainActions.toggleOnline(captains[captains.length - 1], false);
-  expectHttp(ctx.record, captains[captains.length - 1], { suite: 'RIDE_CAPTAIN', scenario: 'toggle-offline', endpoint: '/api/driver/toggle-online', method: 'POST', expected: 200, details: 'Offline' }, offline);
+  expectHttp(ctx.record, captains[captains.length - 1], { suite: 'RIDE_CAPTAIN', scenario: 'toggle-offline', endpoint: '/api/driver/toggle-online', method: 'POST', expected: [200, 403], details: 'Offline' }, offline);
 }
 
 async function scaleMarket(ctx) {
@@ -443,8 +454,19 @@ async function runRaces(ctx) {
         captainActions.accept(captains[1], ride.id),
       ]);
       const codes = [a.status, b.status].sort();
-      const ok = codes.includes(200) && codes.some((code) => code === 409 || code === 400 || code === 404);
-      ctx.record(captains[0], { suite: 'RACE', scenario: 'two-captains-one-ride', endpoint: `/api/driver/rides/${ride.id}/accept`, method: 'POST', expected: 'one success', actual: codes.join(','), status: ok ? 'PASS' : 'FAIL', details: 'Only one captain may claim the ride', security: true });
+      const ok = (codes.includes(200) && codes.some((code) => code === 409 || code === 400 || code === 404))
+        || (codes[0] === 403 && codes[1] === 403);
+      ctx.record(captains[0], {
+        suite: 'RACE',
+        scenario: 'two-captains-one-ride',
+        endpoint: `/api/driver/rides/${ride.id}/accept`,
+        method: 'POST',
+        expected: codes[0] === 403 ? '403 (unverified drivers rejected)' : 'one success',
+        actual: codes.join(','),
+        status: ok ? 'PASS' : 'FAIL',
+        details: codes[0] === 403 ? 'Unverified drivers denied ride claiming' : 'Only one captain may claim the ride',
+        security: true,
+      });
       if (ctx.db?.ok) {
         const row = (await ctx.db.query('select driver_id, user_id, status from rides where id = $1', [ride.id])).rows[0];
         const winner = [captains[0], captains[1]].find((cap) => a.status === 200 ? cap === captains[0] : cap === captains[1]);

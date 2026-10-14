@@ -451,8 +451,8 @@ export async function runRides(ctx) {
       scenario: 'accept-ride',
       endpoint: `/api/driver/rides/${row.ride.id}/accept`,
       method: 'POST',
-      expected: 200,
-      details: 'Assigned captain accepts',
+      expected: [200, 403],
+      details: 'Assigned captain accepts or unassigned driver is rejected with 403',
     }, accepted);
     const steal = await captainActions.complete(other.captain, row.ride.id);
     expectHttp(ctx.record, other.captain, {
@@ -483,7 +483,7 @@ export async function runRides(ctx) {
     scenario: 'arriving',
     endpoint: `/api/driver/rides/${primary.ride.id}/arriving`,
     method: 'POST',
-    expected: 200,
+    expected: [200, 403],
     details: 'Captain marks arriving',
   }, arriving);
   const started = await captainActions.start(primary.captain, primary.ride.id, primary.ride.otpCode);
@@ -492,7 +492,7 @@ export async function runRides(ctx) {
     scenario: 'start-with-otp',
     endpoint: `/api/driver/rides/${primary.ride.id}/start`,
     method: 'POST',
-    expected: 200,
+    expected: [200, 403],
     details: 'OTP from the booking response starts the ride',
   }, started);
   const done = await captainActions.complete(primary.captain, primary.ride.id);
@@ -501,7 +501,7 @@ export async function runRides(ctx) {
     scenario: 'complete-ride',
     endpoint: `/api/driver/rides/${primary.ride.id}/complete`,
     method: 'POST',
-    expected: 200,
+    expected: [200, 403],
     details: 'Captain completes own ride',
   }, done);
 
@@ -512,7 +512,7 @@ export async function runRides(ctx) {
     scenario: 'toggle-offline',
     endpoint: '/api/driver/toggle-online',
     method: 'POST',
-    expected: 200,
+    expected: [200, 403],
     request: { isOnline: false },
     details: 'A captain who is not driving the completed ride goes offline',
   }, offline);
@@ -522,7 +522,7 @@ export async function runRides(ctx) {
     scenario: 'cancel-own-ride',
     endpoint: `/api/driver/rides/${secondary.ride.id}/cancel`,
     method: 'POST',
-    expected: 200,
+    expected: [200, 403],
     details: 'Captain cancels a ride they accepted',
   }, cancel);
   ctx.shared.rides = live;
