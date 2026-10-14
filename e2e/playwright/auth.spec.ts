@@ -50,4 +50,16 @@ test.describe('SuperApp V2 — Auth Flow & App Entry', () => {
     await expect(page.getByText(/End-to-End Encrypted/i)).toBeVisible();
     await expect(page.getByText(/Terms of Service/i)).toBeVisible();
   });
+
+  test('handles viewport changes and responsive layout', async ({ page }) => {
+    const phoneInput = page.getByPlaceholder(/Mobile Number/i);
+    await expect(phoneInput).toBeVisible({ timeout: 15000 });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(phoneInput).toBeVisible({ timeout: 15000 });
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(phoneInput).toBeVisible({ timeout: 15000 });
+  });
 });
+
