@@ -17,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      API_BASE_URL: ${{ secrets.API_BASE_URL }}
-      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-      ADMIN_MOBILE: ${{ secrets.ADMIN_MOBILE }}
-      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-      TEST_OTP: ${{ secrets.TEST_OTP }}
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      ConnectionStrings__SupabaseConnection: ${{ secrets.SUPABASE_CONNECTION }}
+      API_BASE_URL: ${{ secrets.API_BASE_URL || vars.API_BASE_URL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD || vars.ADMIN_PASSWORD }}
+      ADMIN_MOBILE: ${{ secrets.ADMIN_MOBILE || vars.ADMIN_MOBILE }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL || vars.ADMIN_EMAIL }}
+      TEST_OTP: ${{ secrets.TEST_OTP || vars.TEST_OTP }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL || vars.SUPABASE_DB_URL }}
+      ConnectionStrings__SupabaseConnection: ${{ secrets.SUPABASE_CONNECTION || vars.SUPABASE_CONNECTION }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
