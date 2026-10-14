@@ -48,13 +48,15 @@ test.describe('SuperApp V2 — End-to-End User Journeys', () => {
   test('03: Deep navigation to Service Screens and Back', async ({ page }) => {
     // Verify phone entry screen loads cleanly without uncaught exceptions
     const phoneInput = page.getByPlaceholder(/Mobile Number/i);
-    await expect(phoneInput).toBeVisible();
+    await expect(phoneInput).toBeVisible({ timeout: 15000 });
 
     // Verify page responsiveness on viewport resize
-    await page.setViewportSize({ width: 390, height: 844 }); // iPhone 12/13/14
-    await expect(page.getByText(/SuperApp/i).first()).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 }); // Mobile viewport
+    await expect(page.locator('#root')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/SuperApp/i).first()).toBeVisible({ timeout: 15000 });
 
-    await page.setViewportSize({ width: 1280, height: 800 }); // Desktop
-    await expect(page.getByText(/SuperApp/i).first()).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 800 }); // Desktop viewport
+    await expect(page.locator('#root')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/SuperApp/i).first()).toBeVisible({ timeout: 15000 });
   });
 });

@@ -13,14 +13,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,
-  workers: process.env.CI ? 2 : undefined,
+  workers: process.env.CI ? 1 : undefined,
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
     ['json', { outputFile: 'e2e/playwright-results.json' }],
   ],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8081',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8081',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
