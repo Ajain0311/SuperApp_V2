@@ -5,6 +5,12 @@ on:
     # 22:00–09:00 IST hourly. GitHub cron is UTC (IST = UTC+5:30).
     # 16:30–23:30 and 00:30–03:30 UTC.
     - cron: '30 16-23,0-3 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/overnight-testing.yml'
+      - 'e2e/agents/**'
   workflow_dispatch:
 
 concurrency:
