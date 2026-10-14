@@ -2,6 +2,7 @@ const IDEMPOTENT = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export function createApiClient({ baseUrl, timeoutMs = 20000, retries = 1, token = null }) {
   let auth = token;
+  const cleanBase = (baseUrl || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
   async function request(method, path, body = undefined, options = {}) {
     const started = Date.now();
@@ -15,7 +16,8 @@ export function createApiClient({ baseUrl, timeoutMs = 20000, retries = 1, token
         if (body !== undefined) headers['Content-Type'] = 'application/json';
         const bearer = options.token !== undefined ? options.token : auth;
         if (bearer) headers.Authorization = `Bearer ${bearer}`;
-        const res = await fetch(`${baseUrl}${path}`, {
+        const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+        const res = await fetch(`${cleanBase}${normalizedPath}`, {
           method,
           headers,
           body: body === undefined ? undefined : JSON.stringify(body),

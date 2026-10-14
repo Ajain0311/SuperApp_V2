@@ -243,6 +243,9 @@ export async function main(argv = process.argv.slice(2)) {
     cleanup: ctx.cleanupReport || (args.cleanup ? null : 'not requested'),
     matrix: ctx.matrix,
   }, null, 2));
+  if (ctx.db?.close) {
+    await ctx.db.close().catch(() => {});
+  }
   log.info(`Report ${written.latest}`);
   log.info(`PASS ${report.summary.PASS} FAIL ${report.summary.FAIL} BLOCKED ${report.summary.BLOCKED} NOT_IMPLEMENTED ${report.summary.NOT_IMPLEMENTED}`);
   return report.summary.FAIL > 0 || report.summary.ERROR > 0 ? 1 : 0;

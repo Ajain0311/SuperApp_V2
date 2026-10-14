@@ -67,7 +67,7 @@ jobs:
 
       - name: Run 100-user volume regression
         if: steps.check_secrets.outputs.has_secrets == 'true'
-        run: npm run test:agents:volume -- --customers 100 --restaurant-owners 10 --captains 20 --sellers 20 --concurrency 25 --cleanup
+        run: npm run test:agents:volume -- --base-url "$API_BASE_URL" --customers 100 --restaurant-owners 10 --captains 20 --sellers 20 --concurrency 25 --cleanup
 
       - name: Write job summary
         if: always()
