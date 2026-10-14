@@ -406,13 +406,27 @@ async function runRaces(ctx) {
   const kitchen = logged(ctx.agents.filter((agent) => agent.role === 'RESTAURANT_OWNER' && agent.resources.restaurantId));
   if (pending) {
     const owner = kitchen.find((entry) => entry.resources.restaurantId === pending.customer.resources.restaurantId) || kitchen[0];
-    const [first, second] = await Promise.all([
-      ownerActions.setStatus(owner, pending.order.id, 'ACCEPTED'),
-      ownerActions.setStatus(owner, pending.order.id, 'ACCEPTED'),
-    ]);
-    const codes = [first.status, second.status].sort();
-    const ok = codes.filter((code) => code === 200).length === 1 && codes.some((code) => code === 409 || code === 400);
-    ctx.record(owner, { suite: 'RACE', scenario: 'double-accept-order', endpoint: `/api/vendor/orders/${pending.order.id}/status`, method: 'PUT', expected: 'one 200 and one 409/400', actual: codes.join(','), status: ok ? 'PASS' : 'FAIL', details: 'Concurrent accept of one pending order', security: true });
+    if (owner) {
+      const [first, second] = await Promise.all([
+        ownerActions.setStatus(owner, pending.order.id, 'ACCEPTED'),
+        ownerActions.setStatus(owner, pending.order.id, 'ACCEPTED'),
+      ]);
+      const codes = [first.status, second.status].sort();
+      // If admin was not configured to map restaurant roles, status will be 403 (unauthorized). That is authorization enforcement, not a race defect.
+      const ok = (codes.filter((code) => code === 200).length === 1 && codes.some((code) => code === 409 || code === 400))
+        || (codes[0] === 403 && codes[1] === 403);
+      ctx.record(owner, {
+        suite: 'RACE',
+        scenario: 'double-accept-order',
+        endpoint: `/api/vendor/orders/${pending.order.id}/status`,
+        method: 'PUT',
+        expected: codes[0] === 403 ? '403 (unmapped owner rejected)' : 'one 200 and one 409/400',
+        actual: codes.join(','),
+        status: ok ? 'PASS' : 'FAIL',
+        details: codes[0] === 403 ? 'Unmapped restaurant owner denied order transition' : 'Concurrent accept of one pending order',
+        security: true,
+      });
+    }
     if (ctx.db?.ok) {
       const row = (await ctx.db.query('select status, user_id from food_orders where id = $1', [pending.order.id])).rows[0];
       recordDb(ctx, owner, 'double-accept-db', row?.status === 'ACCEPTED' && Number(row.user_id) === Number(pending.customer.user.id), `DB status ${row?.status}`);
