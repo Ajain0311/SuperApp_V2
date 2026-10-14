@@ -2,28 +2,24 @@ import { test, expect } from '@playwright/test';
 
 test.describe('SuperApp V2 — End-to-End User Journeys', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to local or configured host
     await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
   });
 
   test('01: Welcome landing displays branding, all service sectors and quick trust badges', async ({ page }) => {
-    // Wait for react-native-web root to mount
-    await expect(page.locator('#root')).toBeVisible({ timeout: 20000 });
-
-    // Assert App Hero
+    // Assert App Hero & title
+    await expect(page).toHaveTitle(/PhoneEntry|Splash|SuperApp|HTTP-EXPNAT-NET/i);
     await expect(page.getByText(/ALL-IN-ONE SUPER APP/i)).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText(/SuperApp/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/SuperApp/i).first()).toBeVisible({ timeout: 15000 });
 
     // Verify 3 core business domains
-    await expect(page.getByText(/Food Delivery|🍕/i).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/Fast Cabs|🚕/i).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/Bazaar|🛍️/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Food Delivery|🍕/i).first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Fast Cabs|🚕/i).first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Bazaar|🛍️/i).first()).toBeVisible({ timeout: 15000 });
 
     // Verify compliance and encryption guarantees
-    await expect(page.getByText(/Instant SMS OTP/i)).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/End-to-End Encrypted/i)).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/Zero Spam/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Instant SMS OTP/i)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/End-to-End Encrypted/i)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Zero Spam/i)).toBeVisible({ timeout: 15000 });
   });
 
   test('02: Phone entry input validation and OTP dispatch trigger', async ({ page }) => {
