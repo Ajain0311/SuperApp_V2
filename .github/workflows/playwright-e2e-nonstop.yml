@@ -43,11 +43,16 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: https://makemytree.duckdns.org/api
           EXPO_PUBLIC_SIGNALR_HUB_URL: https://makemytree.duckdns.org
 
+      - name: Start Web Preview Server
+        run: |
+          npx --yes serve dist -l 8081 -s &
+          npx --yes wait-on http://127.0.0.1:8081 -t 30000
+
       - name: Execute Non-Stop Playwright E2E Tests
         run: npm run test:e2e
         env:
           CI: true
-          PLAYWRIGHT_BASE_URL: http://localhost:8081
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8081
 
       - name: Publish Test Summary to GitHub Job Summary
         if: always()

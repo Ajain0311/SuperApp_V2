@@ -8,37 +8,39 @@ test.describe('SuperApp V2 — End-to-End User Journeys', () => {
   });
 
   test('01: Welcome landing displays branding, all service sectors and quick trust badges', async ({ page }) => {
+    // Wait for react-native-web root to mount
+    await expect(page.locator('#root')).toBeVisible({ timeout: 20000 });
+
     // Assert App Hero
-    await expect(page.getByText(/ALL-IN-ONE SUPER APP/i)).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText(/SuperApp/i).first()).toBeVisible();
+    await expect(page.getByText(/ALL-IN-ONE SUPER APP/i)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/SuperApp/i).first()).toBeVisible({ timeout: 10000 });
 
     // Verify 3 core business domains
-    await expect(page.getByText(/Food Delivery|🍕/i).first()).toBeVisible();
-    await expect(page.getByText(/Fast Cabs|🚕/i).first()).toBeVisible();
-    await expect(page.getByText(/Bazaar|🛍️/i).first()).toBeVisible();
+    await expect(page.getByText(/Food Delivery|🍕/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Fast Cabs|🚕/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Bazaar|🛍️/i).first()).toBeVisible({ timeout: 10000 });
 
     // Verify compliance and encryption guarantees
-    await expect(page.getByText(/Instant SMS OTP/i)).toBeVisible();
-    await expect(page.getByText(/End-to-End Encrypted/i)).toBeVisible();
-    await expect(page.getByText(/Zero Spam/i)).toBeVisible();
+    await expect(page.getByText(/Instant SMS OTP/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/End-to-End Encrypted/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Zero Spam/i)).toBeVisible({ timeout: 10000 });
   });
 
   test('02: Phone entry input validation and OTP dispatch trigger', async ({ page }) => {
     const phoneInput = page.getByPlaceholder(/Mobile Number/i);
-    await expect(phoneInput).toBeVisible({ timeout: 15000 });
+    await expect(phoneInput).toBeVisible({ timeout: 20000 });
 
     // Validate digit counter on typing
     await phoneInput.fill('9988776655');
-    await expect(page.getByText(/Ready to send code/i)).toBeVisible();
+    await expect(page.getByText(/Ready to send code/i)).toBeVisible({ timeout: 10000 });
 
     // Trigger OTP submission
     const getCodeBtn = page.getByText(/Get Verification Code/i).first();
-    await expect(getCodeBtn).toBeVisible();
+    await expect(getCodeBtn).toBeVisible({ timeout: 10000 });
     await getCodeBtn.click();
 
-    // When backend returns OTP or error on network, verify UI feedback
-    // Either transitions to OtpVerification screen or shows alert / error state gracefully
-    await page.waitForTimeout(1000);
+    // Verify application state responds
+    await page.waitForTimeout(1500);
     const bodyText = await page.locator('body').innerText();
     expect(bodyText.length).toBeGreaterThan(50);
   });

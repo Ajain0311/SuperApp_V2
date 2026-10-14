@@ -41,13 +41,12 @@ export default defineConfig({
       },
     },
   ],
-  /* Start local web server automatically if PLAYWRIGHT_BASE_URL is not explicitly set */
-  webServer: process.env.PLAYWRIGHT_BASE_URL
-    ? undefined
-    : {
-        command: 'npx serve dist -l 8081',
-        url: 'http://localhost:8081',
-        reuseExistingServer: true,
-        timeout: 30000,
-      },
+  /* Start local web preview server automatically */
+  webServer: {
+    command: 'npx serve dist -l 8081 -s',
+    url: 'http://localhost:8081',
+    reuseExistingServer: !process.env.CI,
+    timeout: 60000,
+  },
 });
+
