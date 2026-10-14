@@ -44,8 +44,8 @@ export default defineConfig({
   /* Start local web preview server automatically */
   webServer: {
     command: 'npx serve dist -l 8081 -s',
-    url: 'http://localhost:8081',
-    reuseExistingServer: !process.env.CI,
+    url: 'http://127.0.0.1:8081',
+    reuseExistingServer: true,
     timeout: 60000,
   },
 });
