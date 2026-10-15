@@ -7,7 +7,7 @@ on:
     - cron: '30 16-23,0-3 * * *'
   push:
     branches:
-      - main
+      - dev
     paths:
       - '.github/workflows/overnight-testing.yml'
       - 'e2e/agents/**'

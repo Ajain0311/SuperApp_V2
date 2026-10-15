@@ -250,3 +250,39 @@ To drive high customer engagement without marketing tooling costs, the notificat
 4. **CORS & Network Policies**:
    - Strict CORS origins configured in ASP.NET Core `Program.cs`.
    - Rate limiting and size limits enforced on multipart binary upload endpoints.
+
+---
+
+## 10. Git Branch Strategy, CI/CD Pipeline & Public Web Architecture
+
+### 10.1 Branch Architecture
+- **`main` (Production Branch)**:
+  - Contains strictly production-ready application source (React Native / Expo, ASP.NET Core backend, database migrations, essential application unit tests).
+  - Protected against direct pushes. Changes enter `main` exclusively through Pull Requests from `dev` after passing CI gates.
+  - Hosts the verified production VM auto-deployment workflow (`.github/workflows/deploy.yml`).
+- **`dev` (Development & Testing Branch)**:
+  - Active integration branch containing the complete codebase alongside automated multi-agent testing orchestration, 24/7 Playwright continuous browser suites, and overnight regression runners.
+  - Normal target branch for all ongoing development, fixes, and agent testing.
+
+### 10.2 CI/CD & Deployment Flow
+```mermaid
+flowchart LR
+    DevCommit["Developer / Agent on dev"] --> DevCI["dev CI & Continuous E2E Tests"]
+    DevCI --> PR["Pull Request: dev -> main"]
+    PR --> MainCI["main Quality Gates (Typecheck, Jest, .NET Tests)"]
+    MainCI --> Merge["Merge to main"]
+    Merge --> Deploy["deploy.yml (SSH to VM -> scripts/manage.sh)"]
+    Deploy --> LiveApp["Production VM (api + web)"]
+```
+- **Deployment Isolation**: Commits on `dev` cannot trigger production VM deployments.
+- **Auto-Deployment Trigger**: `.github/workflows/deploy.yml` triggers solely on `push` to `main` (merges) and manual `workflow_dispatch`.
+
+### 10.3 Public Policy & Store Compliance Web Architecture
+- **Repository**: `Ajain0311/superapp-website` (React 19 + Vite + TypeScript, SPA fallback via `vercel.json`).
+- **Production URL**: `https://superapp-website-ashen.vercel.app`
+- **Statutory & Store Routes**:
+  - Privacy Policy: `https://superapp-website-ashen.vercel.app/privacy-policy` (Foreground GPS, zero background tracking, Easebuzz payment processing disclosures)
+  - Terms of Service: `https://superapp-website-ashen.vercel.app/terms-and-conditions`
+  - Contact & Grievance: `https://superapp-website-ashen.vercel.app/contact` (DPDP & Indian IT Rules statutory grievance officer details)
+  - Account Deletion: `https://superapp-website-ashen.vercel.app/delete-account` (Self-service instructions & data erasure timelines for Google Play compliance)
+

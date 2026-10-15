@@ -25,21 +25,24 @@
 ## 📌 Last Session Handoff
 
 - **Date**: October 15, 2026
-- **Status**: Completed Actionable Stabilization & Reliability Fixes:
-  - **Marketplace**: Verified backend listing ID check, failure alert with form persistence, duplicate submission prevention, local notification gating on confirmed creation, deduplication of custom/server items, and empty collection handling.
-  - **Food & Restaurants**: Added graceful empty menu and restaurant empty states, explicit demo mode labeling for offline fallback fixtures, and preserved accurate item mappings.
-  - **Payments**: Enforced server-authoritative order amount and ownership verification in `PaymentsController`, eliminated hardcoded ₹1 override, sanitized test cards and test checkout URLs from production `/kit` responses, preserved Easebuzz gateway architecture.
-  - **Security & OTP**: Startup guard preventing `MockOtpService` from running in Production mode, verified OTP exception handling, validated device token formatting in notifications.
-  - **Configuration**: Corrected `app.json` schema validation for SDK 57 (21/21 expo-doctor checks passed).
+- **Status**: Git Branch Strategy & Production Architecture Separation:
+  - **Branch Architecture Established**:
+    - `main`: Clean, stable, production-ready application branch. Hosts production deployment (`.github/workflows/deploy.yml`) and minimal CI checks. Direct pushes protected; merges via PR only.
+    - `dev`: Primary active development & testing branch. Houses the complete codebase, multi-agent regression framework, continuous 24/7 Playwright browser suite (`.github/workflows/playwright-e2e-nonstop.yml`), and overnight volume testing (`.github/workflows/overnight-testing.yml`).
+  - **VM Deployment Isolation**: Commits on `dev` do NOT trigger production VM deployments. `deploy.yml` is restricted to push events on `main`.
+  - **Public Store Compliance Website**: Verified live Vercel website (`Ajain0311/superapp-website`) at `https://superapp-website-ashen.vercel.app` with 100% active HTTP 200 routes:
+    - Privacy Policy: `https://superapp-website-ashen.vercel.app/privacy-policy`
+    - Terms & Conditions: `https://superapp-website-ashen.vercel.app/terms-and-conditions`
+    - Account Deletion: `https://superapp-website-ashen.vercel.app/delete-account`
+    - Grievance & Contact: `https://superapp-website-ashen.vercel.app/contact`
 - **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md).
-  - FIX-19: Easebuzz live dashboard & webhook verification `[BLOCKED_EXTERNAL_DEPENDENCY]`
-  - FIX-20: Google Play Store upload checklist (.aab) `[BLOCKED_EXTERNAL_DEPENDENCY]`
+  - FIX-19: Easebuzz live dashboard & webhook verification [BLOCKED_EXTERNAL_DEPENDENCY]
+  - FIX-20: Google Play Store upload checklist (.aab) [BLOCKED_EXTERNAL_DEPENDENCY]
+  - GitHub Branch Protection Rule on `main`: Block direct push, require PR & passing CI [MANUAL_ACTION_REQUIRED in GitHub Repo Settings]
 - **Verification Suites**:
   - `dotnet test backend/SuperApp.sln`: 115 Passed / 115 Total (100%)
   - `npx tsc --noEmit`: 0 Errors (100% clean)
   - `npm test -- --watchAll=false`: 16 Suites Passed, 88 Tests Passed (100%)
   - `npx expo-doctor`: 21/21 checks passed (100% clean)
   - `npm run test:agents:self`: 14 Passed / 14 Total (100%)
-
-
 
