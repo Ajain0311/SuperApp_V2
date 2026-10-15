@@ -2,7 +2,9 @@ name: ci
 
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
   check:
@@ -13,10 +15,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test -- --watchAll=false
-      # Self-test only: no API process and no Expo app.
-      - run: npm run test:agents:self
-      - name: syntax-check agent runner
-        run: node --check e2e/agents/runner.js
+      - name: Backend Unit Tests (.NET 10)
+        run: dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj

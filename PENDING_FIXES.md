@@ -336,7 +336,7 @@ When anyone joins this project:
   3. **Mandatory Store Policies & Consents:**
      - **Location Permission:** Declare foreground location (`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`) for driver dispatch and ride tracking.
      - **Push Notifications:** Declare `POST_NOTIFICATIONS` for live order alerts.
-     - **Privacy Policy URL:** Host a privacy policy (e.g. `https://makemytree.duckdns.org/privacy`) explaining phone number, GPS coordinates, and payment handling.
+     - **Privacy Policy URL:** Publicly hosted & verified on Vercel at https://superapp-website-ashen.vercel.app/privacy-policy (HTTP 200) explaining foreground GPS coordinates, contact details, Easebuzz payments, and account deletion at https://superapp-website-ashen.vercel.app/delete-account.
   4. **Google Play Console Release Track:**
      - Create app in Google Play Console.
      - Upload `.aab` to **Internal Testing** track first, test on 2-3 devices, then promote to Closed Testing / Production.

@@ -48,8 +48,11 @@ This checklist defines the mandatory pre-flight verification gates, security aud
 
 - [ ] **Version Bump**: Update `version` in `package.json` and `app.json` following semantic versioning.
 - [ ] **Android Build (AAB)**: Execute `npx eas build --platform android --profile production` with upload key signing.
-- [ ] **iOS Build (IPA)**: Execute `npx eas build --platform ios --profile production` with Apple Developer provisioning profile.
-- [ ] **Store Privacy Disclosures**: Verify Google Play & Apple App Store disclosures for foreground GPS (`expo-location`) and push notifications (`expo-notifications`).
+- [ ] **Store Privacy Disclosures**: Verify Google Play & Apple App Store disclosures for foreground GPS (`expo-location`), notifications, and statutory policies hosted on Vercel (`https://superapp-website-ashen.vercel.app`):
+  - Privacy Policy: `https://superapp-website-ashen.vercel.app/privacy-policy`
+  - Terms of Service: `https://superapp-website-ashen.vercel.app/terms-and-conditions`
+  - Account Deletion: `https://superapp-website-ashen.vercel.app/delete-account`
+  - Grievance Desk: `https://superapp-website-ashen.vercel.app/contact`
 
 ---
 

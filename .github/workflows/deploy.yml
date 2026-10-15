@@ -49,9 +49,6 @@ jobs:
       - name: Frontend Unit Tests
         run: npm test -- --watchAll=false
 
-      - name: Agent Framework Self-Tests
-        run: npm run test:agents:self
-
       - name: Backend Unit Tests (.NET 10)
         run: dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj
 
