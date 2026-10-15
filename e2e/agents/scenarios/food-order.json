@@ -1,0 +1,7 @@
+{
+  "name": "food-order",
+  "suite": "FOOD_ORDER",
+  "flows": ["food-order"],
+  "endpoints": ["/api/restaurants", "/api/Addresses", "/api/FoodOrders", "/api/FoodOrders/my-orders", "/api/FoodOrders/{id}"],
+  "description": "Two customers place COD orders and cannot read each other's orders. Direct GET returns 403."
+}

@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev ]
   pull_request:
-    branches: [ main ]
+    branches: [ dev ]
 
 jobs:
   check:
@@ -23,3 +23,5 @@ jobs:
       - run: npm test -- --watchAll=false
       - name: Backend Unit Tests (.NET 10)
         run: dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj
+      - name: Agent Framework Self-Tests
+        run: npm run test:agents:self

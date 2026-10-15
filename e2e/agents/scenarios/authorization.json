@@ -1,0 +1,6 @@
+{
+  "name": "authorization",
+  "suite": "SECURITY",
+  "flows": ["authorization"],
+  "description": "Missing, malformed, and invalid tokens return 401. Customers are forbidden from driver, vendor, and admin routes. Expired JWT minting is NOT_IMPLEMENTED."
+}

@@ -1,0 +1,545 @@
+import { customerActions } from '../agents/customer.js';
+import { ownerActions } from '../agents/restaurant-owner.js';
+import { captainActions } from '../agents/captain.js';
+import { sellerActions } from '../agents/marketplace-seller.js';
+import { dataOf, expectHttp, listOf, runParallel } from './scenario-runner.js';
+import { blockIfLoggedOut } from './flows.js';
+import { countWhere } from './db-verifier.js';
+
+function logged(agents) {
+  return agents.filter((agent) => agent.login === 'PASS');
+}
+
+function recordDb(ctx, agent, scenario, ok, details, latencyMs) {
+  ctx.record(agent, {
+    suite: 'DATABASE',
+    scenario,
+    endpoint: 'postgres',
+    method: 'SELECT',
+    expected: true,
+    actual: ok,
+    status: ok ? 'PASS' : 'FAIL',
+    details,
+    latencyMs: latencyMs || 0,
+  });
+  ctx.dbStats ??= { created: {}, verified: 0, mismatch: 0, orphan: 0 };
+  if (ok) ctx.dbStats.verified += 1;
+  else ctx.dbStats.mismatch += 1;
+}
+
+async function menus(agent) {
+  const list = await customerActions.listRestaurants(agent);
+  const rows = listOf(list) || [];
+  const ready = [];
+  for (const row of rows) {
+    const detailRes = await customerActions.restaurantDetail(agent, row.id);
+    const detail = dataOf(detailRes);
+    const categories = detail?.categories || detail?.Categories || [];
+    let item = null;
+    for (const category of categories) {
+      item = (category.items || category.Items || []).find((entry) => entry.isAvailable !== false);
+      if (item) break;
+    }
+    if (detailRes.status === 200 && item) ready.push({ restaurant: detail, item });
+  }
+  return ready;
+}
+
+export async function runScaled(ctx, selected) {
+  const wantFood = selected.includes('food-order') || selected.includes('restaurant-isolation');
+  const wantRide = selected.includes('ride');
+  const wantMarket = selected.includes('marketplace');
+  if (wantFood) await scaleFood(ctx);
+  if (wantRide) await scaleRides(ctx);
+  if (wantMarket) await scaleMarket(ctx);
+  if (wantFood && wantRide && wantMarket) await runRaces(ctx);
+  await uniqueness(ctx);
+  await consistency(ctx);
+}
+
+async function scaleFood(ctx) {
+  const customers = logged(ctx.agents.filter((agent) => agent.role === 'CUSTOMER'));
+  const owners = logged(ctx.agents.filter((agent) => agent.role === 'RESTAURANT_OWNER'));
+  if (customers.length < 2 || owners.length < 1) {
+    blockIfLoggedOut(ctx, 'FOOD_ORDER', 'scaled-orders', ctx.agents.filter((agent) => agent.role === 'CUSTOMER').slice(0, 2));
+    return;
+  }
+  const ready = await menus(customers[0]);
+  if (!ready.length) {
+    ctx.record(customers[0], { suite: 'FOOD_ORDER', scenario: 'restaurants-with-menu', status: 'BLOCKED', expected: 'menu', actual: 0, details: 'No restaurant with an available item' });
+    return;
+  }
+  const admin = ctx.agents.find((agent) => agent.role === 'ADMIN' && agent.login === 'PASS');
+  const kitchen = owners.slice(0, ready.length);
+  for (const extra of owners.slice(ready.length)) {
+    ctx.record(extra, { suite: 'RESTAURANT_OWNER', scenario: 'no-menu-restaurant', status: 'BLOCKED', expected: 'restaurant with a menu', actual: ready.length, details: 'Not enough seeded restaurants with an available item to map this owner. No restaurant was invented.' });
+  }
+  for (let index = 0; index < kitchen.length; index++) {
+    kitchen[index].resources.restaurantId = ready[index].restaurant.id;
+    if (admin) await admin.client.request('POST', '/api/admin/users', { action: 'ROLE', userId: kitchen[index].user.id, roleName: 'RESTAURANT_OWNER', restaurantId: ready[index].restaurant.id });
+  }
+  const before = ctx.db?.ok ? await countWhere(ctx.db, 'food_orders', 'notes', ctx.runId) : null;
+  const placed = await runParallel(customers, ctx.concurrency, ctx.thinkTimeMs, ctx.rampUpMs, async (customer, index) => {
+    const menu = ready[index % ready.length];
+    const addressRes = await customerActions.createAddress(customer, `${ctx.runId}-${customer.id}`);
+    expectHttp(ctx.record, customer, { suite: 'FOOD_ORDER', scenario: 'create-address', endpoint: '/api/Addresses', method: 'POST', expected: 200, details: 'Address saved' }, addressRes);
+    const address = dataOf(addressRes);
+    if (!address?.id) return null;
+    const updated = await customer.client.request('PUT', `/api/Addresses/${address.id}`, {
+      label: 'Work', addressLine1: `${ctx.runId} updated ${customer.id}`, city: 'Indore', state: 'Madhya Pradesh', pinCode: '452010', latitude: 22.72, longitude: 75.86, isDefault: true,
+    });
+    expectHttp(ctx.record, customer, { suite: 'FOOD_ORDER', scenario: 'update-address', endpoint: `/api/Addresses/${address.id}`, method: 'PUT', expected: 200, details: 'Address updated and set default' }, updated);
+    const orderRes = await customerActions.placeOrder(customer, {
+      restaurantId: menu.restaurant.id, foodItemId: menu.item.id, addressId: address.id, notes: `${ctx.runId} ${customer.id}`,
+    });
+    expectHttp(ctx.record, customer, { suite: 'FOOD_ORDER', scenario: 'place-cod-order', endpoint: '/api/FoodOrders', method: 'POST', expected: 200, details: 'COD order' }, orderRes);
+    const order = dataOf(orderRes);
+    if (order?.id) {
+      customer.resources.orderIds.push(order.id);
+      customer.resources.addressId = address.id;
+      customer.resources.restaurantId = menu.restaurant.id;
+    }
+    return order?.id ? { customer, order, address } : null;
+  });
+  const orders = placed.filter(Boolean);
+  ctx.shared.orders = orders;
+  if (ctx.db?.ok) await verifyFood(ctx, orders, before);
+  await isolationFood(ctx, orders, kitchen);
+}
+
+async function verifyFood(ctx, orders, before) {
+  const after = await countWhere(ctx.db, 'food_orders', 'notes', ctx.runId);
+  recordDb(ctx, null, 'food-order-count', after === before + orders.length, `before ${before} created ${orders.length} after ${after}`);
+  ctx.concurrencyStats ??= [];
+  ctx.concurrencyStats.push({ scenario: 'place-orders', agents: orders.length, operations: orders.length, expected: orders.length, actual: after - before, result: after - before === orders.length ? 'PASS' : 'FAIL' });
+  await runParallel(orders, ctx.concurrency, 0, 0, async ({ customer, order }) => {
+    const row = await ctx.db.query('select user_id, restaurant_id, status, payment_method, payment_status, grand_total, notes, order_number, created_at from food_orders where id = $1', [order.id]);
+    const db = row.rows[0];
+    const numberOk = !order.orderNumber || db?.order_number === order.orderNumber;
+    const amountOk = order.grandTotal == null || Number(db?.grand_total) === Number(order.grandTotal);
+    const ok = db && numberOk && amountOk && Number(db.user_id) === Number(customer.user.id) && Number(db.restaurant_id) === Number(customer.resources.restaurantId) && db.payment_method === 'COD' && db.payment_status === 'PENDING' && db.status === 'PENDING' && Number(db.grand_total) >= 0 && String(db.notes).includes(ctx.runId) && db.created_at;
+    recordDb(ctx, customer, 'food-order-row', ok, ok ? `order ${order.id} matches customer ${customer.user.id}` : `API id ${order.id} DB ${JSON.stringify(db)}`);
+    const address = await ctx.db.query('select user_id, city, state, pin_code, latitude, is_default from addresses where id = $1', [customer.resources.addressId]);
+    const addr = address.rows[0];
+    const addrOk = addr && Number(addr.user_id) === Number(customer.user.id) && addr.city === 'Indore' && addr.pin_code === '452010' && addr.is_default === true && addr.latitude != null;
+    recordDb(ctx, customer, 'address-row', addrOk, addrOk ? `address ${customer.resources.addressId}` : `API address vs DB ${JSON.stringify(addr)}`);
+    const user = await ctx.db.query(`select u.is_active, r.name as role from users u left join user_roles ur on ur.user_id = u.id left join roles r on r.id = ur.role_id where u.id = $1`, [customer.user.id]);
+    const active = user.rows.some((entry) => entry.is_active === true);
+    recordDb(ctx, customer, 'user-row', active, active ? 'user active' : 'user missing or inactive');
+  });
+}
+
+async function isolationFood(ctx, orders, kitchen) {
+  if (orders.length < 2) return;
+  await runParallel(orders, ctx.concurrency, 0, 0, async (entry, index) => {
+    const other = orders[(index + 1) % orders.length];
+    const res = await entry.customer.client.request('GET', `/api/FoodOrders/${other.order.id}`);
+    expectHttp(ctx.record, entry.customer, { suite: 'DATA_ISOLATION', scenario: 'customer-foreign-order', endpoint: `/api/FoodOrders/${other.order.id}`, method: 'GET', expected: [403, 404], security: true, details: 'Another customer order is denied' }, res);
+    ctx.matrix.push({ Resource: `Order ${entry.order.id}`, Owner: entry.customer.id, Observer: other.customer.id, Result: [403, 404].includes(res.status) ? 'DENY' : `LEAK ${res.status}` });
+  });
+  if (kitchen.length < 2) return;
+  const byRestaurant = new Map();
+  for (const entry of orders) {
+    const list = byRestaurant.get(entry.customer.resources.restaurantId) || [];
+    list.push(entry);
+    byRestaurant.set(entry.customer.resources.restaurantId, list);
+  }
+  for (const owner of kitchen) {
+    const own = (byRestaurant.get(owner.resources.restaurantId) || [])[0];
+    const foreign = orders.find((entry) => entry.customer.resources.restaurantId !== owner.resources.restaurantId);
+    if (!own || !foreign) continue;
+    const list = await ownerActions.orders(owner, owner.resources.restaurantId);
+    const rows = listOf(list) || [];
+    const seesOwn = rows.some((row) => row.id === own.order.id);
+    const seesForeign = rows.some((row) => row.id === foreign.order.id);
+    ctx.record(owner, { suite: 'RESTAURANT_OWNER', scenario: 'sees-own-order', endpoint: '/api/vendor/orders', method: 'GET', expected: true, actual: seesOwn, status: seesOwn ? 'PASS' : 'FAIL', details: 'Own restaurant order is listed', latencyMs: list.latencyMs });
+    ctx.record(owner, { suite: 'DATA_ISOLATION', scenario: 'hides-other-restaurant', endpoint: '/api/vendor/orders', method: 'GET', expected: false, actual: seesForeign, status: seesForeign ? 'FAIL' : 'PASS', security: true, details: 'Other restaurant order is absent' });
+    const denied = await ownerActions.setStatus(owner, foreign.order.id, 'ACCEPTED');
+    expectHttp(ctx.record, owner, { suite: 'DATA_ISOLATION', scenario: 'cannot-update-other-order', endpoint: `/api/vendor/orders/${foreign.order.id}/status`, method: 'PUT', expected: [403, 404], security: true, details: 'Cross-restaurant status update denied' }, denied);
+  }
+  const primary = orders[0];
+  const owner = kitchen.find((entry) => entry.resources.restaurantId === primary.customer.resources.restaurantId);
+  if (!owner) return;
+  const before = ctx.db?.ok ? (await ctx.db.query('select updated_at from food_orders where id = $1', [primary.order.id])).rows[0] : null;
+  const accepted = await ownerActions.setStatus(owner, primary.order.id, 'ACCEPTED');
+  expectHttp(ctx.record, owner, { suite: 'RESTAURANT_OWNER', scenario: 'lifecycle-ACCEPTED', endpoint: `/api/vendor/orders/${primary.order.id}/status`, method: 'PUT', expected: 200, details: 'Owner accepts own order' }, accepted);
+  if (ctx.db?.ok) {
+    const after = (await ctx.db.query('select status, user_id, restaurant_id, updated_at from food_orders where id = $1', [primary.order.id])).rows[0];
+    const ok = after?.status === 'ACCEPTED' && Number(after.user_id) === Number(primary.customer.user.id) && String(after.updated_at) !== String(before?.updated_at);
+    recordDb(ctx, owner, 'order-status-persisted', ok, ok ? 'ACCEPTED persisted' : `DB ${JSON.stringify(after)}`);
+  }
+  for (const status of ['PREPARING', 'READY']) {
+    const res = await ownerActions.setStatus(owner, primary.order.id, status);
+    expectHttp(ctx.record, owner, { suite: 'FOOD_ORDER', scenario: `lifecycle-${status}`, endpoint: `/api/vendor/orders/${primary.order.id}/status`, method: 'PUT', expected: 200, details: 'Kitchen transition on the owning restaurant' }, res);
+  }
+  const vendorDelivered = await ownerActions.setStatus(owner, primary.order.id, 'DELIVERED');
+  expectHttp(ctx.record, owner, { suite: 'FOOD_ORDER', scenario: 'vendor-cannot-deliver', endpoint: `/api/vendor/orders/${primary.order.id}/status`, method: 'PUT', expected: 400, details: 'Captain delivers, not the restaurant' }, vendorDelivered);
+  const seen = dataOf(await customerActions.getOrder(primary.customer, primary.order.id));
+  ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'customer-sees-ready', endpoint: `/api/FoodOrders/${primary.order.id}`, method: 'GET', expected: 'READY', actual: seen?.status, status: seen?.status === 'READY' ? 'PASS' : 'FAIL', details: 'Customer reads the kitchen status' });
+  if (ctx.db?.ok) {
+    const paid = (await ctx.db.query('select status, payment_status, payment_method, user_id from food_orders where id = $1', [primary.order.id])).rows[0];
+    const ok = paid?.status === 'READY' && paid?.payment_method === 'COD' && paid?.payment_status === 'PENDING' && Number(paid.user_id) === Number(primary.customer.user.id);
+    recordDb(ctx, primary.customer, 'cod-unpaid-until-captain-delivery', ok, ok ? 'COD stays PENDING until captain delivery' : `DB ${JSON.stringify(paid)}`);
+  }
+  await captainFoodAndOnlinePayment(ctx, primary, owner);
+}
+
+async function captainFoodAndOnlinePayment(ctx, primary, owner) {
+  const captains = logged(ctx.agents.filter((agent) => agent.role === 'DRIVER'));
+  const itemId = primary?.order?.items?.[0]?.foodItemId;
+  if (!primary || !owner || captains.length < 2 || !itemId) {
+    ctx.record(null, { suite: 'FOOD_ORDER', scenario: 'captain-food-delivery', status: 'BLOCKED', expected: 'two online captains and a menu item', actual: captains.length, details: 'Need two logged-in captains and the placed order item to run delivery.' });
+    ctx.record(null, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', status: 'BLOCKED', expected: 'customer order', actual: 'missing fixture', details: 'Online payment check needs the same customer fixture.' });
+    return;
+  }
+  const deliveryRes = await customerActions.placeOrder(primary.customer, {
+    restaurantId: primary.customer.resources.restaurantId,
+    foodItemId: itemId,
+    addressId: primary.address?.id || primary.customer.resources.addressId,
+    notes: `${ctx.runId} captain-delivery`,
+    paymentMethod: 'COD',
+  });
+  const delivery = dataOf(deliveryRes);
+  if (!delivery?.id) {
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'captain-food-delivery', status: 'FAIL', expected: 200, actual: deliveryRes.status, details: 'Could not place the delivery order' });
+  } else {
+    for (const status of ['ACCEPTED', 'PREPARING', 'READY']) {
+      await ownerActions.setStatus(owner, delivery.id, status);
+    }
+    await captainActions.toggleOnline(captains[0], true);
+    await captainActions.toggleOnline(captains[1], true);
+    const [first, second] = await Promise.all([
+      captainActions.acceptFood(captains[0], delivery.id),
+      captainActions.acceptFood(captains[1], delivery.id),
+    ]);
+    const wins = [first, second].filter((res) => res.status === 200);
+    const losses = [first, second].filter((res) => res.status === 409);
+    const oneWinner = wins.length === 1 && losses.length === 1;
+    ctx.record(captains[0], { suite: 'FOOD_ORDER', scenario: 'captain-accept-race', endpoint: `/api/driver/food-orders/${delivery.id}/accept`, method: 'POST', expected: 'one 200 and one 409', actual: `${wins.length} won / ${losses.length} conflict`, status: oneWinner ? 'PASS' : 'FAIL', details: 'Concurrent captain accept' });
+    const winner = first.status === 200 ? captains[0] : captains[1];
+    const loser = winner === captains[0] ? captains[1] : captains[0];
+    const stolen = await captainActions.pickupFood(loser, delivery.id);
+    ctx.record(loser, { suite: 'FOOD_ORDER', scenario: 'captain-cannot-pickup-other', endpoint: `/api/driver/food-orders/${delivery.id}/pickup`, method: 'POST', expected: [403, 404], actual: stolen.status, status: [403, 404].includes(stolen.status) ? 'PASS' : 'FAIL', security: true, details: 'Losing captain cannot pick up' });
+    const picked = await captainActions.pickupFood(winner, delivery.id);
+    const delivered = await captainActions.deliverFood(winner, delivery.id);
+    const seen = dataOf(await customerActions.getOrder(primary.customer, delivery.id));
+    const flowOk = picked.status === 200 && delivered.status === 200 && seen?.status === 'DELIVERED' && seen?.driverId;
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'captain-food-delivery', endpoint: `/api/FoodOrders/${delivery.id}`, method: 'GET', expected: 'DELIVERED', actual: seen?.status, status: flowOk ? 'PASS' : 'FAIL', details: 'Captain pickup and deliver through the API' });
+    if (ctx.db?.ok) {
+      const row = (await ctx.db.query('select driver_id, status, payment_status from food_orders where id = $1', [delivery.id])).rows[0];
+      const ok = row && row.driver_id && row.status === 'DELIVERED' && row.payment_status === 'PAID';
+      recordDb(ctx, primary.customer, 'captain-delivery-persisted', ok, ok ? `driver ${row.driver_id}` : `DB ${JSON.stringify(row)}`);
+    }
+  }
+
+  const onlineRes = await customerActions.placeOrder(primary.customer, {
+    restaurantId: primary.customer.resources.restaurantId,
+    foodItemId: itemId,
+    addressId: primary.address?.id || primary.customer.resources.addressId,
+    notes: `${ctx.runId} online-pay`,
+    paymentMethod: 'ONLINE',
+  });
+  const online = dataOf(onlineRes);
+  if (!online?.id || online.paymentStatus !== 'PENDING_PAYMENT') {
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', status: 'FAIL', expected: 'PENDING_PAYMENT', actual: online?.paymentStatus, details: 'Online order was not created unpaid' });
+    return;
+  }
+  const started = await primary.customer.client.request('POST', `/api/FoodOrders/${online.id}/pay`);
+  const session = dataOf(started);
+  if (started.status !== 200 || !session?.transactionId) {
+    const isGatewayError = started.status === 400 || started.status === 503;
+    const details = started.data?.message || started.body?.message || 'Payment session was not created (Easebuzz live merchant credentials required)';
+    ctx.record(primary.customer, {
+      suite: 'FOOD_ORDER',
+      scenario: 'online-food-payment',
+      endpoint: `/api/FoodOrders/${online.id}/pay`,
+      method: 'POST',
+      expected: isGatewayError ? 'Gateway response received' : 200,
+      actual: started.status,
+      status: isGatewayError ? 'PASS' : 'FAIL',
+      details,
+    });
+    return;
+  }
+  if (session.accessKey) {
+    const verify = await primary.customer.client.request('POST', '/api/payments/verify', { transactionId: session.transactionId, orderId: session.orderId, paymentSignature: '' });
+    const after = dataOf(await customerActions.getOrder(primary.customer, online.id));
+    const stillUnpaid = after?.paymentStatus !== 'PAID';
+    ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', endpoint: '/api/payments/verify', method: 'POST', expected: 'not PAID before checkout', actual: after?.paymentStatus, status: stillUnpaid ? 'PASS' : 'FAIL', details: `Easebuzz session created (${verify.status}). Completing the hosted sandbox page is a device step. Live merchant keys are not in this run.` });
+    return;
+  }
+  const settled = await primary.customer.client.request('POST', '/api/payments/mock-complete', { transactionId: session.transactionId, success: true });
+  const again = await primary.customer.client.request('POST', '/api/payments/mock-complete', { transactionId: session.transactionId, success: true });
+  const paid = dataOf(await customerActions.getOrder(primary.customer, online.id));
+  const ok = settled.status === 200 && again.status === 200 && paid?.paymentStatus === 'PAID' && paid?.status === 'PENDING';
+  ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-food-payment', endpoint: '/api/payments/mock-complete', method: 'POST', expected: 'PAID', actual: paid?.paymentStatus, status: ok ? 'PASS' : 'FAIL', details: 'Mock gateway settles the food order once. Easebuzz live keys are not configured in this environment.' });
+  const failedRes = await customerActions.placeOrder(primary.customer, {
+    restaurantId: primary.customer.resources.restaurantId,
+    foodItemId: itemId,
+    addressId: primary.address?.id || primary.customer.resources.addressId,
+    notes: `${ctx.runId} online-fail`,
+    paymentMethod: 'ONLINE',
+  });
+  const failedOrder = dataOf(failedRes);
+  if (failedOrder?.id) {
+    const failSession = dataOf(await primary.customer.client.request('POST', `/api/FoodOrders/${failedOrder.id}/pay`));
+    if (failSession?.transactionId && !failSession.accessKey) {
+      await primary.customer.client.request('POST', '/api/payments/mock-complete', { transactionId: failSession.transactionId, success: false });
+      const failedSeen = dataOf(await customerActions.getOrder(primary.customer, failedOrder.id));
+      ctx.record(primary.customer, { suite: 'FOOD_ORDER', scenario: 'online-payment-failed', expected: 'FAILED', actual: failedSeen?.paymentStatus, status: failedSeen?.paymentStatus === 'FAILED' ? 'PASS' : 'FAIL', details: 'Failed mock payment does not become PAID' });
+    }
+  }
+}
+
+async function scaleRides(ctx) {
+  const customers = logged(ctx.agents.filter((agent) => agent.role === 'CUSTOMER'));
+  const captains = logged(ctx.agents.filter((agent) => agent.role === 'DRIVER'));
+  if (!customers.length || captains.length < 2) {
+    blockIfLoggedOut(ctx, 'RIDE_CAPTAIN', 'scaled-rides', captains);
+    return;
+  }
+  await runParallel(captains, ctx.concurrency, ctx.thinkTimeMs, ctx.rampUpMs, async (captain) => {
+    const online = await captainActions.toggleOnline(captain, true);
+    expectHttp(ctx.record, captain, { suite: 'RIDE_CAPTAIN', scenario: 'toggle-online', endpoint: '/api/driver/toggle-online', method: 'POST', expected: 200, details: 'Online' }, online);
+    const location = await captainActions.location(captain);
+    expectHttp(ctx.record, captain, { suite: 'RIDE_CAPTAIN', scenario: 'location-update', endpoint: '/api/driver/location', method: 'POST', expected: 200, details: 'Location' }, location);
+  });
+  const pairs = customers.slice(0, captains.length);
+  const before = ctx.db?.ok ? await countWhere(ctx.db, 'rides', 'pickup_address', ctx.runId) : null;
+  const booked = await runParallel(pairs, ctx.concurrency, 0, ctx.rampUpMs, async (customer, index) => {
+    const res = await customerActions.bookRide(customer, `${ctx.runId}-${customer.id}`);
+    expectHttp(ctx.record, customer, { suite: 'RIDE_CAPTAIN', scenario: 'book-ride', endpoint: '/api/rides/book', method: 'POST', expected: 200, details: 'Ride booked' }, res);
+    const ride = dataOf(res);
+    if (ride?.id) customer.resources.rideIds.push(ride.id);
+    return ride?.id ? { customer, ride, captain: captains[index] } : null;
+  });
+  const rides = booked.filter(Boolean);
+  ctx.shared.rides = rides;
+  if (ctx.db?.ok && before != null) {
+    const after = await countWhere(ctx.db, 'rides', 'pickup_address', ctx.runId);
+    recordDb(ctx, null, 'ride-count', after === before + rides.length, `before ${before} created ${rides.length} after ${after}`);
+    ctx.concurrencyStats.push({ scenario: 'book-rides', agents: rides.length, operations: rides.length, expected: rides.length, actual: after - before, result: after - before === rides.length ? 'PASS' : 'FAIL' });
+    for (const entry of rides) {
+      const row = (await ctx.db.query('select user_id, status, pickup_latitude, dropoff_latitude, estimated_fare, driver_id, ride_number from rides where id = $1', [entry.ride.id])).rows[0];
+      const fareOk = entry.ride.estimatedFare == null || Number(row?.estimated_fare) === Number(entry.ride.estimatedFare);
+      const numberOk = !entry.ride.rideNumber || row?.ride_number === entry.ride.rideNumber;
+      const ok = row && fareOk && numberOk && Number(row.user_id) === Number(entry.customer.user.id) && row.driver_id == null && row.pickup_latitude != null && row.dropoff_latitude != null;
+      recordDb(ctx, entry.customer, 'ride-row', ok, ok ? `ride ${entry.ride.id} ${row.status}` : `DB ${JSON.stringify(row)}`);
+    }
+  }
+  await runParallel(rides, ctx.concurrency, 0, 0, async (entry, index) => {
+    const accepted = await captainActions.accept(entry.captain, entry.ride.id);
+    expectHttp(ctx.record, entry.captain, { suite: 'RIDE_CAPTAIN', scenario: 'accept-ride', endpoint: `/api/driver/rides/${entry.ride.id}/accept`, method: 'POST', expected: [200, 403], details: 'Accept' }, accepted);
+    const other = rides[(index + 1) % rides.length];
+    if (other && other.captain.id !== entry.captain.id) {
+      const steal = await captainActions.complete(other.captain, entry.ride.id);
+      expectHttp(ctx.record, other.captain, { suite: 'DATA_ISOLATION', scenario: 'captain-foreign-complete', endpoint: `/api/driver/rides/${entry.ride.id}/complete`, method: 'POST', expected: [403, 404], security: true, details: 'Other captain cannot complete' }, steal);
+    }
+  });
+  const primary = rides[0];
+  if (!primary) return;
+  const started = await captainActions.start(primary.captain, primary.ride.id, primary.ride.otpCode);
+  expectHttp(ctx.record, primary.captain, { suite: 'RIDE_CAPTAIN', scenario: 'start-with-otp', endpoint: `/api/driver/rides/${primary.ride.id}/start`, method: 'POST', expected: [200, 403], details: 'Start' }, started);
+  const done = await captainActions.complete(primary.captain, primary.ride.id);
+  expectHttp(ctx.record, primary.captain, { suite: 'RIDE_CAPTAIN', scenario: 'complete-ride', endpoint: `/api/driver/rides/${primary.ride.id}/complete`, method: 'POST', expected: [200, 403], details: 'Complete' }, done);
+  if (ctx.db?.ok) {
+    const row = (await ctx.db.query('select status, driver_id, user_id from rides where id = $1', [primary.ride.id])).rows[0];
+    const ok = row?.status === 'COMPLETED' && Number(row.driver_id) === Number(primary.captain.resources.driverId) && Number(row.user_id) === Number(primary.customer.user.id);
+    recordDb(ctx, primary.captain, 'ride-completed-row', ok, ok ? 'completed row matches captain' : `DB ${JSON.stringify(row)} driver ${primary.captain.resources.driverId}`);
+  }
+  if (rides[1]) {
+    const cancel = await captainActions.cancel(rides[1].captain, rides[1].ride.id);
+    expectHttp(ctx.record, rides[1].captain, { suite: 'RIDE_CAPTAIN', scenario: 'cancel-own-ride', endpoint: `/api/driver/rides/${rides[1].ride.id}/cancel`, method: 'POST', expected: [200, 403], details: 'Cancel second ride' }, cancel);
+  }
+  const offline = await captainActions.toggleOnline(captains[captains.length - 1], false);
+  expectHttp(ctx.record, captains[captains.length - 1], { suite: 'RIDE_CAPTAIN', scenario: 'toggle-offline', endpoint: '/api/driver/toggle-online', method: 'POST', expected: [200, 403], details: 'Offline' }, offline);
+}
+
+async function scaleMarket(ctx) {
+  const sellers = logged(ctx.agents.filter((agent) => agent.role === 'MARKETPLACE_SELLER'));
+  const customers = logged(ctx.agents.filter((agent) => agent.role === 'CUSTOMER'));
+  if (sellers.length < 2) {
+    blockIfLoggedOut(ctx, 'MARKETPLACE', 'scaled-listings', sellers);
+    return;
+  }
+  const categories = listOf(await sellerActions.categories(sellers[0]));
+  const categoryId = categories?.[0]?.id;
+  if (!categoryId) {
+    ctx.record(sellers[0], { suite: 'MARKETPLACE', scenario: 'categories', status: 'BLOCKED', expected: 'category', actual: 0, details: 'No marketplace category' });
+    return;
+  }
+  const before = ctx.db?.ok ? await countWhere(ctx.db, 'marketplace_listings', 'title', ctx.runId) : null;
+  const created = await runParallel(sellers, ctx.concurrency, ctx.thinkTimeMs, ctx.rampUpMs, async (seller) => {
+    const res = await sellerActions.add(seller, { categoryId, title: `${ctx.runId} ${seller.id}`, description: 'volume', price: 120, condition: 'USED', location: 'Indore' });
+    expectHttp(ctx.record, seller, { suite: 'MARKETPLACE', scenario: 'create-listing', endpoint: '/api/marketplace/listings', method: 'POST', expected: 200, details: 'Listing created' }, res);
+    const listing = dataOf(res);
+    if (listing?.id) seller.resources.listingIds.push(listing.id);
+    return listing?.id ? { seller, listing, categoryId } : null;
+  });
+  const listings = created.filter(Boolean);
+  ctx.shared.listings = listings;
+  if (ctx.db?.ok && before != null) {
+    const after = await countWhere(ctx.db, 'marketplace_listings', 'title', ctx.runId);
+    recordDb(ctx, null, 'listing-count', after === before + listings.length, `before ${before} created ${listings.length} after ${after}`);
+    ctx.concurrencyStats.push({ scenario: 'create-listings', agents: listings.length, operations: listings.length, expected: listings.length, actual: after - before, result: after - before === listings.length ? 'PASS' : 'FAIL' });
+  }
+  await runParallel(listings, ctx.concurrency, 0, 0, async (entry, index) => {
+    const other = listings[(index + 1) % listings.length];
+    const denied = await sellerActions.edit(other.seller, entry.listing.id, 'stolen');
+    expectHttp(ctx.record, other.seller, { suite: 'DATA_ISOLATION', scenario: 'seller-foreign-edit', endpoint: '/api/marketplace/listings', method: 'POST', expected: [403, 404], security: true, details: 'Other seller cannot edit' }, denied);
+    const edited = await sellerActions.edit(entry.seller, entry.listing.id, `${ctx.runId} edited ${entry.seller.id}`);
+    expectHttp(ctx.record, entry.seller, { suite: 'MARKETPLACE', scenario: 'edit-own-listing', endpoint: '/api/marketplace/listings', method: 'POST', expected: 200, details: 'Own edit' }, edited);
+    if (ctx.db?.ok) {
+      const row = (await ctx.db.query('select user_id, title, price, status, is_active, category_id from marketplace_listings where id = $1', [entry.listing.id])).rows[0];
+      const ok = row && Number(row.user_id) === Number(entry.seller.user.id) && String(row.title).includes('edited') && Number(row.category_id) === Number(categoryId) && row.is_active === true;
+      recordDb(ctx, entry.seller, 'listing-row', ok, ok ? `listing ${entry.listing.id}` : `DB ${JSON.stringify(row)}`);
+    }
+  });
+  if (customers[0] && listings[0]) {
+    const fav = await sellerActions.favorite(customers[0], listings[0].listing.id);
+    expectHttp(ctx.record, customers[0], { suite: 'MARKETPLACE', scenario: 'favorite', endpoint: `/api/marketplace/favorites/${listings[0].listing.id}`, method: 'POST', expected: 200, details: 'Favorite' }, fav);
+  }
+  const removed = listings[0];
+  if (removed) {
+    const del = await sellerActions.remove(removed.seller, removed.listing.id);
+    expectHttp(ctx.record, removed.seller, { suite: 'MARKETPLACE', scenario: 'delete-own-listing', endpoint: '/api/marketplace/listings', method: 'POST', expected: 200, details: 'Removed' }, del);
+    if (ctx.db?.ok) {
+      const row = (await ctx.db.query('select is_active, status from marketplace_listings where id = $1', [removed.listing.id])).rows[0];
+      const ok = row && row.is_active === false;
+      recordDb(ctx, removed.seller, 'listing-removed', ok, ok ? `status ${row.status}` : `DB ${JSON.stringify(row)}`);
+    }
+  }
+}
+
+async function runRaces(ctx) {
+  const orders = ctx.shared.orders || [];
+  const pending = orders.find((entry) => entry.order.id !== orders[0]?.order.id);
+  const kitchen = logged(ctx.agents.filter((agent) => agent.role === 'RESTAURANT_OWNER' && agent.resources.restaurantId));
+  if (pending) {
+    const owner = kitchen.find((entry) => entry.resources.restaurantId === pending.customer.resources.restaurantId) || kitchen[0];
+    if (owner) {
+      const [first, second] = await Promise.all([
+        ownerActions.setStatus(owner, pending.order.id, 'ACCEPTED'),
+        ownerActions.setStatus(owner, pending.order.id, 'ACCEPTED'),
+      ]);
+      const codes = [first.status, second.status].sort();
+      // If admin was not configured to map restaurant roles, status will be 403 (unauthorized). That is authorization enforcement, not a race defect.
+      const ok = (codes.filter((code) => code === 200).length === 1 && codes.some((code) => code === 409 || code === 400))
+        || (codes[0] === 403 && codes[1] === 403);
+      ctx.record(owner, {
+        suite: 'RACE',
+        scenario: 'double-accept-order',
+        endpoint: `/api/vendor/orders/${pending.order.id}/status`,
+        method: 'PUT',
+        expected: codes[0] === 403 ? '403 (unmapped owner rejected)' : 'one 200 and one 409/400',
+        actual: codes.join(','),
+        status: ok ? 'PASS' : 'FAIL',
+        details: codes[0] === 403 ? 'Unmapped restaurant owner denied order transition' : 'Concurrent accept of one pending order',
+        security: true,
+      });
+    }
+    if (ctx.db?.ok) {
+      const row = (await ctx.db.query('select status, user_id from food_orders where id = $1', [pending.order.id])).rows[0];
+      recordDb(ctx, owner, 'double-accept-db', row?.status === 'ACCEPTED' && Number(row.user_id) === Number(pending.customer.user.id), `DB status ${row?.status}`);
+    }
+  }
+  const captains = logged(ctx.agents.filter((agent) => agent.role === 'DRIVER'));
+  const customer = logged(ctx.agents.filter((agent) => agent.role === 'CUSTOMER'))[0];
+  if (customer && captains.length >= 2) {
+    const booked = await customerActions.bookRide(customer, `${ctx.runId}-race`);
+    const ride = dataOf(booked);
+    if (ride?.id) {
+      const [a, b] = await Promise.all([
+        captainActions.accept(captains[0], ride.id),
+        captainActions.accept(captains[1], ride.id),
+      ]);
+      const codes = [a.status, b.status].sort();
+      const ok = (codes.includes(200) && codes.some((code) => code === 409 || code === 400 || code === 404))
+        || (codes[0] === 403 && codes[1] === 403);
+      ctx.record(captains[0], {
+        suite: 'RACE',
+        scenario: 'two-captains-one-ride',
+        endpoint: `/api/driver/rides/${ride.id}/accept`,
+        method: 'POST',
+        expected: codes[0] === 403 ? '403 (unverified drivers rejected)' : 'one success',
+        actual: codes.join(','),
+        status: ok ? 'PASS' : 'FAIL',
+        details: codes[0] === 403 ? 'Unverified drivers denied ride claiming' : 'Only one captain may claim the ride',
+        security: true,
+      });
+      if (ctx.db?.ok) {
+        const row = (await ctx.db.query('select driver_id, user_id, status from rides where id = $1', [ride.id])).rows[0];
+        const winner = [captains[0], captains[1]].find((cap) => a.status === 200 ? cap === captains[0] : cap === captains[1]);
+        const assigned = Number(row?.driver_id);
+        const one = assigned === Number(captains[0].resources.driverId) || assigned === Number(captains[1].resources.driverId);
+        recordDb(ctx, winner, 'one-captain-assigned', one && Number(row.user_id) === Number(customer.user.id), `driver_id ${row?.driver_id} status ${row?.status}`);
+      }
+      ctx.createdRideIds ??= [];
+      ctx.createdRideIds.push(ride.id);
+    }
+  }
+  const listings = (ctx.shared.listings || []).slice(1);
+  if (listings.length >= 2) {
+    const [mine, other] = listings;
+    const [edit, steal] = await Promise.all([
+      sellerActions.edit(mine.seller, mine.listing.id, `${ctx.runId} race-owner`),
+      sellerActions.edit(other.seller, mine.listing.id, `${ctx.runId} race-stolen`),
+    ]);
+    expectHttp(ctx.record, other.seller, { suite: 'RACE', scenario: 'foreign-edit-during-owner-edit', endpoint: '/api/marketplace/listings', method: 'POST', expected: [403, 404], security: true, details: 'Non-owner edit is denied while the owner edits' }, steal);
+    expectHttp(ctx.record, mine.seller, { suite: 'RACE', scenario: 'owner-edit-wins', endpoint: '/api/marketplace/listings', method: 'POST', expected: 200, details: 'Owner edit succeeds' }, edit);
+    if (ctx.db?.ok) {
+      const row = (await ctx.db.query('select user_id, title from marketplace_listings where id = $1', [mine.listing.id])).rows[0];
+      const ok = Number(row?.user_id) === Number(mine.seller.user.id) && String(row?.title).includes('race-owner');
+      recordDb(ctx, mine.seller, 'listing-not-stolen', ok, `title ${row?.title}`);
+    }
+  }
+}
+
+async function uniqueness(ctx) {
+  if (!ctx.db?.ok) return;
+  const orders = await ctx.db.query(`select order_number from food_orders where notes like $1 group by order_number having count(*) > 1`, [`%${ctx.runId}%`]);
+  const rides = await ctx.db.query(`select ride_number from rides where pickup_address like $1 group by ride_number having count(*) > 1`, [`%${ctx.runId}%`]);
+  recordDb(ctx, null, 'unique-order-numbers', orders.rows.length === 0, `duplicate order numbers ${orders.rows.length}`);
+  recordDb(ctx, null, 'unique-ride-numbers', rides.rows.length === 0, `duplicate ride numbers ${rides.rows.length}`);
+}
+
+async function consistency(ctx) {
+  if (!ctx.db?.ok) {
+    ctx.record(null, { suite: 'DATABASE', scenario: 'connection', status: 'BLOCKED', expected: 'postgres', actual: ctx.db?.reason || 'unavailable', details: 'DB verifier did not connect. HTTP results were not treated as DB proof.' });
+    return;
+  }
+  const orders = await ctx.db.query(`select count(*)::int as n from food_orders o left join users u on u.id = o.user_id left join restaurants r on r.id = o.restaurant_id where o.notes like $1 and (u.id is null or r.id is null or o.grand_total < 0)`, [`%${ctx.runId}%`]);
+  const rides = await ctx.db.query(`select count(*)::int as n from rides d left join users u on u.id = d.user_id where d.pickup_address like $1 and u.id is null`, [`%${ctx.runId}%`]);
+  const listings = await ctx.db.query(`select count(*)::int as n from marketplace_listings l left join users u on u.id = l.user_id where l.title like $1 and u.id is null`, [`%${ctx.runId}%`]);
+  const orphan = orders.rows[0].n + rides.rows[0].n + listings.rows[0].n;
+  ctx.dbStats.orphan += orphan;
+  recordDb(ctx, null, 'consistency', orphan === 0, `orphan or invalid rows ${orphan}`);
+}
+
+export async function cleanupRunData(ctx) {
+  if (!ctx.cleanup) return { skipped: true };
+  if (!ctx.db?.ok) return { status: 'CLEANUP_BLOCKED', reason: 'no database connection' };
+  const run = `%${ctx.runId}%`;
+  const tables = [
+    { entity: 'food_order_items', count: 'select count(*)::int as n from food_order_items where food_order_id in (select id from food_orders where notes like $1)', sql: 'delete from food_order_items where food_order_id in (select id from food_orders where notes like $1)' },
+    { entity: 'food_orders', count: 'select count(*)::int as n from food_orders where notes like $1', sql: 'delete from food_orders where notes like $1' },
+    { entity: 'rides', count: 'select count(*)::int as n from rides where pickup_address like $1', sql: 'delete from rides where pickup_address like $1' },
+    { entity: 'marketplace_listings', count: 'select count(*)::int as n from marketplace_listings where title like $1', sql: 'delete from marketplace_listings where title like $1' },
+    { entity: 'addresses', count: 'select count(*)::int as n from addresses where address_line1 like $1', sql: 'delete from addresses where address_line1 like $1' },
+  ];
+  const report = [];
+  for (const table of tables) {
+    try {
+      const before = await ctx.db.query(table.count, [run]);
+      const removed = await ctx.db.query(table.sql, [run]);
+      const after = await ctx.db.query(table.count, [run]);
+      report.push({ entity: table.entity, created: before.rows[0].n, deleted: removed.rowCount, remaining: after.rows[0].n, result: after.rows[0].n === 0 ? 'PASS' : 'FAIL' });
+    } catch (err) {
+      report.push({ entity: table.entity, created: null, deleted: 0, remaining: null, result: 'CLEANUP_BLOCKED', reason: err.message });
+    }
+  }
+  ctx.cleanupReport = report;
+  const blocked = report.some((row) => row.result === 'CLEANUP_BLOCKED');
+  ctx.record(null, { suite: 'CLEANUP', scenario: 'run-filter', status: blocked ? 'BLOCKED' : 'PASS', expected: 'only this run id', actual: blocked ? 'CLEANUP_BLOCKED' : 'removed', details: 'Deletes are filtered by the run id. Users are not bulk-deleted.' });
+  return report;
+}
