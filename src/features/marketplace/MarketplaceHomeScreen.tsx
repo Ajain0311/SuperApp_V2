@@ -65,7 +65,7 @@ export const MarketplaceHomeScreen: React.FC = () => {
       .then((res) => {
         const data = res.data?.data || res.data;
         const items = data?.items || data;
-        if (Array.isArray(items) && items.length > 0) {
+        if (Array.isArray(items)) {
           setServerListings(items);
         }
       })
@@ -79,7 +79,9 @@ export const MarketplaceHomeScreen: React.FC = () => {
   );
 
   const allListings = useMemo(() => {
-    return [...customListings, ...serverListings];
+    const serverIds = new Set(serverListings.map((s) => s.id));
+    const uniqueCustom = customListings.filter((c) => !serverIds.has(c.id));
+    return [...uniqueCustom, ...serverListings];
   }, [customListings, serverListings]);
 
   const filteredListings = useMemo(() => {

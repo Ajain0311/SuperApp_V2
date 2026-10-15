@@ -16,6 +16,11 @@ public class MockOtpService : IOtpService
 
     public MockOtpService(AppDbContext db)
     {
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+        if (isProd)
+        {
+            throw new InvalidOperationException("MockOtpService is strictly forbidden in Production environment.");
+        }
         var provider = Environment.GetEnvironmentVariable("OTP_PROVIDER");
         if (!string.IsNullOrEmpty(provider) && !string.Equals(provider, "Mock", StringComparison.OrdinalIgnoreCase))
         {

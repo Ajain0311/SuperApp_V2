@@ -167,6 +167,13 @@ builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSms
 builder.Services.AddScoped<MockOtpService>();
 builder.Services.AddScoped<PunjabGovOtpService>();
 
+var isProduction = string.Equals(builder.Environment.EnvironmentName, "Production", StringComparison.OrdinalIgnoreCase);
+
+if (isProduction && (string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase) || otpTestMode))
+{
+    throw new InvalidOperationException("CRITICAL: MockOtpService or OTP_TEST_MODE cannot be enabled in a Production environment. Configure a live SMS provider.");
+}
+
 if (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddScoped<IOtpService, MockOtpService>();

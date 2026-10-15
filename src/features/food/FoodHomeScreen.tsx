@@ -97,6 +97,8 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>(DEFAULT_RESTAURANTS);
   const [deliverTo, setDeliverTo] = useState('Connaught Place, New Delhi');
 
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
   useEffect(() => {
     // Attempt backend fetch; defaults gracefully to seeded data
     apiClient
@@ -104,12 +106,14 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
       .then((res) => {
         const payload = res.data?.data || res.data;
         const items = payload?.items || payload;
-        if (Array.isArray(items) && items.length > 0) {
+        if (Array.isArray(items)) {
           setRestaurants(items);
+          setIsDemoMode(false);
         }
       })
       .catch(() => {
-        // Safe offline default
+        // Safe offline demo fallback for dev/testing
+        setIsDemoMode(true);
       });
   }, []);
 
@@ -269,9 +273,23 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionHeaderTitle}>
             POPULAR SPOTS NEAR YOU ({filteredRestaurants.length})
+            {isDemoMode ? ' • DEMO' : ''}
           </Text>
           <Text style={styles.sortByText}>Sort by ▼</Text>
         </View>
+
+        {/* Empty State */}
+        {filteredRestaurants.length === 0 && (
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
+            <Ionicons name="restaurant-outline" size={48} color={AppColors.textTertiary} />
+            <Text style={{ ...styles.restaurantName, marginTop: 12, color: AppColors.textSecondary }}>
+              No restaurants currently available
+            </Text>
+            <Text style={{ fontSize: 13, color: AppColors.textTertiary, marginTop: 4 }}>
+              Please check back soon or try another location.
+            </Text>
+          </View>
+        )}
 
         {/* Restaurant Cards */}
         {filteredRestaurants.map((restaurant) => (

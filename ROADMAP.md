@@ -24,20 +24,22 @@
 
 ## 📌 Last Session Handoff
 
-- **Date**: October 10, 2026
-- **Status**: Completed FIX-21 through FIX-25:
-  - **FIX-21**: Redesigned "Find Your Ride" section to Rapido-style minimalist layout with inline pickup/destination inputs, instant autocomplete suggestions dropdown, and right-hand map pin icon launching a dedicated "Pin on Map" modal. Heavy inline map compartment eliminated.
-  - **FIX-22**: Fixed Marketplace image upload on web and native by wrapping manipulated image in a real `Blob` on `Platform.OS === 'web'` and RN custom FormData on mobile.
-  - **FIX-23**: Removed test payment banner from `HomeScreen.tsx` and removed `PaymentTestScreen` navigation from `ProfileScreen.tsx`.
-  - **FIX-24**: Resolved restaurant and food dish image loading with automatic fallback CDN placeholder and absolute URL resolver in `FoodHomeScreen.tsx` and `RestaurantDetailScreen.tsx`.
-  - **FIX-25**: Guarded Mapbox native imports and added informative dev client build / web search suggestions fallbacks.
+- **Date**: October 15, 2026
+- **Status**: Completed Actionable Stabilization & Reliability Fixes:
+  - **Marketplace**: Verified backend listing ID check, failure alert with form persistence, duplicate submission prevention, local notification gating on confirmed creation, deduplication of custom/server items, and empty collection handling.
+  - **Food & Restaurants**: Added graceful empty menu and restaurant empty states, explicit demo mode labeling for offline fallback fixtures, and preserved accurate item mappings.
+  - **Payments**: Enforced server-authoritative order amount and ownership verification in `PaymentsController`, eliminated hardcoded ₹1 override, sanitized test cards and test checkout URLs from production `/kit` responses, preserved Easebuzz gateway architecture.
+  - **Security & OTP**: Startup guard preventing `MockOtpService` from running in Production mode, verified OTP exception handling, validated device token formatting in notifications.
+  - **Configuration**: Corrected `app.json` schema validation for SDK 57 (21/21 expo-doctor checks passed).
 - **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md).
-  - FIX-19: Easebuzz live dashboard & webhook verification `[OPEN]`
-  - FIX-20: Google Play Store upload checklist (.aab) `[OPEN]`
+  - FIX-19: Easebuzz live dashboard & webhook verification `[BLOCKED_EXTERNAL_DEPENDENCY]`
+  - FIX-20: Google Play Store upload checklist (.aab) `[BLOCKED_EXTERNAL_DEPENDENCY]`
 - **Verification Suites**:
-  - `dotnet test backend/SuperApp.sln`: 111 Passed / 111 Total
-  - `npx tsc --noEmit`: 0 Errors
-  - `npm test`: 14 Suites Passed, 82 Tests Passed
+  - `dotnet test backend/SuperApp.sln`: 115 Passed / 115 Total (100%)
+  - `npx tsc --noEmit`: 0 Errors (100% clean)
+  - `npm test -- --watchAll=false`: 16 Suites Passed, 88 Tests Passed (100%)
+  - `npx expo-doctor`: 21/21 checks passed (100% clean)
+  - `npm run test:agents:self`: 14 Passed / 14 Total (100%)
 
 
 

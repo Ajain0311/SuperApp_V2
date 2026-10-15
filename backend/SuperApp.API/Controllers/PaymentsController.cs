@@ -57,6 +57,7 @@ public class PaymentsController : ControllerBase
     public ActionResult<ApiResponse<PaymentKitInfo>> GetKit()
     {
         var (configured, active, key, hasCredentials, mode) = ResolveKit();
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
         return Ok(ApiResponse<PaymentKitInfo>.Ok(new PaymentKitInfo
         {
             ConfiguredProvider = configured,
@@ -64,8 +65,8 @@ public class PaymentsController : ControllerBase
             CheckoutMode = mode,
             KeyId = key,
             HasCredentials = hasCredentials,
-            CheckoutUrl = "/pay-test/",
-            TestCards =
+            CheckoutUrl = isProd ? null : "/pay-test/",
+            TestCards = isProd ? [] :
             [
                 "Visa 4012 0010 3714 1112",
                 "CVV any 3 digits, expiry any future date",
@@ -78,12 +79,45 @@ public class PaymentsController : ControllerBase
     [HttpPost("create-order")]
     public async Task<ActionResult<ApiResponse<PaymentOrderResult>>> CreateOrder([FromBody] CreatePaymentRequest request)
     {
-        // Force ₹1.00 for live payment gateway verification if requested or enabled
-        decimal finalAmount = request.Amount > 0 ? 1.00m : 1.00m;
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+        long? authenticatedUserId = (claim != null && long.TryParse(claim.Value, out var authId)) ? authId : null;
+        var userId = authenticatedUserId ?? 1;
 
-        var userId = GetCurrentUserId();
+        decimal authoritativeAmount = request.Amount;
+        if (string.Equals(request.Module, "FOOD", StringComparison.OrdinalIgnoreCase) && long.TryParse(request.ReceiptId, out var foodOrderId))
+        {
+            var foodOrder = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == foodOrderId);
+            if (foodOrder != null)
+            {
+                if (authenticatedUserId.HasValue && foodOrder.UserId != authenticatedUserId.Value && !User.IsInRole(RoleNames.Admin))
+                {
+                    return Forbid();
+                }
+                authoritativeAmount = foodOrder.GrandTotal;
+                userId = foodOrder.UserId;
+            }
+        }
+        else if (string.Equals(request.Module, "RIDE", StringComparison.OrdinalIgnoreCase) && long.TryParse(request.ReceiptId, out var rideId))
+        {
+            var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == rideId);
+            if (ride != null)
+            {
+                if (authenticatedUserId.HasValue && ride.UserId != authenticatedUserId.Value && !User.IsInRole(RoleNames.Admin))
+                {
+                    return Forbid();
+                }
+                authoritativeAmount = ride.ActualFare ?? ride.EstimatedFare;
+                userId = ride.UserId;
+            }
+        }
+
+        if (authoritativeAmount < 1.00m)
+        {
+            authoritativeAmount = 1.00m;
+        }
+
         var result = await _paymentService.CreatePaymentOrderAsync(
-            finalAmount,
+            authoritativeAmount,
             request.Currency,
             request.ReceiptId,
             request.Module,

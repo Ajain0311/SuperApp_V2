@@ -131,6 +131,8 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   const clearCart = useCartStore((state) => state.clearCart);
   const getItemTotal = useCartStore((state) => state.getItemTotal);
 
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
   useEffect(() => {
     const rId = Number(route.params?.restaurantId) || 1;
     apiClient
@@ -138,6 +140,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       .then((res) => {
         const data = res.data?.data || res.data;
         if (data) {
+          setIsDemoMode(false);
           if (data.name) setRestaurantName(data.name);
           const categoryList: any[] = Array.isArray(data.categories) ? data.categories : [];
           const fromCategories: FoodItemRow[] = categoryList.flatMap((cat: any) =>
@@ -167,15 +170,14 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
               }))
             : [];
           const mapped = fromCategories.length > 0 ? fromCategories : fromItems;
-          if (mapped.length > 0) {
-            setFoodItems(mapped);
-            const cats = ['All', ...Array.from(new Set(mapped.map((m: FoodItemRow) => m.category)))];
-            setMenuCategories(cats as string[]);
-          }
+          setFoodItems(mapped);
+          const cats = ['All', ...Array.from(new Set(mapped.map((m: FoodItemRow) => m.category)))];
+          setMenuCategories(cats as string[]);
         }
       })
       .catch(() => {
-        // Safe offline default
+        // Safe offline default for testing/demo
+        setIsDemoMode(true);
       });
   }, [route.params?.restaurantId]);
 
@@ -411,6 +413,17 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
               </View>
             </View>
           ))}
+          {filteredItems.length === 0 && (
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
+              <Ionicons name="fast-food-outline" size={48} color={AppColors.textTertiary} />
+              <Text style={{ ...styles.dishName, marginTop: 12, color: AppColors.textSecondary, textAlign: 'center' }}>
+                No menu items available in this category
+              </Text>
+              <Text style={{ fontSize: 13, color: AppColors.textTertiary, marginTop: 4, textAlign: 'center' }}>
+                Please select another category or check back later.
+              </Text>
+            </View>
+          )}
 
           {/* Bottom spacing for floating cart */}
           <View style={{ height: 100 }} />

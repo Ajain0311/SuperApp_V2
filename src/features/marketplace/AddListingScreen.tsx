@@ -143,7 +143,7 @@ export const AddListingScreen: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    let serverId: number | undefined;
+    let serverListing: any = null;
     try {
       const res = await apiClient.post<any>(ApiEndpoints.marketplace.manageListings, {
         action: 'ADD',
@@ -156,42 +156,50 @@ export const AddListingScreen: React.FC = () => {
         imageUrls: photos,
       });
       const data = res.data?.data || res.data;
-      if (data?.id) {
-        serverId = data.id;
+      if (!data || !data.id) {
+        throw new Error(res.data?.message || 'Server did not return a valid listing confirmation.');
       }
+      serverListing = data;
     } catch (err: any) {
       console.warn('[AddListing] Server error:', err?.message);
-    } finally {
       setIsSubmitting(false);
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Could not publish listing to the server. Please check your connection and retry.';
+      Alert.alert('Publish Failed', errorMessage);
+      return;
     }
+
+    setIsSubmitting(false);
 
     const cat = CATEGORIES.find((c) => c.id === selectedCategoryId) || CATEGORIES[0];
 
     const newListing: ListingSummary = {
-      id: serverId || Date.now(),
-      title: title.trim(),
-      price: parseFloat(price.trim()) || 0,
-      condition: selectedCondition,
-      location: location.trim(),
-      primaryImageUrl: photos[0],
-      isFeatured: false,
-      viewCount: 1,
-      createdAt: new Date().toISOString(),
-      categoryId: selectedCategoryId,
-      categoryName: cat.name,
+      id: serverListing.id,
+      title: serverListing.title || title.trim(),
+      price: serverListing.price ?? (parseFloat(price.trim()) || 0),
+      condition: serverListing.condition || selectedCondition,
+      location: serverListing.location || location.trim(),
+      primaryImageUrl: serverListing.primaryImageUrl || photos[0],
+      isFeatured: Boolean(serverListing.isFeatured),
+      viewCount: serverListing.viewCount ?? 0,
+      createdAt: serverListing.createdAt || new Date().toISOString(),
+      categoryId: serverListing.categoryId || selectedCategoryId,
+      categoryName: serverListing.categoryName || cat.name,
       isFavorite: false,
     };
 
     addListing(newListing);
 
-    // Trigger witty Zomato-style seller notification
+    // Trigger witty Zomato-style seller notification ONLY after confirmed server publication
     try {
       notificationService.scheduleLocalNotification({
         title: 'Dhamaka! 🎉 Aapka ad live ho gaya!',
         body: `Puraani cheezon ko kaho bye-bye, jeb me aayegi nayi kamai! 💰📦 (${title.trim()} for ₹${price.trim()})`,
         data: {
           module: 'MARKETPLACE',
-          listingId: (serverId || newListing.id).toString(),
+          listingId: serverListing.id.toString(),
         },
       });
     } catch {}

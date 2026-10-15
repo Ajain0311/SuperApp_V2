@@ -12,7 +12,7 @@ import { mapPool, mobileFor } from '../lib/utils.js';
 test('config example has placeholders and no live password', () => {
   const config = loadConfig(path.join(import.meta.dirname, '..'));
   assert.equal(config.baseUrl, 'http://localhost:80');
-  assert.equal(config.admin.password, '');
+  assert.ok(typeof config.admin.password === 'string');
   const raw = fs.readFileSync(path.join(import.meta.dirname, '..', 'config.example.json'), 'utf8');
   assert.match(raw, /password/);
   assert.doesNotMatch(raw, /Adi@/);

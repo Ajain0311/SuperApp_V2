@@ -132,12 +132,18 @@ public class NotificationsController : ControllerBase
             return BadRequest(ApiResponse.Fail("Device token is required"));
         }
 
+        var cleanToken = request.Token.Trim();
+        if (cleanToken.Length < 10)
+        {
+            return BadRequest(ApiResponse.Fail("Device token format is invalid"));
+        }
+
         var userId = GetCurrentUserId();
         if (!userId.HasValue)
             return Unauthorized(ApiResponse.Fail("Authentication required"));
 
         var existing = await _db.UserDeviceTokens
-            .FirstOrDefaultAsync(t => t.UserId == userId.Value && t.DeviceToken == request.Token);
+            .FirstOrDefaultAsync(t => t.UserId == userId.Value && t.DeviceToken == cleanToken);
 
         if (existing == null)
         {

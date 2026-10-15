@@ -154,6 +154,19 @@ jest.mock('expo-location', () => {
   };
 });
 
+jest.mock('expo-image-manipulator', () => ({
+  manipulateAsync: jest.fn().mockResolvedValue({
+    uri: 'file://mock-compressed.jpg',
+    width: 1200,
+    height: 800,
+  }),
+  SaveFormat: {
+    JPEG: 'jpeg',
+    PNG: 'png',
+    WEBP: 'webp',
+  },
+}));
+
 beforeEach(() => {
   mockStorageMap.clear();
   jest.clearAllMocks();

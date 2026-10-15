@@ -65,7 +65,8 @@
         "expo",
         "expo-constants",
         "expo-location",
-        "expo-notifications"
+        "expo-notifications",
+        "expo-dev-client"
       ]
     }
   },
