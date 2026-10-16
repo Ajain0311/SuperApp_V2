@@ -200,8 +200,19 @@ public class EasebuzzPaymentService : IPaymentService
         var payment = await _db.Payments.FirstOrDefaultAsync(p =>
             p.TransactionId == transactionId || p.TransactionId == orderId);
 
+        if (payment == null)
+        {
+            return new PaymentVerificationResult
+            {
+                IsVerified = false,
+                TransactionId = transactionId,
+                Status = "FAILED",
+                Message = "Payment order not found"
+            };
+        }
+
         var hashMatchesSuccess = false;
-        if (!string.IsNullOrWhiteSpace(paymentSignature) && payment != null)
+        if (!string.IsNullOrWhiteSpace(paymentSignature) && !string.IsNullOrWhiteSpace(_salt))
         {
             var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == payment.UserId);
             var firstname = string.IsNullOrWhiteSpace(user?.FullName) ? "Customer" : user!.FullName!.Trim();
@@ -280,7 +291,7 @@ public class EasebuzzPaymentService : IPaymentService
                     if (normalizedTxnStatus == "success")
                     {
                         // Validate amount integrity if amount is returned in transaction object
-                        if (payment != null && txnItem.TryGetProperty("amount", out var amtEl))
+                        if (txnItem.TryGetProperty("amount", out var amtEl))
                         {
                             var amtStr = amtEl.ToString().Trim('"', ' ');
                             if (decimal.TryParse(amtStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var retrievedAmt))
@@ -292,39 +303,41 @@ public class EasebuzzPaymentService : IPaymentService
                                 else
                                 {
                                     _logger.LogWarning("Easebuzz transaction {TxnId} amount mismatch. DB: {DbAmount}, Gateway: {GatAmount}", transactionId, payment.Amount, retrievedAmt);
+                                    paid = false;
+                                    explicitFailure = true;
                                 }
                             }
                             else
                             {
-                                paid = true;
+                                _logger.LogWarning("Easebuzz transaction {TxnId} unparseable amount {AmtStr}. Failing closed.", transactionId, amtStr);
+                                paid = false;
+                                explicitFailure = true;
                             }
+                        }
+                        else if (hashMatchesSuccess)
+                        {
+                            paid = true;
                         }
                         else
                         {
-                            paid = true;
+                            _logger.LogWarning("Easebuzz transaction {TxnId} missing amount and unverified hash. Failing closed.", transactionId);
+                            paid = false;
+                            explicitFailure = true;
                         }
                     }
                     else if (normalizedTxnStatus is "failure" or "failed" or "dropped" or "bounced" or "usercancelled" or "user_cancelled")
                     {
                         explicitFailure = true;
+                        paid = false;
                     }
                 }
             }
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            // Non-JSON or unstructured response fallback
-            if (body.Contains("\"status\":\"success\"", StringComparison.OrdinalIgnoreCase) ||
-                body.Contains("\"txn_status\":\"success\"", StringComparison.OrdinalIgnoreCase))
-            {
-                paid = true;
-            }
-            else if (body.Contains("\"status\":\"failure\"", StringComparison.OrdinalIgnoreCase) ||
-                     body.Contains("\"status\":\"dropped\"", StringComparison.OrdinalIgnoreCase) ||
-                     body.Contains("\"status\":\"usercancelled\"", StringComparison.OrdinalIgnoreCase))
-            {
-                explicitFailure = true;
-            }
+            _logger.LogError(ex, "Failed to parse Easebuzz transaction response as JSON for {TxnId}. Failing closed.", transactionId);
+            explicitFailure = true;
+            paid = false;
         }
 
         if (payment != null && (paid || explicitFailure))
@@ -362,6 +375,8 @@ public class EasebuzzPaymentService : IPaymentService
 
     public bool VerifyCallbackHash(IDictionary<string, string> fields)
     {
+        if (string.IsNullOrWhiteSpace(_salt) || string.IsNullOrWhiteSpace(_key)) return false;
+
         fields.TryGetValue("hash", out var incoming);
         if (string.IsNullOrWhiteSpace(incoming)) return false;
 

@@ -41,6 +41,7 @@ foreach (var envPath in envCandidates)
 }
 
 var builder = WebApplication.CreateBuilder(args);
+var isProduction = string.Equals(builder.Environment.EnvironmentName, "Production", StringComparison.OrdinalIgnoreCase);
 
 // --- Database Configuration (Environment-driven & Provider-agnostic) ---
 var dbProvider = Environment.GetEnvironmentVariable("DATABASE_PROVIDER") 
@@ -66,9 +67,9 @@ else if (string.Equals(dbProvider, "Postgres", StringComparison.OrdinalIgnoreCas
         ?? builder.Configuration.GetConnectionString("SupabaseConnection")
         ?? "Host=localhost;Database=SuperAppDB;Username=postgres;Password=postgres;";
 
-    if (pgConnectionString.Contains("<LOCAL_SECRET>") || pgConnectionString.Contains("<SUPABASE_DB_PASSWORD>"))
+    if (pgConnectionString.Contains("<LOCAL_SECRET>") || pgConnectionString.Contains("<SUPABASE_DB_PASSWORD>") || pgConnectionString.Contains("YOUR_DATABASE_PASSWORD_HERE"))
     {
-        Console.WriteLine("[Database] Supabase connection string contains placeholder secrets. Falling back to InMemory provider for local development.");
+        Console.WriteLine("[Database] Database connection string contains placeholder secrets. Falling back to InMemory provider for local development.");
         builder.Services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase("SuperAppInMemoryDb"));
         dbProvider = "InMemory";
@@ -111,6 +112,16 @@ else
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET")
     ?? builder.Configuration["Jwt:Secret"] 
     ?? "SuperApp_Development_Secret_Key_2026_Must_Be_At_Least_32_Characters";
+
+if (isProduction)
+{
+    if (string.IsNullOrWhiteSpace(jwtSecret) ||
+        string.Equals(jwtSecret, "SuperApp_Development_Secret_Key_2026_Must_Be_At_Least_32_Characters", StringComparison.OrdinalIgnoreCase) ||
+        jwtSecret.Length < 32)
+    {
+        throw new InvalidOperationException("CRITICAL: Insecure or default JWT secret cannot be used in a Production environment. Configure a strong JWT_SECRET with at least 32 characters.");
+    }
+}
 
 var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER")
     ?? builder.Configuration["Jwt:Issuer"] 
@@ -166,9 +177,6 @@ builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
 builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
 builder.Services.AddScoped<MockOtpService>();
 builder.Services.AddScoped<PunjabGovOtpService>();
-
-var isProduction = string.Equals(builder.Environment.EnvironmentName, "Production", StringComparison.OrdinalIgnoreCase);
-
 if (isProduction && (string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase) || otpTestMode))
 {
     throw new InvalidOperationException("CRITICAL: MockOtpService or OTP_TEST_MODE cannot be enabled in a Production environment. Configure a live SMS provider.");
@@ -200,6 +208,12 @@ builder.Services.AddHttpClient<EasebuzzPaymentService>(client =>
 var useEasebuzz = string.Equals(paymentProvider, "Easebuzz", StringComparison.OrdinalIgnoreCase)
     && !string.IsNullOrWhiteSpace(paymentKey)
     && !string.IsNullOrWhiteSpace(paymentSalt);
+
+if (isProduction && (string.Equals(paymentProvider, "Mock", StringComparison.OrdinalIgnoreCase) || !useEasebuzz))
+{
+    throw new InvalidOperationException("CRITICAL: MockPaymentService or unconfigured payment gateway cannot be used in a Production environment. Configure Easebuzz with valid credentials.");
+}
+
 if (useEasebuzz)
 {
     builder.Services.AddScoped<IPaymentService>(sp => sp.GetRequiredService<EasebuzzPaymentService>());
@@ -219,6 +233,12 @@ var mapboxToken = Environment.GetEnvironmentVariable("MAPBOX_ACCESS_TOKEN")
 builder.Services.AddHttpClient<MapboxMapService>();
 var useMapbox = string.Equals(mapProvider, "Mapbox", StringComparison.OrdinalIgnoreCase)
     && !string.IsNullOrWhiteSpace(mapboxToken);
+
+if (isProduction && string.Equals(mapProvider, "Mapbox", StringComparison.OrdinalIgnoreCase) && !useMapbox)
+{
+    throw new InvalidOperationException("CRITICAL: Mapbox map provider is configured for Production but MAPBOX_ACCESS_TOKEN is missing.");
+}
+
 if (useMapbox)
 {
     builder.Services.AddScoped<IMapService>(sp => sp.GetRequiredService<MapboxMapService>());
@@ -289,14 +309,27 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // --- CORS (Compatible with Web SignalR credentials & Mobile) ---
+var configuredOrigins = builder.Configuration.GetSection("AppSettings:CorsAllowedOrigins").Get<string[]>()
+    ?? new[] { "https://makemytree.duckdns.org", "http://localhost:8081", "http://127.0.0.1:8081" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.SetIsOriginAllowed(_ => true)
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
+        if (isProduction && configuredOrigins != null && configuredOrigins.Length > 0)
+        {
+            policy.WithOrigins(configuredOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
+        else
+        {
+            policy.SetIsOriginAllowed(_ => true)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
     });
 });
 

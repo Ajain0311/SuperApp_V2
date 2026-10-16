@@ -30,14 +30,20 @@ public class TokenService : ITokenService
             claims.Add(new Claim(ClaimTypes.Role, role));
         }
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
-            _config["Jwt:Secret"] ?? "SuperApp_Development_Secret_Key_2026_Must_Be_At_Least_32_Characters"));
+        var secret = Environment.GetEnvironmentVariable("JWT_SECRET")
+            ?? _config["Jwt:Secret"]
+            ?? "SuperApp_Development_Secret_Key_2026_Must_Be_At_Least_32_Characters";
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+        var issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? _config["Jwt:Issuer"] ?? "SuperApp";
+        var audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? _config["Jwt:Audience"] ?? "SuperApp";
+
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"] ?? "SuperApp",
-            audience: _config["Jwt:Audience"] ?? "SuperApp",
+            issuer: issuer,
+            audience: audience,
             claims: claims,
             expires: DateTime.UtcNow.AddDays(30),
             signingCredentials: creds
