@@ -9,6 +9,16 @@ public class MockPaymentService : IPaymentService
 
     public MockPaymentService(AppDbContext db)
     {
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+        if (isProd)
+        {
+            throw new InvalidOperationException("MockPaymentService is strictly forbidden in Production environment.");
+        }
+        var provider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+        if (!string.IsNullOrEmpty(provider) && !string.Equals(provider, "Mock", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"MockPaymentService is strictly disabled when PAYMENT_PROVIDER is '{provider}'. Production payment gateway must be used.");
+        }
         _db = db;
     }
 
@@ -53,12 +63,20 @@ public class MockPaymentService : IPaymentService
     public async Task<PaymentVerificationResult> VerifyPaymentAsync(string transactionId, string orderId, string paymentSignature)
     {
         var payment = _db.Payments.FirstOrDefault(p => p.TransactionId == transactionId);
-        if (payment != null)
+        if (payment == null)
         {
-            payment.Status = "PAID";
-            payment.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            return new PaymentVerificationResult
+            {
+                IsVerified = false,
+                TransactionId = transactionId,
+                Status = "FAILED",
+                Message = "Payment order not found"
+            };
         }
+
+        payment.Status = "PAID";
+        payment.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
 
         return new PaymentVerificationResult
         {

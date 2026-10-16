@@ -511,4 +511,158 @@ public class FoodDeliveryAndPaymentTests
             Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
         }
     }
+
+    [Fact]
+    public async Task CreateOrder_WithoutAuth_ReturnsUnauthorized()
+    {
+        var db = NewDb();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var controller = new SuperApp.API.Controllers.PaymentsController(new MockPaymentService(db), db, config);
+        // DefaultHttpContext with no User claims
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+        var result = await controller.CreateOrder(new CreatePaymentRequest
+        {
+            Module = "FOOD",
+            ReceiptId = "50",
+            Amount = 100
+        });
+
+        var unauth = Assert.IsType<UnauthorizedObjectResult>(result.Result);
+        var resp = Assert.IsType<ApiResponse<PaymentOrderResult>>(unauth.Value);
+        Assert.False(resp.Success);
+    }
+
+    [Fact]
+    public async Task CreateOrder_BelongingToAnotherUser_ReturnsForbid()
+    {
+        var db = NewDb();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var controller = new SuperApp.API.Controllers.PaymentsController(new MockPaymentService(db), db, config);
+
+        // Order owned by User 1
+        db.FoodOrders.Add(new FoodOrder
+        {
+            Id = 55,
+            OrderNumber = "FO-OWN55",
+            UserId = 1,
+            RestaurantId = 1,
+            PaymentMethod = "ONLINE",
+            PaymentStatus = "PENDING_PAYMENT",
+            GrandTotal = 250,
+            Status = OrderStatus.Pending
+        });
+        await db.SaveChangesAsync();
+
+        // Calling as User 2 (not admin)
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "2"),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var result = await controller.CreateOrder(new CreatePaymentRequest
+        {
+            Module = "FOOD",
+            ReceiptId = "55",
+            Amount = 250
+        });
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task VerifyPayment_WithoutAuth_ReturnsUnauthorized()
+    {
+        var db = NewDb();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var controller = new SuperApp.API.Controllers.PaymentsController(new MockPaymentService(db), db, config);
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+        var result = await controller.VerifyPayment(new VerifyPaymentRequest
+        {
+            TransactionId = "txn-12345"
+        });
+
+        var unauth = Assert.IsType<UnauthorizedObjectResult>(result.Result);
+        var resp = Assert.IsType<ApiResponse<PaymentVerificationResult>>(unauth.Value);
+        Assert.False(resp.Success);
+    }
+
+    [Fact]
+    public async Task VerifyPayment_BelongingToAnotherUser_ReturnsForbid()
+    {
+        var db = NewDb();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var controller = new SuperApp.API.Controllers.PaymentsController(new MockPaymentService(db), db, config);
+
+        // Payment owned by User 1
+        db.Payments.Add(new Payment
+        {
+            Id = 101,
+            UserId = 1,
+            Module = "FOOD",
+            OrderId = 55,
+            Amount = 250,
+            PaymentMethod = "UPI",
+            TransactionId = "txn-secret-101",
+            Status = "PENDING",
+            CreatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        // Calling as User 2 (not admin)
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "2"),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var result = await controller.VerifyPayment(new VerifyPaymentRequest
+        {
+            TransactionId = "txn-secret-101"
+        });
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public void MockPaymentService_InProduction_ThrowsException()
+    {
+        var origEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+        try
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Mock");
+
+            var db = NewDb();
+            Assert.Throws<InvalidOperationException>(() => new MockPaymentService(db));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", origEnv);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
+        }
+    }
+
+    [Fact]
+    public async Task MockPaymentService_VerifyPayment_NonExistentTxn_FailsClosed()
+    {
+        var db = NewDb();
+        var service = new MockPaymentService(db);
+        var result = await service.VerifyPaymentAsync("non-existent-txn-id", "", "");
+
+        Assert.False(result.IsVerified);
+        Assert.Equal("FAILED", result.Status);
+        Assert.Contains("not found", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -118,4 +118,152 @@ public class AuthTests
             Environment.SetEnvironmentVariable("OTP_PROVIDER", origProvider);
         }
     }
+
+    [Fact]
+    public async Task AdminLogin_WithAdmin123_FailsWhenPasswordDoesNotMatch()
+    {
+        // Regression test verifying removal of hardcoded Admin@123 backdoor
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        using var db = new SuperApp.API.Data.AppDbContext(options);
+
+        var adminRole = new Role { Id = 1, Name = RoleNames.Admin };
+        db.Roles.Add(adminRole);
+
+        var adminUser = new User
+        {
+            Id = 10,
+            MobileNumber = "9876543210",
+            FullName = "Legit Admin",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("RealStrongPassword!2026"),
+            IsActive = true
+        };
+        db.Users.Add(adminUser);
+        db.UserRoles.Add(new UserRole { UserId = 10, RoleId = 1 });
+        await db.SaveChangesAsync();
+
+        var otpService = new MockOtpService(db);
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var tokenService = new TokenService(config);
+        var controller = new SuperApp.API.Controllers.AuthController(db, otpService, tokenService);
+
+        var result = await controller.AdminLogin(new SuperApp.API.DTOs.AdminLoginRequest
+        {
+            MobileNumber = "9876543210",
+            Password = "Admin@123", // Backdoor attempt
+            OtpCode = "123456"
+        });
+
+        var badReq = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result.Result);
+        var res = Assert.IsType<SuperApp.API.DTOs.AuthResponse>(badReq.Value);
+        Assert.False(res.Success);
+        Assert.Equal("Invalid password", res.Message);
+
+        // Verify password hash in DB was NOT overwritten
+        var freshUser = await db.Users.FindAsync((long)10);
+        Assert.True(BCrypt.Net.BCrypt.Verify("RealStrongPassword!2026", freshUser!.PasswordHash));
+        Assert.False(BCrypt.Net.BCrypt.Verify("Admin@123", freshUser!.PasswordHash));
+    }
+
+    [Fact]
+    public async Task SendOtp_InProduction_NeverReturnsDevOtp()
+    {
+        var origEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var origProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER");
+        try
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", "PunjabGov");
+
+            var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var db = new SuperApp.API.Data.AppDbContext(options);
+
+            var fakeOtpService = new MockOtpServiceForProdTest();
+            var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+            var tokenService = new TokenService(config);
+            var controller = new SuperApp.API.Controllers.AuthController(db, fakeOtpService, tokenService);
+
+            var result = await controller.SendOtp(new SuperApp.API.DTOs.SendOtpRequest
+            {
+                MobileNumber = "9876543210"
+            });
+
+            var okResult = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
+            var res = Assert.IsType<SuperApp.API.DTOs.SendOtpResponse>(okResult.Value);
+            Assert.True(res.Success);
+            Assert.Null(res.DevOtp); // Must be strictly null in Production
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", origEnv);
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", origProvider);
+        }
+    }
+
+    [Fact]
+    public void ProductionSecurityValidator_RejectsWeakOrDefaultJwtInProduction()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret(null, true));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret("", true));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret("short_secret_under_32_chars", true));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret(SuperApp.API.Services.ProductionSecurityValidator.DefaultDevJwtSecret, true));
+
+        // Allowed in non-production
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret(SuperApp.API.Services.ProductionSecurityValidator.DefaultDevJwtSecret, false);
+
+        // Allowed in production with strong unique 32+ char key
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret("a_secure_production_secret_key_with_proper_length_123456", true);
+    }
+
+    [Fact]
+    public void ProductionSecurityValidator_RejectsMockPaymentOrMissingCredentialsInProduction()
+    {
+        // Rejects Mock provider
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Mock", null, null, true));
+
+        // Rejects Easebuzz with missing key or salt
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Easebuzz", "key123", "", true));
+
+        // Allowed in non-production
+        SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Mock", null, null, false);
+
+        // Allowed in production with Easebuzz and credentials
+        SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Easebuzz", "live_key", "live_salt", true);
+    }
+
+    [Fact]
+    public void ProductionSecurityValidator_RejectsMockOtpOrTestModeInProduction()
+    {
+        // Rejects Mock OTP
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("Mock", false, true));
+
+        // Rejects test mode OTP
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("PunjabGov", true, true));
+
+        // Allowed in non-production
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("Mock", true, false);
+
+        // Allowed in production with live provider and test mode off
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("PunjabGov", false, true);
+    }
+
+    private class MockOtpServiceForProdTest : IOtpService
+    {
+        public Task<string> GenerateAndSendOtpAsync(string mobileNumber, string purpose = "LOGIN") => Task.FromResult("999888");
+        public Task<bool> VerifyOtpAsync(string mobileNumber, string otpCode, string purpose = "LOGIN") => Task.FromResult(true);
+    }
 }

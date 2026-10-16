@@ -24,12 +24,12 @@ public class PaymentsController : ControllerBase
         _configuration = configuration;
     }
 
-    private long GetCurrentUserId()
+    private long? GetCurrentUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier);
         if (claim != null && long.TryParse(claim.Value, out var id))
             return id;
-        return 1;
+        return null;
     }
 
     private (string configured, string active, string? key, bool hasCredentials, string mode) ResolveKit()
@@ -75,40 +75,45 @@ public class PaymentsController : ControllerBase
         }));
     }
 
-    [AllowAnonymous]
+    [Authorize]
     [HttpPost("create-order")]
     public async Task<ActionResult<ApiResponse<PaymentOrderResult>>> CreateOrder([FromBody] CreatePaymentRequest request)
     {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
-        long? authenticatedUserId = (claim != null && long.TryParse(claim.Value, out var authId)) ? authId : null;
-        var userId = authenticatedUserId ?? 1;
+        var authenticatedUserId = GetCurrentUserId();
+        if (!authenticatedUserId.HasValue)
+            return Unauthorized(ApiResponse<PaymentOrderResult>.Fail("Authentication required"));
+        var userId = authenticatedUserId.Value;
 
         decimal authoritativeAmount = request.Amount;
         if (string.Equals(request.Module, "FOOD", StringComparison.OrdinalIgnoreCase) && long.TryParse(request.ReceiptId, out var foodOrderId))
         {
             var foodOrder = await _db.FoodOrders.FirstOrDefaultAsync(o => o.Id == foodOrderId);
-            if (foodOrder != null)
+            if (foodOrder == null)
             {
-                if (authenticatedUserId.HasValue && foodOrder.UserId != authenticatedUserId.Value && !User.IsInRole(RoleNames.Admin))
-                {
-                    return Forbid();
-                }
-                authoritativeAmount = foodOrder.GrandTotal;
-                userId = foodOrder.UserId;
+                return NotFound(ApiResponse<PaymentOrderResult>.Fail("Food order not found"));
             }
+            if (foodOrder.UserId != userId && !User.IsInRole(RoleNames.Admin))
+            {
+                return Forbid();
+            }
+            authoritativeAmount = foodOrder.GrandTotal;
         }
         else if (string.Equals(request.Module, "RIDE", StringComparison.OrdinalIgnoreCase) && long.TryParse(request.ReceiptId, out var rideId))
         {
             var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == rideId);
-            if (ride != null)
+            if (ride == null)
             {
-                if (authenticatedUserId.HasValue && ride.UserId != authenticatedUserId.Value && !User.IsInRole(RoleNames.Admin))
-                {
-                    return Forbid();
-                }
-                authoritativeAmount = ride.ActualFare ?? ride.EstimatedFare;
-                userId = ride.UserId;
+                return NotFound(ApiResponse<PaymentOrderResult>.Fail("Ride not found"));
             }
+            if (ride.UserId != userId && !User.IsInRole(RoleNames.Admin))
+            {
+                return Forbid();
+            }
+            authoritativeAmount = ride.ActualFare ?? ride.EstimatedFare;
+        }
+        else
+        {
+            return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Invalid payment module or receipt ID"));
         }
 
         if (authoritativeAmount < 1.00m)
@@ -129,12 +134,25 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<PaymentOrderResult>.Ok(result, "Payment order created"));
     }
 
-    [AllowAnonymous]
+    [Authorize]
     [HttpPost("verify")]
     public async Task<ActionResult<ApiResponse<PaymentVerificationResult>>> VerifyPayment([FromBody] VerifyPaymentRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.TransactionId))
             return BadRequest(ApiResponse<PaymentVerificationResult>.Fail("TransactionId is required"));
+
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<PaymentVerificationResult>.Fail("Authentication required"));
+
+        var payment = await _db.Payments.FirstOrDefaultAsync(p =>
+            p.TransactionId == request.TransactionId || p.TransactionId == request.OrderId);
+
+        if (payment == null)
+            return NotFound(ApiResponse<PaymentVerificationResult>.Fail("Payment order not found"));
+
+        if (payment.UserId != userId.Value && !User.IsInRole(RoleNames.Admin))
+            return Forbid();
 
         var result = await _paymentService.VerifyPaymentAsync(
             request.TransactionId,
@@ -149,7 +167,7 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<PaymentVerificationResult>.Ok(result));
     }
 
-    [AllowAnonymous]
+    [Authorize]
     [HttpPost("mock-complete")]
     public async Task<ActionResult<ApiResponse<PaymentVerificationResult>>> MockComplete(
         [FromBody] MockCompletePaymentRequest request)
@@ -172,6 +190,10 @@ public class PaymentsController : ControllerBase
                 "Live gateway is active. Complete payment in Easebuzz Checkout."));
         }
 
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<PaymentVerificationResult>.Fail("Authentication required"));
+
         if (string.IsNullOrWhiteSpace(request.TransactionId))
             return BadRequest(ApiResponse<PaymentVerificationResult>.Fail("TransactionId is required"));
 
@@ -180,6 +202,9 @@ public class PaymentsController : ControllerBase
 
         if (payment == null)
             return NotFound(ApiResponse<PaymentVerificationResult>.Fail("Payment order not found"));
+
+        if (payment.UserId != userId.Value && !User.IsInRole(RoleNames.Admin))
+            return Forbid();
 
         if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
@@ -231,7 +256,7 @@ public class PaymentsController : ControllerBase
             hashOk = ease.VerifyCallbackHash(fields);
 
         if (!string.IsNullOrWhiteSpace(txnid))
-            await ApplyGatewayFieldsAsync(txnid, status, hashOk);
+            await ApplyGatewayFieldsAsync(txnid, status, hashOk, fields);
 
         var paidFlag = string.Equals(status, "success", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
         var html = $@"<!DOCTYPE html><html><head><meta charset='utf-8'><title>Payment</title></head>
@@ -281,16 +306,17 @@ setTimeout(function(){{ window.close(); }}, 1200);
         fields.TryGetValue("txnid", out var txnid);
         fields.TryGetValue("status", out var status);
         if (!string.IsNullOrWhiteSpace(txnid))
-            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified);
+            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified, fields);
 
         return Ok(new { received = true });
     }
 
     /// <summary>
-    /// Idempotent gateway apply. Success becomes PAID only when the callback hash was verified.
+    /// Idempotent gateway apply. Success becomes PAID only when callback hash was verified
+    /// and callback amount matches the stored payment amount.
     /// Unknown statuses are left unchanged.
     /// </summary>
-    private async Task ApplyGatewayFieldsAsync(string txnid, string status, bool hashVerified)
+    private async Task ApplyGatewayFieldsAsync(string txnid, string status, bool hashVerified, IDictionary<string, string>? fields = null)
     {
         var payment = await _db.Payments.FirstOrDefaultAsync(p => p.TransactionId == txnid);
         if (payment == null)
@@ -306,6 +332,20 @@ setTimeout(function(){{ window.close(); }}, 1200);
         {
             if (!hashVerified)
                 return;
+
+            // Enforce amount parity if gateway provides amount
+            if (fields != null && (fields.TryGetValue("amount", out var amtStr) || fields.TryGetValue("net_amount_debit", out amtStr)))
+            {
+                if (decimal.TryParse(amtStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var callbackAmount))
+                {
+                    if (Math.Abs(callbackAmount - payment.Amount) > 0.01m)
+                    {
+                        // Amount mismatch! Fail closed to prevent underpayment spoofing.
+                        return;
+                    }
+                }
+            }
+
             payment.Status = "PAID";
         }
         else if (normalized is "usercancelled" or "user_cancelled" or "cancelled")
@@ -326,12 +366,16 @@ setTimeout(function(){{ window.close(); }}, 1200);
         await FoodPaymentSync.ApplyAsync(_db, txnid, payment.Status == "PAID");
     }
 
+    [Authorize]
     [HttpGet("my-payments")]
     public async Task<ActionResult<ApiResponse<List<Payment>>>> GetMyPayments()
     {
         var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<List<Payment>>.Fail("Authentication required"));
+
         var payments = await _db.Payments
-            .Where(p => p.UserId == userId)
+            .Where(p => p.UserId == userId.Value)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync();
 

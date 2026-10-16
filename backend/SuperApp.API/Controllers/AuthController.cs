@@ -51,6 +51,7 @@ public class AuthController : ControllerBase
         string devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
         bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
 
         return Ok(new SendOtpResponse
         {
@@ -60,7 +61,7 @@ public class AuthController : ControllerBase
                 : "OTP sent successfully to your mobile number",
             IsNewUser = isNewUser,
             IsAdmin = isAdmin,
-            DevOtp = isRealSms ? null : devOtp
+            DevOtp = (isProd || isRealSms) ? null : devOtp
         });
     }
 
@@ -176,14 +177,6 @@ public class AuthController : ControllerBase
             }
         }
 
-        // Self-healing: If user is admin and enters Admin@123, reconcile password hash in Supabase
-        if (!isPasswordValid && request.Password == "Admin@123")
-        {
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123");
-            await _db.SaveChangesAsync();
-            isPasswordValid = true;
-        }
-
         if (!isPasswordValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid password" });
 
@@ -242,13 +235,14 @@ public class AuthController : ControllerBase
         string devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
         bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
 
         return Ok(new SendOtpResponse
         {
             Success = true,
             Message = "OTP sent successfully for password reset",
             IsAdmin = true,
-            DevOtp = isRealSms ? null : devOtp
+            DevOtp = (isProd || isRealSms) ? null : devOtp
         });
     }
 

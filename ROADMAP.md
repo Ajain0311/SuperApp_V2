@@ -18,31 +18,38 @@
 >    - Mark finished tasks with `[x]` and record verification details.
 >    - Add any new tasks or blockers discovered during work.
 >    - Update the **Last Session Handoff** section at the bottom.
-   - **Auto-Commit & Push:** Automatically `git commit` and `git push` changes without asking for permission.
+>    - **Auto-Commit & Push:** Automatically `git commit` and `git push` changes without asking for permission.
 
 ---
 
 ## 📌 Last Session Handoff
 
-- **Date**: October 15, 2026
-- **Status**: Git Branch Strategy & Production Architecture Separation:
-  - **Branch Architecture Established**:
-    - `main`: Clean, stable, production-ready application branch. Hosts production deployment (`.github/workflows/deploy.yml`) and minimal CI checks. Direct pushes protected; merges via PR only.
-    - `dev`: Primary active development & testing branch. Houses the complete codebase, multi-agent regression framework, continuous 24/7 Playwright browser suite (`.github/workflows/playwright-e2e-nonstop.yml`), and overnight volume testing (`.github/workflows/overnight-testing.yml`).
-  - **VM Deployment Isolation**: Commits on `dev` do NOT trigger production VM deployments. `deploy.yml` is restricted to push events on `main`.
-  - **Public Store Compliance Website**: Verified live Vercel website (`Ajain0311/superapp-website`) at `https://superapp-website-ashen.vercel.app` with 100% active HTTP 200 routes:
-    - Privacy Policy: `https://superapp-website-ashen.vercel.app/privacy-policy`
-    - Terms & Conditions: `https://superapp-website-ashen.vercel.app/terms-and-conditions`
-    - Account Deletion: `https://superapp-website-ashen.vercel.app/delete-account`
-    - Grievance & Contact: `https://superapp-website-ashen.vercel.app/contact`
-- **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md).
-  - FIX-19: Easebuzz live dashboard & webhook verification [BLOCKED_EXTERNAL_DEPENDENCY]
-  - FIX-20: Google Play Store upload checklist (.aab) [BLOCKED_EXTERNAL_DEPENDENCY]
-  - GitHub Branch Protection Rule on `main`: Block direct push, require PR & passing CI [MANUAL_ACTION_REQUIRED in GitHub Repo Settings]
-- **Verification Suites**:
-  - `dotnet test backend/SuperApp.sln`: 115 Passed / 115 Total (100%)
-  - `npx tsc --noEmit`: 0 Errors (100% clean)
-  - `npm test -- --watchAll=false`: 16 Suites Passed, 88 Tests Passed (100%)
-  - `npx expo-doctor`: 21/21 checks passed (100% clean)
-  - `npm run test:agents:self`: 14 Passed / 14 Total (100%)
-
+- **Date**: October 16, 2026
+- **Status**: Production-Readiness Security Audit, Vulnerability Elimination & Auth Hardening:
+  - **Security Audit & Hardening Completed**:
+    1. **Authentication Backdoor Removed**: Eliminated hardcoded `Admin@123` password override/self-healing bypass from `AuthController.cs`. Regression tested with non-matching passwords and DB hash preservation.
+    2. **Production OTP DevOtp Leak Guard**: Enforced `DevOtp = null` strictly when `ASPNETCORE_ENVIRONMENT=Production` in both `SendOtp` and `ForgotPassword`.
+    3. **JWT Production Enforcement**: Added startup validator in `Program.cs` requiring `JWT_SECRET` >= 32 characters and rejecting development fallback key in Production mode. Unified `TokenService` resolution with env vars.
+    4. **Payment Gateway Authorization & Ownership Isolation**:
+       - Added `[Authorize]` and current-user ownership validation to `PaymentsController.CreateOrder`, `VerifyPayment`, `MockComplete`, and `GetMyPayments`.
+       - Enforced cross-user isolation: attempting to create orders or verify payments for another user returns HTTP 403 Forbidden.
+    5. **Easebuzz Gateway Fail-Closed Hardening**:
+       - Required exact amount parity between Easebuzz status response and database payment record (mismatch now fails closed to `FAILED`).
+       - Eliminated unauthenticated JSON parsing fallbacks in `EasebuzzPaymentService.VerifyPaymentAsync`.
+       - Enforced non-empty `_salt` and `_key` verification in callback hashes.
+    6. **Production Provider Lockdown**:
+       - Added production guards to `MockPaymentService` constructor and `Program.cs` preventing silent fallback to mock payments.
+       - Enforced map provider checks preventing silent fallback in production.
+       - Restricted CORS in production mode to configured `CorsAllowedOrigins`.
+    7. **Credential Sanitization in Tracked Files**:
+       - Removed plaintext DB credentials, Easebuzz merchant keys, and SMS gateway server keys from `appsettings.json` and `.env.example`, replacing them with template placeholders. Preserved local developer runtime credentials in untracked `.env`.
+  - **Active Bug Backlog**: Detailed task list in [`PENDING_FIXES.md`](PENDING_FIXES.md).
+    - FIX-19: Easebuzz live credentials (`PAYMENT_KEY`, `PAYMENT_SECRET`, live webhook callback setup in merchant dashboard) [BLOCKED_EXTERNAL_DEPENDENCY]
+    - FIX-20: Google Play Store upload checklist (.aab) [BLOCKED_EXTERNAL_DEPENDENCY]
+    - Android Native Device Testing: Physical device or AVD system image download for execution [BLOCKED_HARDWARE_DEPENDENCY]
+  - **Verification Suites**:
+    - `dotnet test backend/SuperApp.sln`: 126 Passed / 126 Total (100% across all 17 test suites, +11 new security tests)
+    - `npx tsc --noEmit`: 0 Errors (100% clean)
+    - `npm test -- --watchAll=false`: 16 Suites Passed, 88 Tests Passed (100%)
+    - `npx expo-doctor`: 21/21 checks passed (100% clean)
+    - `npm run test:agents:self`: 14 Passed / 14 Total (100%)
