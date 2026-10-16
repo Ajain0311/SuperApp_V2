@@ -102,6 +102,88 @@ describe('LocationService - Device GPS, Permissions & Geocoding', () => {
       const loc = await locationService.getCurrentLocation();
       expect(loc.latitude).toBe(LocationService.defaultLocation.latitude);
       expect(loc.longitude).toBe(LocationService.defaultLocation.longitude);
+      expect(loc.isFallback).toBe(true);
+    });
+
+    it('throws error when throwOnError is true and location services are disabled', async () => {
+      (Location.hasServicesEnabledAsync as jest.Mock).mockResolvedValueOnce(false);
+      await expect(locationService.getCurrentLocation({ throwOnError: true })).rejects.toThrow(
+        'Location services are disabled on your device. Please turn on GPS.'
+      );
+    });
+
+    it('throws error when throwOnError is true and permission is denied', async () => {
+      (Location.hasServicesEnabledAsync as jest.Mock).mockResolvedValueOnce(true);
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+        status: Location.PermissionStatus.DENIED,
+      });
+      await expect(locationService.getCurrentLocation({ throwOnError: true })).rejects.toThrow(
+        'Location permission denied.'
+      );
+    });
+
+    it('throws error when throwOnError is true and GPS times out', async () => {
+      (Location.hasServicesEnabledAsync as jest.Mock).mockResolvedValueOnce(true);
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+        status: Location.PermissionStatus.GRANTED,
+      });
+      (Location.getCurrentPositionAsync as jest.Mock).mockRejectedValueOnce(new Error('Hardware timeout'));
+
+      await expect(locationService.getCurrentLocation({ throwOnError: true })).rejects.toThrow(
+        'Hardware timeout'
+      );
+    });
+
+    it('uses last known position if recent (< maxAgeMs)', async () => {
+      (Location.hasServicesEnabledAsync as jest.Mock).mockResolvedValueOnce(true);
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+        status: Location.PermissionStatus.GRANTED,
+      });
+      ((Location as any).getLastKnownPositionAsync as jest.Mock).mockResolvedValueOnce({
+        coords: {
+          latitude: 19.076,
+          longitude: 72.8777,
+          accuracy: 15,
+          altitude: 10,
+          speed: 0,
+          heading: 0,
+        },
+        timestamp: Date.now() - 5000,
+      });
+      (Location.reverseGeocodeAsync as jest.Mock).mockResolvedValueOnce([
+        { name: 'Bandra', city: 'Mumbai', region: 'Maharashtra' },
+      ]);
+
+      const loc = await locationService.getCurrentLocation({ throwOnError: true });
+      expect(loc.latitude).toBe(19.076);
+      expect(loc.longitude).toBe(72.8777);
+      expect(loc.formattedAddress).toContain('Bandra');
+      expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+    });
+
+    it('preserves valid coordinates with formatted coordinate fallback when reverse geocoding fails', async () => {
+      (Location.hasServicesEnabledAsync as jest.Mock).mockResolvedValueOnce(true);
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+        status: Location.PermissionStatus.GRANTED,
+      });
+      (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValueOnce({
+        coords: {
+          latitude: 12.9716,
+          longitude: 77.5946,
+          accuracy: 5,
+          altitude: 900,
+          speed: 0,
+          heading: 0,
+        },
+        timestamp: Date.now(),
+      });
+      (Location.reverseGeocodeAsync as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+
+      const loc = await locationService.getCurrentLocation({ throwOnError: true });
+      expect(loc.latitude).toBe(12.9716);
+      expect(loc.longitude).toBe(77.5946);
+      expect(loc.formattedAddress).toBe('12.9716°, 77.5946°');
+      expect(loc.isFallback).toBe(false);
     });
   });
 

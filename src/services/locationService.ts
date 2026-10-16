@@ -106,35 +106,74 @@ export class LocationService {
   async getCurrentLocation(options?: {
     accuracy?: Location.Accuracy;
     timeoutMs?: number;
+    throwOnError?: boolean;
+    maxAgeMs?: number;
   }): Promise<LocationCoordinates> {
     const timeoutMs = options?.timeoutMs ?? 10000;
     const accuracy = options?.accuracy ?? Location.Accuracy.Balanced;
+    const throwOnError = options?.throwOnError ?? false;
+    const maxAgeMs = options?.maxAgeMs ?? 60000;
 
     const enabled = await this.isLocationServicesEnabled();
     if (!enabled) {
-      console.warn('[LocationService] Location services are disabled. Using fallback location.');
+      console.warn('[LocationService] Location services are disabled.');
+      if (throwOnError) {
+        throw new Error('Location services are disabled on your device. Please turn on GPS.');
+      }
       return LocationService.defaultLocation;
     }
 
     const permission = await this.requestPermission();
     if (permission !== 'granted') {
-      console.warn('[LocationService] Permission not granted. Using fallback location.');
+      console.warn('[LocationService] Permission not granted.');
+      if (throwOnError) {
+        throw new Error('Location permission denied.');
+      }
       return LocationService.defaultLocation;
     }
 
     let timeoutId: any;
     try {
-      const locationPromise = Location.getCurrentPositionAsync({ accuracy });
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Location request timed out')), timeoutMs);
-      });
+      // Fast path: Check last known position if recent (< maxAgeMs)
+      let position: Location.LocationObject | null = null;
+      if (typeof Location.getLastKnownPositionAsync === 'function') {
+        try {
+          const lastKnown = await Location.getLastKnownPositionAsync({
+            maxAge: maxAgeMs,
+            requiredAccuracy: 100,
+          });
+          if (lastKnown && Date.now() - lastKnown.timestamp <= maxAgeMs) {
+            position = lastKnown;
+          }
+        } catch (lastKnownErr) {
+          // Non-fatal, continue to active GPS retrieval
+          console.debug?.('[LocationService] getLastKnownPositionAsync skipped:', lastKnownErr);
+        }
+      }
 
-      const position = await Promise.race([locationPromise, timeoutPromise]);
-      clearTimeout(timeoutId);
+      if (!position) {
+        const locationPromise = Location.getCurrentPositionAsync({ accuracy });
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Location request timed out')), timeoutMs);
+        });
+
+        position = await Promise.race([locationPromise, timeoutPromise]);
+      }
+
+      if (timeoutId) clearTimeout(timeoutId);
 
       const { latitude, longitude, accuracy: posAccuracy, altitude, speed, heading } = position.coords;
 
-      const formattedAddress = await this.reverseGeocode(latitude, longitude);
+      // Reverse geocode with graceful coordinate fallback so valid coordinates are never discarded
+      let formattedAddress = `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`;
+      try {
+        const reverseResolved = await this.reverseGeocode(latitude, longitude);
+        if (reverseResolved && reverseResolved.trim()) {
+          formattedAddress = reverseResolved;
+        }
+      } catch (geoErr) {
+        console.warn('[LocationService] Reverse geocode failed, using coordinates:', geoErr);
+      }
 
       return {
         latitude,
@@ -145,10 +184,14 @@ export class LocationService {
         speed,
         heading,
         timestamp: position.timestamp,
+        isFallback: false,
       };
     } catch (error) {
       if (timeoutId) clearTimeout(timeoutId);
-      console.warn('[LocationService] getCurrentLocation failed, returning fallback:', error);
+      console.warn('[LocationService] getCurrentLocation failed:', error);
+      if (throwOnError) {
+        throw error instanceof Error ? error : new Error(String(error));
+      }
       return LocationService.defaultLocation;
     }
   }

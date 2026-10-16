@@ -177,6 +177,7 @@ jest.mock('expo-location', () => {
       },
       timestamp: 1726500000000,
     }),
+    getLastKnownPositionAsync: jest.fn().mockResolvedValue(null),
     watchPositionAsync: jest.fn().mockResolvedValue({
       remove: jest.fn(),
     }),
