@@ -256,7 +256,7 @@ public class PaymentsController : ControllerBase
             hashOk = ease.VerifyCallbackHash(fields);
 
         if (!string.IsNullOrWhiteSpace(txnid))
-            await ApplyGatewayFieldsAsync(txnid, status, hashOk);
+            await ApplyGatewayFieldsAsync(txnid, status, hashOk, fields);
 
         var paidFlag = string.Equals(status, "success", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
         var html = $@"<!DOCTYPE html><html><head><meta charset='utf-8'><title>Payment</title></head>
@@ -306,16 +306,17 @@ setTimeout(function(){{ window.close(); }}, 1200);
         fields.TryGetValue("txnid", out var txnid);
         fields.TryGetValue("status", out var status);
         if (!string.IsNullOrWhiteSpace(txnid))
-            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified);
+            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified, fields);
 
         return Ok(new { received = true });
     }
 
     /// <summary>
-    /// Idempotent gateway apply. Success becomes PAID only when the callback hash was verified.
+    /// Idempotent gateway apply. Success becomes PAID only when callback hash was verified
+    /// and callback amount matches the stored payment amount.
     /// Unknown statuses are left unchanged.
     /// </summary>
-    private async Task ApplyGatewayFieldsAsync(string txnid, string status, bool hashVerified)
+    private async Task ApplyGatewayFieldsAsync(string txnid, string status, bool hashVerified, IDictionary<string, string>? fields = null)
     {
         var payment = await _db.Payments.FirstOrDefaultAsync(p => p.TransactionId == txnid);
         if (payment == null)
@@ -331,6 +332,20 @@ setTimeout(function(){{ window.close(); }}, 1200);
         {
             if (!hashVerified)
                 return;
+
+            // Enforce amount parity if gateway provides amount
+            if (fields != null && (fields.TryGetValue("amount", out var amtStr) || fields.TryGetValue("net_amount_debit", out amtStr)))
+            {
+                if (decimal.TryParse(amtStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var callbackAmount))
+                {
+                    if (Math.Abs(callbackAmount - payment.Amount) > 0.01m)
+                    {
+                        // Amount mismatch! Fail closed to prevent underpayment spoofing.
+                        return;
+                    }
+                }
+            }
+
             payment.Status = "PAID";
         }
         else if (normalized is "usercancelled" or "user_cancelled" or "cancelled")

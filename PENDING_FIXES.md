@@ -428,7 +428,7 @@ When anyone joins this project:
   6. **Mock Provider Lockdown:** Added constructor guards in `MockPaymentService` and startup guards in `Program.cs` preventing silent fallback in production.
   7. **Credential Sanitization:** Removed all hardcoded database passwords, SMS gateway keys, and Easebuzz merchant secrets from tracked `appsettings.json` and `.env.example`.
   8. **Verification Suites:**
-     - `dotnet test backend/SuperApp.sln`: 123 Passed / 123 Total (100% across all 17 test suites, +8 new security tests)
+     - `dotnet test backend/SuperApp.sln`: 126 Passed / 126 Total (100% across all 17 test suites, +11 new security tests)
      - `npx tsc --noEmit`: 0 Errors (100% clean)
      - `npm test -- --watchAll=false`: 16 Suites Passed, 88 Tests Passed
      - `npx expo-doctor`: 21/21 checks passed

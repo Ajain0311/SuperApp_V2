@@ -111,17 +111,9 @@ else
 // --- Authentication (Environment-driven JWT) ---
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET")
     ?? builder.Configuration["Jwt:Secret"] 
-    ?? "SuperApp_Development_Secret_Key_2026_Must_Be_At_Least_32_Characters";
+    ?? ProductionSecurityValidator.DefaultDevJwtSecret;
 
-if (isProduction)
-{
-    if (string.IsNullOrWhiteSpace(jwtSecret) ||
-        string.Equals(jwtSecret, "SuperApp_Development_Secret_Key_2026_Must_Be_At_Least_32_Characters", StringComparison.OrdinalIgnoreCase) ||
-        jwtSecret.Length < 32)
-    {
-        throw new InvalidOperationException("CRITICAL: Insecure or default JWT secret cannot be used in a Production environment. Configure a strong JWT_SECRET with at least 32 characters.");
-    }
-}
+ProductionSecurityValidator.ValidateJwtSecret(jwtSecret, isProduction);
 
 var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER")
     ?? builder.Configuration["Jwt:Issuer"] 
@@ -177,10 +169,7 @@ builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
 builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
 builder.Services.AddScoped<MockOtpService>();
 builder.Services.AddScoped<PunjabGovOtpService>();
-if (isProduction && (string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase) || otpTestMode))
-{
-    throw new InvalidOperationException("CRITICAL: MockOtpService or OTP_TEST_MODE cannot be enabled in a Production environment. Configure a live SMS provider.");
-}
+ProductionSecurityValidator.ValidateOtpProvider(otpProvider, otpTestMode, isProduction);
 
 if (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
 {
@@ -209,10 +198,7 @@ var useEasebuzz = string.Equals(paymentProvider, "Easebuzz", StringComparison.Or
     && !string.IsNullOrWhiteSpace(paymentKey)
     && !string.IsNullOrWhiteSpace(paymentSalt);
 
-if (isProduction && (string.Equals(paymentProvider, "Mock", StringComparison.OrdinalIgnoreCase) || !useEasebuzz))
-{
-    throw new InvalidOperationException("CRITICAL: MockPaymentService or unconfigured payment gateway cannot be used in a Production environment. Configure Easebuzz with valid credentials.");
-}
+ProductionSecurityValidator.ValidatePaymentProvider(paymentProvider, paymentKey, paymentSalt, isProduction);
 
 if (useEasebuzz)
 {
@@ -234,10 +220,7 @@ builder.Services.AddHttpClient<MapboxMapService>();
 var useMapbox = string.Equals(mapProvider, "Mapbox", StringComparison.OrdinalIgnoreCase)
     && !string.IsNullOrWhiteSpace(mapboxToken);
 
-if (isProduction && string.Equals(mapProvider, "Mapbox", StringComparison.OrdinalIgnoreCase) && !useMapbox)
-{
-    throw new InvalidOperationException("CRITICAL: Mapbox map provider is configured for Production but MAPBOX_ACCESS_TOKEN is missing.");
-}
+ProductionSecurityValidator.ValidateMapProvider(mapProvider, mapboxToken, isProduction);
 
 if (useMapbox)
 {

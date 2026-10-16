@@ -203,6 +203,64 @@ public class AuthTests
         }
     }
 
+    [Fact]
+    public void ProductionSecurityValidator_RejectsWeakOrDefaultJwtInProduction()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret(null, true));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret("", true));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret("short_secret_under_32_chars", true));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret(SuperApp.API.Services.ProductionSecurityValidator.DefaultDevJwtSecret, true));
+
+        // Allowed in non-production
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret(SuperApp.API.Services.ProductionSecurityValidator.DefaultDevJwtSecret, false);
+
+        // Allowed in production with strong unique 32+ char key
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateJwtSecret("a_secure_production_secret_key_with_proper_length_123456", true);
+    }
+
+    [Fact]
+    public void ProductionSecurityValidator_RejectsMockPaymentOrMissingCredentialsInProduction()
+    {
+        // Rejects Mock provider
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Mock", null, null, true));
+
+        // Rejects Easebuzz with missing key or salt
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Easebuzz", "key123", "", true));
+
+        // Allowed in non-production
+        SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Mock", null, null, false);
+
+        // Allowed in production with Easebuzz and credentials
+        SuperApp.API.Services.ProductionSecurityValidator.ValidatePaymentProvider("Easebuzz", "live_key", "live_salt", true);
+    }
+
+    [Fact]
+    public void ProductionSecurityValidator_RejectsMockOtpOrTestModeInProduction()
+    {
+        // Rejects Mock OTP
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("Mock", false, true));
+
+        // Rejects test mode OTP
+        Assert.Throws<InvalidOperationException>(() =>
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("PunjabGov", true, true));
+
+        // Allowed in non-production
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("Mock", true, false);
+
+        // Allowed in production with live provider and test mode off
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("PunjabGov", false, true);
+    }
+
     private class MockOtpServiceForProdTest : IOtpService
     {
         public Task<string> GenerateAndSendOtpAsync(string mobileNumber, string purpose = "LOGIN") => Task.FromResult("999888");

@@ -258,7 +258,7 @@ public class EasebuzzPaymentService : IPaymentService
             };
         }
 
-        var paid = hashMatchesSuccess;
+        var paid = false;
         var explicitFailure = false;
 
         // Parse official Easebuzz JSON status response: { status: 1, data: { status: "success", amount: "...", ... } }
@@ -270,7 +270,12 @@ public class EasebuzzPaymentService : IPaymentService
                 ? (sProp.ValueKind == JsonValueKind.Number ? sProp.GetInt32() : (int.TryParse(sProp.GetString(), out var sp) ? sp : 0))
                 : 0;
 
-            if (rootStatus == 1 && root.TryGetProperty("data", out var dataEl))
+            if (rootStatus != 1)
+            {
+                _logger.LogWarning("Easebuzz transaction status API returned non-success root status {Status} for {TxnId}.", rootStatus, transactionId);
+                explicitFailure = true;
+            }
+            else if (root.TryGetProperty("data", out var dataEl))
             {
                 // In some API variations, data is an object or array of objects
                 JsonElement txnItem = dataEl;
