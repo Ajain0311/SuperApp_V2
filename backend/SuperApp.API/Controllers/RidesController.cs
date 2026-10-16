@@ -243,9 +243,24 @@ public class RidesController : ControllerBase
                 $"Your {ride.VehicleType} ride {ride.RideNumber} has been requested. Looking for nearby drivers...",
                 "RIDE",
                 ride.Id.ToString());
+
+            // Broadcast real push notification to ALL registered captains (regardless of online/offline status)
+            // Fire-and-forget safely so passenger booking response is fast and not delayed
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _notificationService.BroadcastRideToAllCaptainsAsync(ride);
+                }
+                catch (Exception ex)
+                {
+                    // Ensure background failure does not impact passenger booking or log sensitive data
+                    Console.WriteLine($"[PushDispatch] Error broadcasting ride {ride.Id} to captains: {ex.Message}");
+                }
+            });
         }
 
-        // Broadcast to all drivers in drivers-pool
+        // Broadcast to all drivers in drivers-pool via SignalR for connected captains
         await _rideHub.Clients.Group("drivers-pool").SendAsync("RideRequested", new
         {
             id = ride.Id,
@@ -256,6 +271,7 @@ public class RidesController : ControllerBase
             status = ride.Status,
             createdAt = ride.CreatedAt
         });
+
 
         var driverSummary = new DriverSummaryDto
         {

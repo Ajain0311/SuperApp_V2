@@ -11,6 +11,7 @@ export interface LocationCoordinates {
   speed?: number | null;
   heading?: number | null;
   timestamp?: number;
+  isFallback?: boolean;
 }
 
 export interface WatchLocationOptions {
@@ -26,7 +27,9 @@ export class LocationService {
     formattedAddress: 'Connaught Place, Central Delhi',
     accuracy: 10,
     timestamp: Date.now(),
+    isFallback: true,
   };
+
 
   private activeWatcherSubscription: Location.LocationSubscription | null = null;
 

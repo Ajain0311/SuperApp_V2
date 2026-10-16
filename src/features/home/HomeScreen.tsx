@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
@@ -25,14 +27,43 @@ function resolveBannerImage(url: string) {
   return `${origin}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
+export function resolveDeliveryAddress(payload: any): string {
+  const items = Array.isArray(payload) ? payload : [];
+  if (items.length > 0) {
+    const def = items.find((a: any) => a.isDefault) || items[0];
+    const line = [def.addressLine1, def.city].filter(Boolean).join(', ');
+    return line || 'Add delivery address';
+  }
+  return 'Add delivery address';
+}
+
 interface HomeScreenProps {
   navigation: any;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+
   const user = useAuthStore((state) => state.user);
   const [activeRide, setActiveRide] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
+  const [deliverTo, setDeliverTo] = useState<string>('Add delivery address');
+
+  useFocusEffect(
+    useCallback(() => {
+      apiClient
+        .get<any>(ApiEndpoints.common.addresses)
+        .then((res) => {
+          const payload = res?.data?.data ?? res?.data ?? res;
+          setDeliverTo(resolveDeliveryAddress(payload));
+        })
+        .catch(() => {
+          // Never substitute Connaught Place or fabricated address on failure
+          setDeliverTo('Add delivery address');
+        });
+    }, [])
+  );
+
+
 
   useEffect(() => {
     // Fetch live promotional banners
@@ -122,18 +153,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       >
         {/* Top Location Bar */}
         <View style={styles.topBar}>
-          <View style={styles.locationGroup}>
+          <TouchableOpacity
+            style={styles.locationGroup}
+            onPress={() => navigation.navigate('SavedAddresses')}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Select delivery address"
+          >
             <View style={styles.locationIconBox}>
               <Ionicons name="location-sharp" size={20} color={AppColors.error} />
             </View>
             <View style={styles.locationTextColumn}>
               <Text style={styles.deliverToCaption}>DELIVER TO</Text>
               <View style={styles.cityRow}>
-                <Text style={styles.cityName}>Connaught Place, New Delhi</Text>
+                <Text style={styles.cityName} numberOfLines={1}>{deliverTo}</Text>
                 <Ionicons name="chevron-down" size={16} color={AppColors.textSecondary} />
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
+
 
           <TouchableOpacity
             style={styles.profileAvatar}

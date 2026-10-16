@@ -11,9 +11,12 @@ import {
   Platform,
   RefreshControl,
   TextInput,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useRoute, RouteProp } from '@react-navigation/native';
 import { driverService, DriverProfile, DriverRideItem } from '../../services/driverService';
 import { signalRService } from '../../services/signalr';
 import { locationService } from '../../services/locationService';
@@ -21,8 +24,11 @@ import { useRoleStore } from '../../store/roleStore';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { MainTabParamList } from '../../navigation/types';
 
 export const DriverHomeScreen: React.FC = () => {
+
+  const route = useRoute<RouteProp<MainTabParamList, 'DriverHome'>>();
   const { activeRole } = useRoleStore();
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -36,6 +42,7 @@ export const DriverHomeScreen: React.FC = () => {
   const [startOtpInput, setStartOtpInput] = useState('');
   const [isStartingRide, setIsStartingRide] = useState(false);
   const locationWatcherRef = useRef<(() => void) | null>(null);
+  const alertedRideIdsRef = useRef<Set<number>>(new Set());
 
   const loadDriverData = useCallback(async () => {
     try {
@@ -65,6 +72,49 @@ export const DriverHomeScreen: React.FC = () => {
   useEffect(() => {
     loadDriverData();
   }, [loadDriverData]);
+
+  // AppState listener: synchronize available rides on background-to-foreground resume
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        loadDriverData();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [loadDriverData]);
+
+  // Deep-link handling: if launched via push notification with a focusRideId
+  useEffect(() => {
+    const focusRideId = route.params?.focusRideId;
+    if (!focusRideId) return;
+
+    const checkAndPromptRide = async () => {
+      try {
+        const available = await driverService.getAvailableRides();
+        const matched = available.find((r) => r.id === focusRideId);
+        if (matched) {
+          Alert.alert(
+            '🚖 Ride Request',
+            `Ride #${matched.rideNumber}\nPickup: ${matched.pickupAddress}\nDrop: ${matched.dropoffAddress}\nFare: ₹${matched.fare}`,
+            [
+              { text: 'Ignore', style: 'cancel' },
+              { text: 'Accept Trip', onPress: () => handleAcceptRide(matched.id) },
+            ]
+          );
+        } else {
+          Alert.alert('Ride Notice', 'This ride is no longer available or has already been accepted.');
+        }
+      } catch {
+        Alert.alert('Ride Notice', 'This ride is no longer available.');
+      }
+    };
+
+    checkAndPromptRide();
+  }, [route.params?.focusRideId]);
+
 
   // Real-time SignalR driver pool and active ride tracking
   useEffect(() => {
@@ -119,16 +169,20 @@ export const DriverHomeScreen: React.FC = () => {
             });
 
             if (isOnline && !activeRide) {
-              Alert.alert(
-                '🔔 New Ride Request Available!',
-                `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
-                [
-                  { text: 'Ignore', style: 'cancel' },
-                  { text: 'Accept Trip', onPress: () => handleAcceptRide(incoming.id) },
-                ]
-              );
+              if (!alertedRideIdsRef.current.has(incoming.id)) {
+                alertedRideIdsRef.current.add(incoming.id);
+                Alert.alert(
+                  '🔔 New Ride Request Available!',
+                  `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
+                  [
+                    { text: 'Ignore', style: 'cancel' },
+                    { text: 'Accept Trip', onPress: () => handleAcceptRide(incoming.id) },
+                  ]
+                );
+              }
             }
           });
+
 
           // Live sync when another driver accepts first
           unregisterAcceptedByOther = signalRService.onRideAcceptedByOther((data: any) => {
