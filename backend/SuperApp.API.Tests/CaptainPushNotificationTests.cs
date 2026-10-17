@@ -511,36 +511,43 @@ public class CaptainPushNotificationTests
     [Fact]
     public async Task Test_11_RideExpiryBackgroundService_SweepsOverdueRides_Atomically()
     {
-        var db = CreateDb();
-        var user = new User { Id = 701, FullName = "Customer Three" };
-        db.Users.Add(user);
+        var dbName = Guid.NewGuid().ToString();
+        var dbOptions = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
 
-        var overdueRide = new Ride
+        using (var initialDb = new AppDbContext(dbOptions))
         {
-            Id = 930,
-            RideNumber = "RD-930",
-            UserId = user.Id,
-            PickupAddress = "Pickup X",
-            DropoffAddress = "Dropoff Y",
-            EstimatedFare = 120,
-            VehicleType = "AUTO",
-            Status = RideStatus.Requested,
-            CreatedAt = DateTime.UtcNow.AddMinutes(-7)
-        };
-        var activeFreshRide = new Ride
-        {
-            Id = 931,
-            RideNumber = "RD-931",
-            UserId = user.Id,
-            PickupAddress = "Pickup X2",
-            DropoffAddress = "Dropoff Y2",
-            EstimatedFare = 120,
-            VehicleType = "AUTO",
-            Status = RideStatus.Requested,
-            CreatedAt = DateTime.UtcNow.AddMinutes(-2) // Only 2 mins old
-        };
-        db.Rides.AddRange(overdueRide, activeFreshRide);
-        await db.SaveChangesAsync();
+            var user = new User { Id = 701, FullName = "Customer Three" };
+            initialDb.Users.Add(user);
+
+            var overdueRide = new Ride
+            {
+                Id = 930,
+                RideNumber = "RD-930",
+                UserId = user.Id,
+                PickupAddress = "Pickup X",
+                DropoffAddress = "Dropoff Y",
+                EstimatedFare = 120,
+                VehicleType = "AUTO",
+                Status = RideStatus.Requested,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-7)
+            };
+            var activeFreshRide = new Ride
+            {
+                Id = 931,
+                RideNumber = "RD-931",
+                UserId = user.Id,
+                PickupAddress = "Pickup X2",
+                DropoffAddress = "Dropoff Y2",
+                EstimatedFare = 120,
+                VehicleType = "AUTO",
+                Status = RideStatus.Requested,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-2) // Only 2 mins old
+            };
+            initialDb.Rides.AddRange(overdueRide, activeFreshRide);
+            await initialDb.SaveChangesAsync();
+        }
 
         var hubMock = new Mock<IHubContext<RideTrackingHub>>();
         var hubClients = new Mock<IHubClients>();
@@ -549,7 +556,7 @@ public class CaptainPushNotificationTests
         hubMock.Setup(h => h.Clients).Returns(hubClients.Object);
 
         var serviceCollection = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
-        serviceCollection.AddScoped(_ => db);
+        serviceCollection.AddScoped(_ => new AppDbContext(dbOptions));
         serviceCollection.AddScoped(_ => hubMock.Object);
         var serviceProvider = serviceCollection.BuildServiceProvider();
 
@@ -559,10 +566,13 @@ public class CaptainPushNotificationTests
         var sweptCount = await expiryService.SweepExpiredRidesAsync();
         Assert.Equal(1, sweptCount);
 
-        var sweptRide = await db.Rides.FindAsync(930L);
-        var freshRide = await db.Rides.FindAsync(931L);
+        using (var verifyDb = new AppDbContext(dbOptions))
+        {
+            var sweptRide = await verifyDb.Rides.FindAsync(930L);
+            var freshRide = await verifyDb.Rides.FindAsync(931L);
 
-        Assert.Equal(RideStatus.Expired, sweptRide!.Status);
-        Assert.Equal(RideStatus.Requested, freshRide!.Status);
+            Assert.Equal(RideStatus.Expired, sweptRide!.Status);
+            Assert.Equal(RideStatus.Requested, freshRide!.Status);
+        }
     }
 }
