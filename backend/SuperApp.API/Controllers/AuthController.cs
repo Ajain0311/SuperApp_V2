@@ -36,10 +36,14 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Invalid request" });
 
+        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+        if (string.IsNullOrWhiteSpace(cleanMobile) || cleanMobile.Length < 10)
+            return BadRequest(new SendOtpResponse { Success = false, Message = "Invalid mobile number" });
+
         var user = await _db.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
+            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber || u.MobileNumber == cleanMobile);
 
         bool isNewUser = user == null;
         bool isAdmin = user?.UserRoles.Any(ur => ur.Role.Name == RoleNames.Admin) ?? false;
@@ -48,7 +52,7 @@ public class AuthController : ControllerBase
             return BadRequest(new SendOtpResponse { Success = false, Message = "Account is deactivated. Please contact support." });
 
         // Generate OTP for both Citizen and Admin (Admin requires Password + OTP)
-        string devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
+        string devOtp = await _otpService.GenerateAndSendOtpAsync(cleanMobile);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
         bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
         var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
@@ -74,21 +78,22 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid request" });
 
-        var isValid = await _otpService.VerifyOtpAsync(request.MobileNumber, request.OtpCode);
+        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+        var isValid = await _otpService.VerifyOtpAsync(cleanMobile, request.OtpCode);
         if (!isValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid or expired OTP" });
 
         var user = await _db.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
+            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber || u.MobileNumber == cleanMobile);
 
         if (user == null)
         {
             // New user registration
             user = new User
             {
-                MobileNumber = request.MobileNumber,
+                MobileNumber = cleanMobile,
                 FullName = request.FullName,
                 CreatedAt = DateTime.UtcNow,
                 LastLoginAt = DateTime.UtcNow
@@ -148,10 +153,12 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.OtpCode))
             return BadRequest(new AuthResponse { Success = false, Message = "OTP code is required for admin authentication" });
 
+        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+
         var user = await _db.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
+            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber || u.MobileNumber == cleanMobile);
 
         if (user == null)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid credentials" });
@@ -181,7 +188,7 @@ public class AuthController : ControllerBase
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid password" });
 
         // 2. Verify OTP
-        var isOtpValid = await _otpService.VerifyOtpAsync(request.MobileNumber, request.OtpCode);
+        var isOtpValid = await _otpService.VerifyOtpAsync(cleanMobile, request.OtpCode);
         if (!isOtpValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid or expired OTP" });
 
@@ -221,10 +228,12 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Invalid request" });
 
+        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+
         var user = await _db.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
+            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber || u.MobileNumber == cleanMobile);
 
         if (user == null || !user.UserRoles.Any(ur => ur.Role.Name == RoleNames.Admin))
             return BadRequest(new SendOtpResponse { Success = false, Message = "Admin account not found" });
@@ -232,7 +241,7 @@ public class AuthController : ControllerBase
         if (!user.IsActive)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Account is deactivated" });
 
-        string devOtp = await _otpService.GenerateAndSendOtpAsync(request.MobileNumber);
+        string devOtp = await _otpService.GenerateAndSendOtpAsync(cleanMobile);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
         bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
         var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
@@ -255,15 +264,17 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid request" });
 
+        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+
         var user = await _db.Users
             .Include(u => u.UserRoles)
             .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber);
+            .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber || u.MobileNumber == cleanMobile);
 
         if (user == null || !user.UserRoles.Any(ur => ur.Role.Name == RoleNames.Admin))
             return BadRequest(new AuthResponse { Success = false, Message = "Admin account not found" });
 
-        var isOtpValid = await _otpService.VerifyOtpAsync(request.MobileNumber, request.OtpCode);
+        var isOtpValid = await _otpService.VerifyOtpAsync(cleanMobile, request.OtpCode);
         if (!isOtpValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid or expired OTP" });
 

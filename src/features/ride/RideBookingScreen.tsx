@@ -291,6 +291,7 @@ export const RideBookingScreen: React.FC = () => {
   const selectedVehicle = vehicles[selectedIndex] || vehicles[0];
 
   const handleBookRide = async () => {
+    if (isBooking) return;
     if (!pickupCoords) {
       Alert.alert('Pickup Required', 'Please set your pickup location on the map.');
       return;

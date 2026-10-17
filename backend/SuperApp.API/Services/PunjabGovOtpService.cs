@@ -114,9 +114,10 @@ public class PunjabGovOtpService : IOtpService
         var cleanInputOtp = otpCode.Trim();
         if (otpRequest.OtpCode != cleanInputOtp)
         {
-            // In non-production environments, permit configured test OTP (e.g. 123456)
+            // In non-production environments with OTP_TEST_MODE=true and configured test OTP
+            var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
             var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
-            if (!isProd && (cleanInputOtp == _testOtp || cleanInputOtp == "123456"))
+            if (!isProd && isTestMode && !string.IsNullOrWhiteSpace(_testOtp) && cleanInputOtp == _testOtp)
             {
                 otpRequest.IsUsed = true;
                 await _db.SaveChangesAsync();

@@ -187,6 +187,11 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       : foodItems.filter((f) => f.category === menuCategories[selectedCategoryIndex]);
 
   const handlePlaceOrder = async (couponCode?: string, paymentMethod: 'COD' | 'ONLINE' = 'COD') => {
+    if (isPlacingOrder) return;
+    if (cartItems.length === 0) {
+      Alert.alert('Empty Cart', 'Please add items to your cart before proceeding to checkout.');
+      return;
+    }
     setIsPlacingOrder(true);
     try {
       const restId = Number(route.params?.restaurantId) || 1;

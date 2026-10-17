@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Alert,
+  Linking,
+  Modal,
+  ActivityIndicator,
+  FlatList,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -48,6 +54,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [banners, setBanners] = useState<any[]>([]);
   const [deliverTo, setDeliverTo] = useState<string>('Add delivery address');
 
+  // Multi-Category Search Overlay State
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilter, setSearchFilter] = useState<'ALL' | 'FOOD' | 'BAZAAR'>('ALL');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [foodPool, setFoodPool] = useState<any[]>([]);
+  const [bazaarPool, setBazaarPool] = useState<any[]>([]);
+
   useFocusEffect(
     useCallback(() => {
       apiClient
@@ -60,7 +74,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           // Never substitute Connaught Place or fabricated address on failure
           setDeliverTo('Add delivery address');
         });
-    }, [])
+
+      const onBackPress = () => {
+        if (isSearchOpen) {
+          setIsSearchOpen(false);
+          return true;
+        }
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [isSearchOpen])
   );
 
 
@@ -99,42 +124,171 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       .catch(() => {});
   }, []);
 
-  const openBanner = (banner: any) => {
-    const targetType = String(banner.targetType || '').toUpperCase();
-    const moduleName = String(banner.module || '').toUpperCase();
+  const openSearch = () => {
+    setIsSearchOpen(true);
+    if (foodPool.length === 0 || bazaarPool.length === 0) {
+      setSearchLoading(true);
+      Promise.all([
+        apiClient
+          .get<any>(ApiEndpoints.food.restaurants)
+          .then((res) => {
+            const payload = res.data?.data || res.data;
+            const items = payload?.items || payload;
+            if (Array.isArray(items)) setFoodPool(items);
+          })
+          .catch(() => {}),
+        apiClient
+          .get<any>(ApiEndpoints.marketplace.listings)
+          .then((res) => {
+            const payload = res.data?.data || res.data;
+            const items = payload?.items || payload;
+            if (Array.isArray(items)) setBazaarPool(items);
+          })
+          .catch(() => {}),
+      ]).finally(() => {
+        setSearchLoading(false);
+      });
+    }
+  };
 
-    // Prioritize explicit target types
+  const openBanner = async (banner: any) => {
+    if (!banner) return;
+    const targetType = String(banner.targetType || '').toUpperCase().trim();
+    const targetId = banner.targetId != null ? String(banner.targetId).trim() : '';
+    const moduleName = String(banner.module || '').toUpperCase().trim();
+    const ctaUrl = String(banner.ctaUrl || banner.url || banner.link || '').trim();
+
+    // 1. External URL banner
+    if (targetType === 'URL' || targetType === 'EXTERNAL' || ctaUrl.startsWith('http://') || ctaUrl.startsWith('https://')) {
+      const urlToOpen = ctaUrl || (targetId.startsWith('http') ? targetId : '');
+      if (urlToOpen) {
+        try {
+          const supported = await Linking.canOpenURL(urlToOpen);
+          if (supported) {
+            await Linking.openURL(urlToOpen);
+            return;
+          }
+        } catch {}
+      }
+      if (targetType === 'URL' || targetType === 'EXTERNAL') {
+        Alert.alert('Link Unavailable', 'This promotional link is currently not available.');
+        return;
+      }
+    }
+
+    // 2. Marketplace Product / Listing advertisement
+    if (
+      targetType === 'LISTING' ||
+      targetType === 'PRODUCT' ||
+      targetType === 'MARKETPLACE_ITEM' ||
+      targetType === 'BAZAAR_ITEM'
+    ) {
+      if (targetId) {
+        navigation.navigate('ListingDetail', { listingId: targetId });
+        return;
+      }
+      navigation.navigate('Bazaar');
+      return;
+    }
+
+    // 3. Food / Restaurant advertisement
     if (targetType === 'RESTAURANT' || targetType === 'FOOD_ITEM' || targetType === 'FOOD') {
-      if (targetType === 'RESTAURANT' && banner.targetId) {
-        navigation.navigate('RestaurantDetail', { restaurantId: Number(banner.targetId) });
+      if (targetId) {
+        navigation.navigate('RestaurantDetail', { restaurantId: targetId });
         return;
       }
       navigation.navigate('Food');
       return;
     }
-    
-    if (targetType === 'LISTING' || targetType === 'MARKETPLACE' || targetType === 'BAZAAR') {
-      navigation.navigate('Bazaar');
-      return;
+
+    // 4. Category advertisement
+    if (targetType === 'CATEGORY') {
+      if (moduleName === 'FOOD' || targetId.toLowerCase().includes('food') || targetId.toLowerCase().includes('restaurant')) {
+        navigation.navigate('Food');
+        return;
+      }
+      if (moduleName === 'MARKETPLACE' || moduleName === 'BAZAAR') {
+        navigation.navigate('Bazaar');
+        return;
+      }
+      if (moduleName === 'RIDE' || moduleName === 'RIDES') {
+        navigation.navigate('Rides');
+        return;
+      }
     }
-    
+
+    // 5. Ride advertisement
     if (targetType === 'RIDE' || targetType === 'RIDE_PROMO') {
       navigation.navigate('Rides');
       return;
     }
 
-    // Fallbacks based on banner placement module (ignoring HOME)
+    // 6. Fallback based on banner placement module
     if (moduleName === 'FOOD') {
       navigation.navigate('Food');
-    } else if (moduleName === 'RIDE' || moduleName === 'RIDES') {
+      return;
+    }
+    if (moduleName === 'RIDE' || moduleName === 'RIDES') {
       navigation.navigate('Rides');
-    } else if (moduleName === 'MARKETPLACE' || moduleName === 'BAZAAR') {
+      return;
+    }
+    if (moduleName === 'MARKETPLACE' || moduleName === 'BAZAAR') {
       navigation.navigate('Bazaar');
-    } else {
-      // Safest fallback if completely undefined, just do nothing or maybe Food as last resort
-      // but let's avoid wrong routing.
+      return;
+    }
+
+    // 7. General / Unconfigured banner fallback
+    if (banner.title) {
+      Alert.alert(banner.title, banner.subtitle || 'Offer available on SuperApp services.');
     }
   };
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const results: Array<{
+      type: 'FOOD' | 'BAZAAR';
+      id: string | number;
+      title: string;
+      subtitle: string;
+      price?: number;
+    }> = [];
+
+    // Food Results
+    if (searchFilter === 'ALL' || searchFilter === 'FOOD') {
+      foodPool.forEach((item) => {
+        const name = (item.name || '').toLowerCase();
+        const cuisines = (item.cuisines || item.description || '').toLowerCase();
+        if (!q || name.includes(q) || cuisines.includes(q)) {
+          results.push({
+            type: 'FOOD',
+            id: item.id,
+            title: item.name,
+            subtitle: item.cuisines || item.addressLine || 'Restaurant',
+          });
+        }
+      });
+    }
+
+    // Bazaar Results
+    if (searchFilter === 'ALL' || searchFilter === 'BAZAAR') {
+      bazaarPool.forEach((item) => {
+        const title = (item.title || '').toLowerCase();
+        const category = (item.categoryName || '').toLowerCase();
+        const location = (item.location || '').toLowerCase();
+        if (!q || title.includes(q) || category.includes(q) || location.includes(q)) {
+          results.push({
+            type: 'BAZAAR',
+            id: item.id,
+            title: item.title,
+            subtitle: `${item.categoryName || 'General'} • ${item.location || 'Local'}`,
+            price: item.price,
+          });
+        }
+      });
+    }
+
+    return results;
+  }, [searchQuery, searchFilter, foodPool, bazaarPool]);
 
   const getInitials = () => {
     if (!user?.fullName) return 'JD';
@@ -187,7 +341,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <AppSearchBar
             placeholder="Search food, rides, items & groceries..."
             editable={false}
-            onPress={() => navigation.navigate('Food')}
+            onPress={openSearch}
           />
         </View>
 
@@ -348,45 +502,108 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </LinearGradient>
           </TouchableOpacity>
         </View>
-
-        {/* Spotlight Deals Section */}
-        <Text style={[AppTypography.sectionTitle, styles.sectionMargin]}>
-          Spotlight Deals
-        </Text>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dealsScroll}
-        >
-          {/* Deal 1 */}
-          <View style={styles.dealCard}>
-            <Ionicons name="flash" size={22} color={AppColors.yellow} />
-            <Text style={styles.dealTitle}>Express Courier</Text>
-            <Text style={styles.dealSubtitle} numberOfLines={1}>
-              Send packages in 45m
-            </Text>
-          </View>
-
-          {/* Deal 2 */}
-          <View style={styles.dealCard}>
-            <Ionicons name="star" size={22} color={AppColors.primary} />
-            <Text style={styles.dealTitle}>450 SuperCoins</Text>
-            <Text style={styles.dealSubtitle} numberOfLines={1}>
-              Redeem for free rides
-            </Text>
-          </View>
-
-          {/* Deal 3 */}
-          <View style={styles.dealCard}>
-            <Ionicons name="shield-checkmark" size={22} color={AppColors.secondary} />
-            <Text style={styles.dealTitle}>Verified Sellers</Text>
-            <Text style={styles.dealSubtitle} numberOfLines={1}>
-              7-day test warranty
-            </Text>
-          </View>
-        </ScrollView>
       </ScrollView>
+
+      {/* Global Search Overlay Modal */}
+      <Modal visible={isSearchOpen} animationType="slide" onRequestClose={() => setIsSearchOpen(false)}>
+        <SafeAreaView style={styles.searchModalContainer}>
+          <View style={styles.searchModalHeader}>
+            <TouchableOpacity onPress={() => setIsSearchOpen(false)} style={styles.searchBackBtn}>
+              <Ionicons name="arrow-back" size={24} color={AppColors.textPrimary} />
+            </TouchableOpacity>
+            <View style={styles.searchModalInputWrapper}>
+              <AppSearchBar
+                placeholder="Search food, dishes, marketplace ads..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onClear={() => setSearchQuery('')}
+                editable={true}
+              />
+            </View>
+          </View>
+
+          {/* Search Category Filter Tabs */}
+          <View style={styles.searchFilterRow}>
+            {(['ALL', 'FOOD', 'BAZAAR'] as const).map((filter) => {
+              const active = searchFilter === filter;
+              return (
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.searchFilterChip, active ? styles.searchFilterChipActive : null]}
+                  onPress={() => setSearchFilter(filter)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.searchFilterText, active ? styles.searchFilterTextActive : null]}>
+                    {filter === 'ALL' ? 'All Results' : filter === 'FOOD' ? 'Food & Restaurants' : 'Marketplace'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {searchLoading ? (
+            <View style={styles.searchLoaderContainer}>
+              <ActivityIndicator size="large" color={AppColors.primary} />
+              <Text style={styles.searchLoaderText}>Loading searchable catalog...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={searchResults}
+              keyExtractor={(item) => `${item.type}-${item.id}`}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.searchResultsList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.searchResultCard}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setIsSearchOpen(false);
+                    if (item.type === 'FOOD') {
+                      navigation.navigate('RestaurantDetail', { restaurantId: item.id });
+                    } else if (item.type === 'BAZAAR') {
+                      navigation.navigate('ListingDetail', { listingId: String(item.id) });
+                    }
+                  }}
+                >
+                  <View style={styles.searchResultBadge}>
+                    <Ionicons
+                      name={item.type === 'FOOD' ? 'restaurant' : 'pricetag'}
+                      size={14}
+                      color={item.type === 'FOOD' ? '#EA580C' : '#2563EB'}
+                    />
+                    <Text
+                      style={[
+                        styles.searchResultBadgeText,
+                        { color: item.type === 'FOOD' ? '#EA580C' : '#2563EB' },
+                      ]}
+                    >
+                      {item.type === 'FOOD' ? 'RESTAURANT' : 'MARKETPLACE'}
+                    </Text>
+                  </View>
+                  <Text style={styles.searchResultTitle}>{item.title}</Text>
+                  {item.subtitle ? <Text style={styles.searchResultSubtitle}>{item.subtitle}</Text> : null}
+                  {item.price != null ? (
+                    <Text style={styles.searchResultPrice}>₹{Number(item.price).toFixed(0)}</Text>
+                  ) : null}
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View style={styles.searchEmptyBox}>
+                  <Ionicons name="search-outline" size={48} color={AppColors.textTertiary} />
+                  <Text style={styles.searchEmptyTitle}>
+                    {searchQuery.trim().length > 0 ? 'No matching items found' : 'Type to search SuperApp'}
+                  </Text>
+                  <Text style={styles.searchEmptySubtitle}>
+                    {searchQuery.trim().length > 0
+                      ? 'Try searching for dishes like Biryani or marketplace products'
+                      : 'Search across live restaurants, food menus, and verified local listings'}
+                  </Text>
+                </View>
+              }
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -737,5 +954,119 @@ const styles = StyleSheet.create({
   dealSubtitle: {
     color: AppColors.textSecondary,
     fontSize: 11,
+  },
+  searchModalContainer: {
+    flex: 1,
+    backgroundColor: AppColors.background,
+  },
+  searchModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  searchBackBtn: {
+    padding: 8,
+    marginRight: 4,
+  },
+  searchModalInputWrapper: {
+    flex: 1,
+  },
+  searchFilterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: `${AppColors.border}55`,
+  },
+  searchFilterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  searchFilterChipActive: {
+    backgroundColor: AppColors.primary,
+    borderColor: AppColors.primary,
+  },
+  searchFilterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AppColors.textSecondary,
+  },
+  searchFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  searchResultsList: {
+    padding: 16,
+    gap: 12,
+  },
+  searchResultCard: {
+    backgroundColor: AppColors.surface,
+    borderRadius: AppRadius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: `${AppColors.border}88`,
+  },
+  searchResultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  searchResultBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  searchResultTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+    marginBottom: 2,
+  },
+  searchResultSubtitle: {
+    fontSize: 12,
+    color: AppColors.textSecondary,
+  },
+  searchResultPrice: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: AppColors.secondary,
+    marginTop: 6,
+  },
+  searchLoaderContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+  },
+  searchLoaderText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: AppColors.textSecondary,
+  },
+  searchEmptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 24,
+  },
+  searchEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  searchEmptySubtitle: {
+    fontSize: 13,
+    color: AppColors.textTertiary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

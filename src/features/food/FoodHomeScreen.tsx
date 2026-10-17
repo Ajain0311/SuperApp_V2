@@ -77,6 +77,36 @@ const DEFAULT_RESTAURANTS: RestaurantSummary[] = [
     isFeatured: false,
     imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600',
   },
+  {
+    id: 4,
+    name: 'Sagar Ratna (Authentic South Indian)',
+    cuisines: 'South Indian • Dosa • Idli • Filter Coffee • Pure Veg',
+    addressLine: '₹300 for two • 1.5 km',
+    rating: 4.7,
+    totalRatings: 3420,
+    avgDeliveryTimeMinutes: 20,
+    offerText: 'FLAT 15% OFF',
+    isVeg: true,
+    minOrderAmount: 120,
+    deliveryFee: 0,
+    isFeatured: true,
+    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600',
+  },
+  {
+    id: 5,
+    name: 'Rolls King & Wraps',
+    cuisines: 'Rolls • Kathi Rolls • Wraps • Fast Food',
+    addressLine: '₹250 for two • 1.9 km',
+    rating: 4.4,
+    totalRatings: 1100,
+    avgDeliveryTimeMinutes: 20,
+    offerText: '20% OFF',
+    isVeg: false,
+    minOrderAmount: 100,
+    deliveryFee: 0,
+    isFeatured: false,
+    imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600',
+  },
 ];
 
 const CATEGORIES = [
@@ -95,7 +125,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
   const [filterRating4Plus, setFilterRating4Plus] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [restaurants, setRestaurants] = useState<RestaurantSummary[]>(DEFAULT_RESTAURANTS);
-  const [deliverTo, setDeliverTo] = useState('Connaught Place, New Delhi');
+  const [deliverTo, setDeliverTo] = useState('Add delivery address');
 
   const [isDemoMode, setIsDemoMode] = useState(false);
 
@@ -122,22 +152,78 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
       apiClient
         .get<any>(ApiEndpoints.common.addresses)
         .then((res) => {
-          const items = Array.isArray(res?.data) ? res.data : [];
+          const payload = res?.data?.data ?? res?.data ?? res;
+          const items = Array.isArray(payload) ? payload : [];
           const def = items.find((a: any) => a.isDefault) || items[0];
           if (def) {
             const line = [def.addressLine1, def.city].filter(Boolean).join(', ');
-            setDeliverTo(line);
+            setDeliverTo(line || 'Add delivery address');
+          } else {
+            setDeliverTo('Add delivery address');
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setDeliverTo('Add delivery address');
+        });
     }, [])
   );
 
   const filteredRestaurants = restaurants.filter((r) => {
     if (filterVegOnly && !r.isVeg) return false;
     if (filterRating4Plus && r.rating < 4.5) return false;
+
+    // Category / Cuisine Filter
+    const activeCategory = CATEGORIES[selectedCategoryIndex];
+    if (activeCategory && activeCategory !== 'All') {
+      const catNorm = activeCategory.trim().toLowerCase();
+      const rCuisines = (r.cuisines || '').toLowerCase();
+      const rName = (r.name || '').toLowerCase();
+
+      // Check direct cuisine or name match
+      let matchesCategory = rCuisines.includes(catNorm) || rName.includes(catNorm);
+
+      // Category synonyms/keywords
+      if (!matchesCategory) {
+        if (catNorm === 'south indian') {
+          matchesCategory =
+            rCuisines.includes('south indian') ||
+            rCuisines.includes('dosa') ||
+            rCuisines.includes('idli') ||
+            rCuisines.includes('andhra') ||
+            rCuisines.includes('hyderabadi') ||
+            rCuisines.includes('chettinad') ||
+            rCuisines.includes('kerala') ||
+            rCuisines.includes('tamil') ||
+            rCuisines.includes('udupi');
+        } else if (catNorm === 'north indian') {
+          matchesCategory =
+            rCuisines.includes('north indian') ||
+            rCuisines.includes('punjabi') ||
+            rCuisines.includes('mughlai') ||
+            rCuisines.includes('thali') ||
+            rCuisines.includes('tandoor') ||
+            rCuisines.includes('roti');
+        } else if (catNorm === 'biryani') {
+          matchesCategory = rCuisines.includes('biryani') || rName.includes('biryani');
+        } else if (catNorm === 'burgers') {
+          matchesCategory = rCuisines.includes('burger') || rName.includes('burger');
+        } else if (catNorm === 'rolls') {
+          matchesCategory = rCuisines.includes('roll') || rCuisines.includes('wrap');
+        } else if (catNorm === 'desserts') {
+          matchesCategory =
+            rCuisines.includes('dessert') ||
+            rCuisines.includes('sweet') ||
+            rCuisines.includes('mithai') ||
+            rCuisines.includes('ice cream');
+        }
+      }
+
+      if (!matchesCategory) return false;
+    }
+
+    // Search query filter
     if (searchQuery.trim().length > 0) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       const matchName = r.name.toLowerCase().includes(q);
       const matchCuisine = (r.cuisines || '').toLowerCase().includes(q);
       if (!matchName && !matchCuisine) return false;

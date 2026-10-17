@@ -167,6 +167,69 @@ public class AuthTests
     }
 
     [Fact]
+    public async Task AdminLogin_Rejects_InvalidOtp()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        using var db = new SuperApp.API.Data.AppDbContext(options);
+
+        var adminRole = new Role { Id = 1, Name = RoleNames.Admin };
+        db.Roles.Add(adminRole);
+
+        var adminUser = new User
+        {
+            Id = 11,
+            MobileNumber = "9999999999",
+            FullName = "Admin User",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("AdminPass@2026"),
+            IsActive = true
+        };
+        db.Users.Add(adminUser);
+        db.UserRoles.Add(new UserRole { UserId = 11, RoleId = 1 });
+        await db.SaveChangesAsync();
+
+        var otpService = new MockOtpService(db);
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var tokenService = new TokenService(config);
+        var controller = new SuperApp.API.Controllers.AuthController(db, otpService, tokenService);
+
+        // Generate real OTP
+        var realOtp = await otpService.GenerateAndSendOtpAsync("9999999999");
+
+        // Attempt login with wrong OTP
+        var result = await controller.AdminLogin(new SuperApp.API.DTOs.AdminLoginRequest
+        {
+            MobileNumber = "+919999999999",
+            Password = "AdminPass@2026",
+            OtpCode = "000000" // Wrong OTP
+        });
+
+        var badReq = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result.Result);
+        var res = Assert.IsType<SuperApp.API.DTOs.AuthResponse>(badReq.Value);
+        Assert.False(res.Success);
+        Assert.Equal("Invalid or expired OTP", res.Message);
+
+        // Verify entry in OtpRequests has clean 10-digit mobile number
+        var otpEntry = await db.OtpRequests.FirstOrDefaultAsync(o => o.MobileNumber == "9999999999");
+        Assert.NotNull(otpEntry);
+        Assert.Equal(realOtp, otpEntry.OtpCode);
+
+        // Now attempt with correct OTP and normalized mobile number with country code prefix
+        var validResult = await controller.AdminLogin(new SuperApp.API.DTOs.AdminLoginRequest
+        {
+            MobileNumber = "+919999999999",
+            Password = "AdminPass@2026",
+            OtpCode = realOtp
+        });
+
+        var okReq = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(validResult.Result);
+        var okRes = Assert.IsType<SuperApp.API.DTOs.AuthResponse>(okReq.Value);
+        Assert.True(okRes.Success);
+        Assert.NotNull(okRes.Token);
+    }
+
+    [Fact]
     public async Task SendOtp_InProduction_NeverReturnsDevOtp()
     {
         var origEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");

@@ -13,6 +13,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -63,7 +65,7 @@ export const ListingDetailScreen: React.FC = () => {
           description: data.description || 'No description provided.',
           price: Number(data.price) || 0,
           condition: data.condition || 'USED',
-          location: data.location || 'Bengaluru',
+          location: data.location || 'Location not specified',
           images:
             data.images && data.images.length > 0
               ? data.images.map((im: any) => (typeof im === 'string' ? im : im.imageUrl || ''))
@@ -77,7 +79,7 @@ export const ListingDetailScreen: React.FC = () => {
           categoryName: data.categoryName || 'General',
           sellerId: data.sellerId || 1,
           sellerName: data.sellerName || 'Verified Community Member',
-          sellerPhone: data.sellerPhone || '+91 98450 12345',
+          sellerPhone: data.sellerPhone || null,
           sellerRating: Number(data.sellerRating) || 4.9,
           dealsCount: data.dealsCount || 12,
           isFavorite: favorites.includes(data.id || idNum),
@@ -398,9 +400,44 @@ export const ListingDetailScreen: React.FC = () => {
 
             <TouchableOpacity
               style={styles.contactOptionRow}
-              onPress={() => {
+              onPress={async () => {
                 setShowContactModal(false);
-                Alert.alert('Calling', `Dialing ${detail.sellerPhone}...`);
+                const rawPhone = detail.sellerPhone?.trim();
+                if (!rawPhone) {
+                  Alert.alert(
+                    'Phone Number Unavailable',
+                    'The seller has not provided a contact number. Please use SuperApp Chat to reach out.'
+                  );
+                  return;
+                }
+
+                // Strip non-dialable characters while preserving leading + for country code
+                const sanitized = rawPhone.replace(/[^\d+]/g, '');
+                if (!sanitized || sanitized === '+') {
+                  Alert.alert(
+                    'Invalid Phone Number',
+                    'The seller phone number format is invalid.'
+                  );
+                  return;
+                }
+
+                const telUrl = `tel:${sanitized}`;
+                try {
+                  const supported = await Linking.canOpenURL(telUrl);
+                  if (supported || Platform.OS === 'web') {
+                    await Linking.openURL(telUrl);
+                  } else {
+                    Alert.alert(
+                      'Dialer Not Supported',
+                      `Unable to open phone dialer on this device. You can manually dial: ${rawPhone}`
+                    );
+                  }
+                } catch (err) {
+                  Alert.alert(
+                    'Call Error',
+                    `Could not open phone dialer. Seller number: ${rawPhone}`
+                  );
+                }
               }}
             >
               <View style={[styles.contactIconCircle, { backgroundColor: 'rgba(0, 200, 83, 0.2)' }]}>
@@ -408,7 +445,9 @@ export const ListingDetailScreen: React.FC = () => {
               </View>
               <View>
                 <Text style={styles.contactOptionTitle}>Call Seller Directly</Text>
-                <Text style={styles.contactOptionSub}>{detail.sellerPhone}</Text>
+                <Text style={styles.contactOptionSub}>
+                  {detail.sellerPhone ? detail.sellerPhone : 'Number not provided'}
+                </Text>
               </View>
             </TouchableOpacity>
 

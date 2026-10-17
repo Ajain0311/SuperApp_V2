@@ -166,34 +166,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       return response;
     } catch (e: any) {
-      const isDev = process.env.EXPO_PUBLIC_ENV !== 'production';
-      if (isDev && password === 'Admin@123' && (mobileNumber === '9999999999' || mobileNumber.endsWith('9999'))) {
-        const devToken = `dev_admin_token_${Date.now()}`;
-        const adminUser: User = {
-          id: 1,
-          mobileNumber,
-          fullName: 'Super Admin',
-          roles: ['Admin', 'Customer'],
-        };
-        await storage.setToken(devToken);
-        await storage.setUserData(adminUser);
-        set({
-          user: adminUser,
-          token: devToken,
-          isAuthenticated: true,
-          error: null,
-          isFallbackSession: true,
-        });
-        await useRoleStore.getState().syncWithUserRoles(adminUser.roles);
-        return {
-          success: true,
-          token: devToken,
-          user: adminUser,
-          message: 'Development admin session established',
-        };
-      }
-
-      const msg = e.message || 'Admin login failed';
+      const msg = e.response?.data?.message || e.message || 'Admin login failed';
       set({ error: msg });
       throw e;
     }

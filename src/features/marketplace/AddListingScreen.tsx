@@ -26,6 +26,9 @@ import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { notificationService } from '../../services/notificationService';
 import { documentService } from '../../services/documentService';
+import { LocationService } from '../../services/locationService';
+
+const locationService = new LocationService();
 
 const CATEGORIES = [
   { id: 1, name: 'Mobiles' },
@@ -50,12 +53,13 @@ export const AddListingScreen: React.FC = () => {
 
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
-  const [location, setLocation] = useState('Koramangala, Bengaluru');
+  const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(1);
   const [selectedCondition, setSelectedCondition] = useState('LIKE_NEW');
   const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
   const handlePickPhoto = async () => {
     try {
@@ -128,6 +132,24 @@ export const AddListingScreen: React.FC = () => {
     setPhotos(photos.filter((_, idx) => idx !== index));
   };
 
+  const handleUseGps = async () => {
+    if (isLocating) return;
+    setIsLocating(true);
+    try {
+      const loc = await locationService.getCurrentLocation({ timeoutMs: 10000, throwOnError: true });
+      if (loc && !loc.isFallback) {
+        setLocation(loc.formattedAddress || `${loc.latitude.toFixed(4)}°, ${loc.longitude.toFixed(4)}°`);
+      } else {
+        Alert.alert('GPS Notice', 'Could not detect exact street address. Please enter your locality manually.');
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Could not retrieve GPS location';
+      Alert.alert('Location Error', msg);
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!title.trim()) {
       Alert.alert('Missing Field', 'Please enter a title for your item.');
@@ -137,10 +159,16 @@ export const AddListingScreen: React.FC = () => {
       Alert.alert('Missing Field', 'Please enter a valid price.');
       return;
     }
+    if (!location.trim()) {
+      Alert.alert('Missing Field', 'Please enter or detect your pickup location.');
+      return;
+    }
     if (photos.length === 0) {
       Alert.alert('Missing Photos', 'Please add at least one photo of your item.');
       return;
     }
+
+    if (isSubmitting) return;
 
     setIsSubmitting(true);
     let serverListing: any = null;
@@ -336,10 +364,26 @@ export const AddListingScreen: React.FC = () => {
         </View>
 
         {/* Location */}
-        <Text style={styles.inputLabel}>Pickup Location *</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.inputLabel}>Pickup Location *</Text>
+          <TouchableOpacity
+            onPress={handleUseGps}
+            disabled={isLocating}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}
+          >
+            {isLocating ? (
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 4 }} />
+            ) : (
+              <MaterialIcons name="my-location" size={16} color={colors.primary} style={{ marginRight: 4 }} />
+            )}
+            <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>
+              {isLocating ? 'Detecting...' : 'Use Current Location'}
+            </Text>
+          </TouchableOpacity>
+        </View>
         <TextInput
           testID="add-listing-location-input"
-          placeholder="e.g. Koramangala, Bengaluru"
+          placeholder="Enter city, locality or area"
           placeholderTextColor={colors.textTertiary}
           value={location}
           onChangeText={setLocation}
