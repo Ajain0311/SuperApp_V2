@@ -128,6 +128,8 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
 
   const cartItems = useCartStore((state) => state.items);
   const addItemToCart = useCartStore((state) => state.addItem);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const getItemQuantity = useCartStore((state) => state.getItemQuantity);
   const clearCart = useCartStore((state) => state.clearCart);
   const getItemTotal = useCartStore((state) => state.getItemTotal);
 
@@ -402,16 +404,48 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
               {/* Right Image + Add Button */}
               <View style={styles.dishActionCol}>
                 <Image source={{ uri: resolveDishImage(item.image) }} style={styles.dishImage} />
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => handleAddItem(item)}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Add ${item.name}`}
-                  testID={`add-dish-btn-${item.id}`}
-                >
-                  <Text style={styles.addButtonText}>ADD +</Text>
-                </TouchableOpacity>
+                {(() => {
+                  const qty = getItemQuantity(item.id);
+                  if (qty > 0) {
+                    return (
+                      <View style={styles.stepperContainer}>
+                        <TouchableOpacity
+                          style={styles.stepperBtn}
+                          onPress={() => updateQuantity(item.id, -1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="remove" size={16} color={AppColors.primary} />
+                        </TouchableOpacity>
+                        <Text style={styles.stepperQtyText}>{qty}</Text>
+                        <TouchableOpacity
+                          style={styles.stepperBtn}
+                          onPress={() => {
+                            if (item.isCustomizable) {
+                              setActiveItemForCustomization(item);
+                            } else {
+                              updateQuantity(item.id, 1);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="add" size={16} color={AppColors.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }
+                  return (
+                    <TouchableOpacity
+                      style={styles.addButton}
+                      onPress={() => handleAddItem(item)}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${item.name}`}
+                      testID={`add-dish-btn-${item.id}`}
+                    >
+                      <Text style={styles.addButtonText}>ADD +</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
                 {item.isCustomizable && (
                   <Text style={styles.customizableLabel}>CUSTOMISABLE</Text>
                 )}
@@ -647,6 +681,28 @@ const styles = StyleSheet.create({
     color: AppColors.primary,
     fontSize: 13,
     fontWeight: '800',
+  },
+  stepperContainer: {
+    width: 96,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: AppColors.primary,
+    backgroundColor: AppColors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  stepperBtn: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperQtyText: {
+    color: AppColors.primary,
+    fontSize: 14,
+    fontWeight: '900',
   },
   customizableLabel: {
     color: AppColors.textTertiary,

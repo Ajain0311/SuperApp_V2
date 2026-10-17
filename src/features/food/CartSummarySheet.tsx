@@ -14,6 +14,7 @@ import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { AppConstants } from '../../constants/app';
 import { CartItem } from '../../models/food';
+import { useCartStore } from '../../store/cartStore';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 
@@ -36,6 +37,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   onOrderPlaced,
   isSubmitting = false,
 }) => {
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -116,12 +118,28 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
                       <Text style={styles.itemAddons}>{item.addons.join(', ')}</Text>
                     )}
                   </View>
-                  <View style={styles.itemPriceCol}>
+                  <View style={styles.itemRightRow}>
+                    <View style={styles.cartStepperBox}>
+                      <TouchableOpacity
+                        style={styles.cartStepperBtn}
+                        onPress={() => updateQuantity(item.foodItemId, -1)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="remove" size={14} color={AppColors.primary} />
+                      </TouchableOpacity>
+                      <Text style={styles.cartStepperQty}>{item.quantity}</Text>
+                      <TouchableOpacity
+                        style={styles.cartStepperBtn}
+                        onPress={() => updateQuantity(item.foodItemId, 1)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="add" size={14} color={AppColors.primary} />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={styles.itemPrice}>
                       {AppConstants.currency}
                       {item.totalPrice.toFixed(0)}
                     </Text>
-                    <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
                   </View>
                 </View>
               ))}
@@ -342,18 +360,34 @@ const styles = StyleSheet.create({
     color: AppColors.textTertiary,
     marginTop: 2,
   },
-  itemPriceCol: {
-    alignItems: 'flex-end',
+  itemRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cartStepperBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.surface,
+    borderWidth: 1.5,
+    borderColor: AppColors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  cartStepperBtn: {
+    padding: 3,
+  },
+  cartStepperQty: {
+    color: AppColors.primary,
+    fontSize: 13,
+    fontWeight: '800',
+    paddingHorizontal: 8,
   },
   itemPrice: {
     fontSize: 15,
     fontWeight: '800',
     color: AppColors.textPrimary,
-  },
-  itemQuantity: {
-    fontSize: 12,
-    color: AppColors.textSecondary,
-    marginTop: 2,
   },
   couponSection: {
     marginVertical: 12,
