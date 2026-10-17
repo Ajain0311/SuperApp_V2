@@ -85,6 +85,49 @@ describe('NotificationService - Push Permissions, Scheduling & Deep-Link Routing
         })
       );
     });
+
+    it('unregisters device token successfully when calling unregisterDeviceToken', async () => {
+      jest.spyOn(apiClient, 'post').mockResolvedValueOnce({
+        data: { success: true, message: 'Device token unregistered' },
+      } as any);
+
+      const success = await notificationService.unregisterDeviceToken('ExponentPushToken[test]');
+      expect(success).toBe(true);
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/notifications/unregister-device-token',
+        { token: 'ExponentPushToken[test]' }
+      );
+    });
+
+    it('gracefully handles error when unregisterDeviceToken fails', async () => {
+      jest.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('Network error'));
+
+      const success = await notificationService.unregisterDeviceToken('ExponentPushToken[test]');
+      expect(success).toBe(false);
+    });
+  });
+
+  describe('Android Notification Channel Setup', () => {
+    it('configures ride-requests high importance channel on Android', async () => {
+      const { Platform } = require('react-native');
+      const originalOS = Platform.OS;
+      Platform.OS = 'android';
+
+      try {
+        await notificationService.setupNotificationChannels();
+        expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
+          'ride-requests',
+          expect.objectContaining({
+            name: 'Ride Requests',
+            importance: 5,
+            vibrationPattern: [0, 250, 250, 250],
+            sound: 'default',
+          })
+        );
+      } finally {
+        Platform.OS = originalOS;
+      }
+    });
   });
 
   describe('Local Notification Scheduling', () => {

@@ -39,6 +39,7 @@ DEVELOPER & AI AGENT PROTOCOL (TEMPORARILY INACTIVE):
 | **FIX-24** | Food Section: Fix missing food & restaurant images | P0 (Critical) | `[x] CLOSED` |
 | **FIX-25** | Mapbox Dev Client Build Guard & Fallback | P1 (High) | `[x] CLOSED` |
 | **FIX-26** | 24x7 Playwright E2E Testing Suite & Continuous GitHub Workflow | P0 (Critical) | `[x] CLOSED (VERIFIED)` |
+| **FIX-27** | Live Ride Tracking, Real Driver Assignment, Dialer Calling & GPS Accuracy | P0 (Critical) | `[x] CLOSED (VERIFIED)` |
 
 ---
 

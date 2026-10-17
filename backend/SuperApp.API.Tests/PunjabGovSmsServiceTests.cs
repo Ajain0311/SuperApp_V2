@@ -83,4 +83,19 @@ public class PunjabGovSmsServiceTests
         var reuseCheck = await otpService.VerifyOtpAsync(testPhone, otpCode, "LOGIN");
         Assert.False(reuseCheck);
     }
+
+    [Fact]
+    public async Task TwoFactorSmsService_ReturnsFalse_WhenApiKeyMissing()
+    {
+        var inMemory = new Dictionary<string, string?>
+        {
+            { "TwoFactor:ApiKey", "" }
+        };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(inMemory).Build();
+        var client = new HttpClient();
+        var service = new TwoFactorSmsService(client, config, NullLogger<TwoFactorSmsService>.Instance);
+
+        var result = await service.SendSmsAsync("9876543210", "Your OTP is 1234");
+        Assert.False(result);
+    }
 }

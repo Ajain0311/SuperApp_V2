@@ -351,4 +351,46 @@ public class CaptainPushNotificationTests
         var ex = await Assert.ThrowsAsync<HubException>(() => hub.JoinDriversPool());
         Assert.Contains("Only registered captains", ex.Message);
     }
+
+    [Fact]
+    public async Task Test_8_UnregisterDeviceToken_DeactivatesSpecificDeviceTokenOnly()
+    {
+        var db = CreateDb();
+        var captainUser = new User { Id = 301, MobileNumber = "9876543210", FullName = "Captain MultiDevice" };
+        db.Users.Add(captainUser);
+
+        var token1 = new UserDeviceToken { UserId = captainUser.Id, DeviceToken = "ExponentPushToken[Phone1]", IsActive = true };
+        var token2 = new UserDeviceToken { UserId = captainUser.Id, DeviceToken = "ExponentPushToken[Phone2]", IsActive = true };
+        db.UserDeviceTokens.AddRange(token1, token2);
+        await db.SaveChangesAsync();
+
+        var controller = new NotificationsController(db);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, captainUser.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.Driver)
+                }, "TestAuth"))
+            }
+        };
+
+        // Unregister Phone1
+        var result = await controller.UnregisterDeviceToken(new RegisterDeviceTokenRequest
+        {
+            Token = "ExponentPushToken[Phone1]"
+        });
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var apiRes = Assert.IsType<ApiResponse>(okResult.Value);
+        Assert.True(apiRes.Success);
+
+        // Verify Phone1 is inactive, Phone2 remains active
+        var t1 = await db.UserDeviceTokens.FirstAsync(t => t.DeviceToken == "ExponentPushToken[Phone1]");
+        var t2 = await db.UserDeviceTokens.FirstAsync(t => t.DeviceToken == "ExponentPushToken[Phone2]");
+        Assert.False(t1.IsActive);
+        Assert.True(t2.IsActive);
+    }
 }

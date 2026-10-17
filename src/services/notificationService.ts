@@ -119,9 +119,40 @@ export class NotificationService {
   }
 
   /**
+   * Configure Android notification channels for background and terminated delivery
+   */
+  async setupNotificationChannels(): Promise<void> {
+    if (Platform.OS !== 'android' || !Notifications?.setNotificationChannelAsync) {
+      return;
+    }
+    try {
+      await Notifications.setNotificationChannelAsync('ride-requests', {
+        name: 'Ride Requests',
+        importance: (Notifications.AndroidImportance?.MAX ?? 5) as any,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF6B00',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'General Notifications',
+        importance: (Notifications.AndroidImportance?.DEFAULT ?? 3) as any,
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+    } catch (error) {
+      console.warn('[NotificationService] setupNotificationChannels error:', error);
+    }
+  }
+
+  /**
    * Request push notification permissions from user
    */
   async requestPermission(): Promise<NotificationPermissionStatus> {
+    await this.setupNotificationChannels();
     if (!Notifications?.requestPermissionsAsync) {
       return 'granted';
     }
@@ -218,13 +249,37 @@ export class NotificationService {
       await apiClient.post('/notifications/device-token', payload);
       return true;
     } catch (error: any) {
-      // If endpoint doesn't exist on current backend (404), log contract note without crashing
       if (error?.status === 404 || error?.response?.status === 404) {
         console.info(
           '[NotificationService] Device token registration endpoint not deployed on backend yet (/api/notifications/device-token).'
         );
       } else {
         console.warn('[NotificationService] Failed to register device token with backend:', error);
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Unregister device push token with backend on logout
+   */
+  async unregisterDeviceToken(token?: string): Promise<boolean> {
+    try {
+      const targetToken = token || this.cachedPushToken;
+      if (!targetToken) {
+        return true;
+      }
+      await apiClient.post('/notifications/unregister-device-token', {
+        token: targetToken,
+      });
+      if (this.cachedPushToken === targetToken) {
+        this.cachedPushToken = null;
+      }
+      return true;
+    } catch (error: any) {
+      console.warn('[NotificationService] Failed to unregister device token on logout:', error);
+      if (this.cachedPushToken === token) {
+        this.cachedPushToken = null;
       }
       return false;
     }

@@ -108,11 +108,15 @@ export class LocationService {
     timeoutMs?: number;
     throwOnError?: boolean;
     maxAgeMs?: number;
+    maxAccuracyMeters?: number;
+    forceFresh?: boolean;
   }): Promise<LocationCoordinates> {
     const timeoutMs = options?.timeoutMs ?? 10000;
     const accuracy = options?.accuracy ?? Location.Accuracy.Balanced;
     const throwOnError = options?.throwOnError ?? false;
     const maxAgeMs = options?.maxAgeMs ?? 60000;
+    const maxAccuracyMeters = options?.maxAccuracyMeters ?? 100;
+    const forceFresh = options?.forceFresh ?? false;
 
     const enabled = await this.isLocationServicesEnabled();
     if (!enabled) {
@@ -134,19 +138,21 @@ export class LocationService {
 
     let timeoutId: any;
     try {
-      // Fast path: Check last known position if recent (< maxAgeMs)
       let position: Location.LocationObject | null = null;
-      if (typeof Location.getLastKnownPositionAsync === 'function') {
+      if (!forceFresh && typeof Location.getLastKnownPositionAsync === 'function') {
         try {
           const lastKnown = await Location.getLastKnownPositionAsync({
             maxAge: maxAgeMs,
-            requiredAccuracy: 100,
+            requiredAccuracy: maxAccuracyMeters,
           });
-          if (lastKnown && Date.now() - lastKnown.timestamp <= maxAgeMs) {
+          if (
+            lastKnown &&
+            Date.now() - lastKnown.timestamp <= maxAgeMs &&
+            (lastKnown.coords.accuracy == null || lastKnown.coords.accuracy <= maxAccuracyMeters)
+          ) {
             position = lastKnown;
           }
         } catch (lastKnownErr) {
-          // Non-fatal, continue to active GPS retrieval
           console.debug?.('[LocationService] getLastKnownPositionAsync skipped:', lastKnownErr);
         }
       }
@@ -163,6 +169,11 @@ export class LocationService {
       if (timeoutId) clearTimeout(timeoutId);
 
       const { latitude, longitude, accuracy: posAccuracy, altitude, speed, heading } = position.coords;
+
+      // Validate accuracy threshold if reported
+      if (posAccuracy != null && maxAccuracyMeters && posAccuracy > maxAccuracyMeters) {
+        console.warn(`[LocationService] GPS accuracy ${posAccuracy}m exceeds threshold ${maxAccuracyMeters}m`);
+      }
 
       // Reverse geocode with graceful coordinate fallback so valid coordinates are never discarded
       let formattedAddress = `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`;

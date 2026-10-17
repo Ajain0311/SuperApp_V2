@@ -214,6 +214,83 @@ public class DriverTests
         Assert.Equal(28.7041m, driver!.CurrentLatitude);
         Assert.Equal(77.1025m, driver.CurrentLongitude);
     }
+
+    [Fact]
+    public async Task Driver_UpdateLocation_RejectsInvalidCoordinates()
+    {
+        var (db, hub) = CreateContext();
+        var user = new User { Id = 25, MobileNumber = "9876500006", FullName = "Invalid Coord Driver" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, 25, RoleNames.Driver);
+
+        // Latitude > 90
+        var res1 = await controller.UpdateLocation(new UpdateDriverLocationRequest
+        {
+            Latitude = 95.0m,
+            Longitude = 77.1025m
+        });
+        Assert.IsType<BadRequestObjectResult>(res1.Result);
+
+        // Longitude > 180
+        var res2 = await controller.UpdateLocation(new UpdateDriverLocationRequest
+        {
+            Latitude = 28.7041m,
+            Longitude = 185.0m
+        });
+        Assert.IsType<BadRequestObjectResult>(res2.Result);
+
+        // Zero coordinates (0, 0)
+        var res3 = await controller.UpdateLocation(new UpdateDriverLocationRequest
+        {
+            Latitude = 0m,
+            Longitude = 0m
+        });
+        Assert.IsType<BadRequestObjectResult>(res3.Result);
+    }
+
+    [Fact]
+    public async Task Driver_ConcurrentAccept_OnlyOneDriverWins()
+    {
+        var (db, hub) = CreateContext();
+        var driverUser1 = new User { Id = 31, MobileNumber = "9876500031", FullName = "Driver One" };
+        var driverUser2 = new User { Id = 32, MobileNumber = "9876500032", FullName = "Driver Two" };
+        var passenger = new User { Id = 60, MobileNumber = "9876500060", FullName = "Passenger User" };
+        db.Users.AddRange(driverUser1, driverUser2, passenger);
+
+        var ride = new Ride
+        {
+            Id = 303,
+            RideNumber = "RD-303",
+            UserId = passenger.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Location A",
+            DropoffAddress = "Location B",
+            EstimatedFare = 80,
+            Status = RideStatus.Requested,
+            OtpCode = "1234"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller1 = CreateController(db, hub, 31, RoleNames.Driver);
+        var controller2 = CreateController(db, hub, 32, RoleNames.Driver);
+
+        // Driver 1 accepts
+        var res1 = await controller1.AcceptRide(303);
+        var ok1 = Assert.IsType<OkObjectResult>(res1.Result);
+        var apiRes1 = Assert.IsType<ApiResponse<RideDto>>(ok1.Value);
+        Assert.True(apiRes1.Success);
+
+        // Driver 2 attempts to accept same ride -> Conflict
+        var res2 = await controller2.AcceptRide(303);
+        Assert.IsType<ConflictObjectResult>(res2.Result);
+
+        var finalRide = await db.Rides.FindAsync(303L);
+        var driver1Record = await db.Drivers.FirstOrDefaultAsync(d => d.UserId == 31);
+        Assert.Equal(driver1Record!.Id, finalRide!.DriverId);
+    }
 }
 
 public class FakeHubContext : IHubContext<RideTrackingHub>

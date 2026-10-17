@@ -171,17 +171,43 @@ else
     builder.Services.AddScoped<IStorageService, LocalStorageService>();
 }
 
-// 2. OTP / SMS Provider (Mock in development/testing; PunjabGov / Live SMS in production)
+// 2. OTP / SMS Provider (Mock in development/testing; PunjabGov / 2Factor in production)
 var otpTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
 var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") 
     ?? builder.Configuration["Providers:Otp"] 
     ?? (otpTestMode ? "Mock" : "PunjabGov");
 
+// SMS Provider Selection:
+// 1 = PunjabGov SMS Provider (current)
+// 2 = 2Factor.in SMS Provider (new)
+var smsProviderConfig = Environment.GetEnvironmentVariable("SMS_PROVIDER") 
+    ?? builder.Configuration["Providers:SmsProvider"] 
+    ?? "2"; // Default to 2 (2Factor.in)
+
 builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
-builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
+
+builder.Services.AddHttpClient<TwoFactorSmsService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+
+if (smsProviderConfig == "2" || string.Equals(smsProviderConfig, "TwoFactor", StringComparison.OrdinalIgnoreCase))
+{
+    // 2Factor.in SMS Provider (Active)
+    builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<TwoFactorSmsService>());
+}
+else
+{
+    // Option 1: PunjabGov SMS Provider
+    builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
+}
+
+// Previous hardcoded provider (commented out):
+// builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
+
 builder.Services.AddScoped<MockOtpService>();
 builder.Services.AddScoped<PunjabGovOtpService>();
 ProductionSecurityValidator.ValidateOtpProvider(otpProvider, otpTestMode, isProduction);
