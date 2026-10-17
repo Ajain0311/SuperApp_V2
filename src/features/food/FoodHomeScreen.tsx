@@ -22,7 +22,7 @@ import { absoluteImageUrl } from '../../services/documentService';
 
 const DEFAULT_RESTAURANT_IMAGE = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600';
 
-function resolveRestaurantImage(url?: string): string {
+export function resolveRestaurantImage(url?: string): string {
   if (!url || !url.trim()) return DEFAULT_RESTAURANT_IMAGE;
   return absoluteImageUrl(url);
 }
@@ -31,7 +31,7 @@ interface FoodHomeScreenProps {
   navigation: any;
 }
 
-const DEFAULT_RESTAURANTS: RestaurantSummary[] = [
+export const DEFAULT_RESTAURANTS: RestaurantSummary[] = [
   {
     id: 1,
     name: 'Meghana Foods (Special Biryani)',

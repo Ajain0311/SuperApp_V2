@@ -46,8 +46,8 @@ const VEHICLES: VehicleOption[] = [
     name: 'Bike Taxi',
     tag: 'FASTEST',
     tagColor: colors.secondary,
-    subtitle: 'Beat traffic • Helmet provided • 3m away',
-    fare: 45.0,
+    subtitle: 'Beat traffic • Helmet provided • Nearby',
+    fare: 0,
     icon: 'two-wheeler',
   },
   {
@@ -55,8 +55,8 @@ const VEHICLES: VehicleOption[] = [
     name: 'Auto Rickshaw',
     tag: 'VALUE',
     tagColor: colors.blue,
-    subtitle: 'Direct drop • Max 3 seats • 5m away',
-    fare: 65.0,
+    subtitle: 'Direct drop • Max 3 seats • Nearby',
+    fare: 0,
     icon: 'electric-rickshaw',
   },
   {
@@ -64,8 +64,8 @@ const VEHICLES: VehicleOption[] = [
     name: 'Economy Cab',
     tag: 'COMFORT',
     tagColor: colors.purple,
-    subtitle: 'AC Hatchback • Luggage space • 7m away',
-    fare: 125.0,
+    subtitle: 'AC Hatchback • Luggage space • Nearby',
+    fare: 0,
     icon: 'directions-car',
   },
 ];
@@ -571,7 +571,7 @@ export const RideBookingScreen: React.FC = () => {
                   isSelected && { color: colors.primary },
                 ]}
               >
-                ₹{vehicle.fare.toFixed(0)}
+                {vehicle.fare > 0 ? `₹${vehicle.fare.toFixed(0)}` : '--'}
               </Text>
             </TouchableOpacity>
           );
@@ -600,7 +600,9 @@ export const RideBookingScreen: React.FC = () => {
                 ? 'Booking Ride...'
                 : !dropoffCoords
                 ? 'Select Destination to Book'
-                : `Confirm ride · estimated ₹${selectedVehicle.fare.toFixed(0)}`}
+                : selectedVehicle.fare > 0
+                ? `Confirm ride · estimated ₹${selectedVehicle.fare.toFixed(0)}`
+                : 'Confirm ride'}
             </Text>
           </TouchableOpacity>
         </View>

@@ -26,6 +26,7 @@ const AVAILABLE_ROLES = [
   { key: 'CUSTOMER', label: 'Customer', icon: 'person-outline' as const },
   { key: 'DRIVER', label: 'Driver / Captain', icon: 'car-outline' as const },
   { key: 'RESTAURANT_OWNER', label: 'Restaurant Owner', icon: 'restaurant-outline' as const },
+  { key: 'MARKETPLACE_SELLER', label: 'Marketplace Seller', icon: 'pricetag-outline' as const },
   { key: 'ADMIN', label: 'Admin', icon: 'shield-checkmark-outline' as const },
 ];
 
@@ -109,9 +110,11 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
     setIsResettingPassword(true);
     try {
       await apiClient.post('/admin/users/assign', {
+        userId: user.id,
         mobileNumber: user.mobileNumber,
         fullName: user.fullName || 'Admin User',
         role: 'ADMIN',
+        roles: ['ADMIN'],
         adminPassword: newPassword.trim(),
       });
       setNewPassword('');

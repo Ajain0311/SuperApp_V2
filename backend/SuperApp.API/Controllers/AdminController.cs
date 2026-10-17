@@ -178,6 +178,7 @@ public class AdminController : ControllerBase
                 return Ok(ApiResponse.Ok($"User account status set to {(user.IsActive ? "ACTIVE" : "SUSPENDED")}"));
 
             case "ROLE":
+            case "REMOVE_ROLE":
                 if (string.IsNullOrWhiteSpace(request.RoleName))
                     return BadRequest(ApiResponse.Fail("RoleName is required"));
 
@@ -190,6 +191,20 @@ public class AdminController : ControllerBase
                 {
                     if (role.Name == RoleNames.Customer)
                         return BadRequest(ApiResponse.Fail("Customer access stays on the account"));
+
+                    if (role.Name == RoleNames.Admin && existingRole != null)
+                    {
+                        var adminRoleObj = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.Admin);
+                        if (adminRoleObj != null)
+                        {
+                            var totalAdmins = await _db.UserRoles.CountAsync(ur => ur.RoleId == adminRoleObj.Id && ur.User.IsActive);
+                            if (totalAdmins <= 1)
+                            {
+                                return BadRequest(ApiResponse.Fail("Cannot remove the last active administrator account"));
+                            }
+                        }
+                    }
+
                     if (existingRole != null)
                     {
                         _db.UserRoles.Remove(existingRole);
@@ -215,6 +230,12 @@ public class AdminController : ControllerBase
                     if (existingRole == null)
                     {
                         _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id, CreatedAt = DateTime.UtcNow });
+                    }
+
+                    if (role.Name == RoleNames.Admin && !string.IsNullOrWhiteSpace(request.AdminPassword))
+                    {
+                        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.AdminPassword.Trim());
+                        user.UpdatedAt = DateTime.UtcNow;
                     }
                     
                     // Provision Driver profile & vehicle if assigning DRIVER
@@ -285,7 +306,7 @@ public class AdminController : ControllerBase
                 }
 
             default:
-                return BadRequest(ApiResponse.Fail($"Unknown user action '{request.Action}'. Use STATUS or ROLE."));
+                return BadRequest(ApiResponse.Fail($"Unknown user action '{request.Action}'. Use STATUS, ROLE, or REMOVE_ROLE."));
         }
     }
 
@@ -296,15 +317,40 @@ public class AdminController : ControllerBase
     [HttpPost("users/assign")]
     public async Task<ActionResult<ApiResponse<AdminUserDto>>> AssignProfiles([FromBody] AdminAssignProfileRequest request)
     {
-        var user = await _db.Users.Include(u => u.UserRoles).FirstOrDefaultAsync(u => u.Id == request.UserId);
+        User? user = null;
+        if (request.UserId > 0)
+        {
+            user = await _db.Users.Include(u => u.UserRoles).FirstOrDefaultAsync(u => u.Id == request.UserId);
+        }
+
+        if (user == null && !string.IsNullOrWhiteSpace(request.MobileNumber))
+        {
+            var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+            user = await _db.Users.Include(u => u.UserRoles)
+                .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber.Trim() || u.MobileNumber == cleanMobile);
+        }
+
         if (user == null)
             return NotFound(ApiResponse<AdminUserDto>.Fail("User not found"));
+
+        if (!string.IsNullOrWhiteSpace(request.FullName) && string.IsNullOrWhiteSpace(user.FullName))
+        {
+            user.FullName = request.FullName.Trim();
+        }
 
         var wanted = request.Roles
             .Where(r => !string.IsNullOrWhiteSpace(r))
             .Select(r => r.Trim().ToUpperInvariant())
             .Distinct()
             .ToList();
+
+        if (!string.IsNullOrWhiteSpace(request.Role))
+        {
+            var singleRole = request.Role.Trim().ToUpperInvariant();
+            if (!wanted.Contains(singleRole))
+                wanted.Add(singleRole);
+        }
+
         if (!wanted.Contains(RoleNames.Customer))
             wanted.Add(RoleNames.Customer);
 
@@ -316,6 +362,12 @@ public class AdminController : ControllerBase
                 return BadRequest(ApiResponse<AdminUserDto>.Fail($"Role '{name}' does not exist"));
             if (user.UserRoles.All(ur => ur.RoleId != role.Id))
                 _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id, CreatedAt = DateTime.UtcNow });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.AdminPassword))
+        {
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.AdminPassword.Trim());
+            user.UpdatedAt = DateTime.UtcNow;
         }
 
         if (wanted.Contains(RoleNames.RestaurantOwner))
@@ -1004,7 +1056,19 @@ public class AdminController : ControllerBase
                 new AppSetting { SettingKey = "driver_commission_percent", SettingValue = "20", Description = "Platform cut on ride fares (%)", UpdatedAt = DateTime.UtcNow },
                 new AppSetting { SettingKey = "surge_pricing_multiplier", SettingValue = "1.0", Description = "Global ride surge multiplier", UpdatedAt = DateTime.UtcNow },
                 new AppSetting { SettingKey = "free_delivery_threshold", SettingValue = "500", Description = "Order value for free delivery in INR", UpdatedAt = DateTime.UtcNow },
-                new AppSetting { SettingKey = "maintenance_mode", SettingValue = "false", Description = "App maintenance downtime mode (true/false)", UpdatedAt = DateTime.UtcNow }
+                new AppSetting { SettingKey = "maintenance_mode", SettingValue = "false", Description = "App maintenance downtime mode (true/false)", UpdatedAt = DateTime.UtcNow },
+                // Ride Fare Pricing Configurations (Bike)
+                new AppSetting { SettingKey = "ride_bike_base_fare", SettingValue = "25", Description = "Bike Ride Base Fare (₹)", UpdatedAt = DateTime.UtcNow },
+                new AppSetting { SettingKey = "ride_bike_per_km_rate", SettingValue = "8", Description = "Bike Ride Per Km Rate (₹/km)", UpdatedAt = DateTime.UtcNow },
+                new AppSetting { SettingKey = "ride_bike_minimum_fare", SettingValue = "35", Description = "Bike Ride Minimum Fare (₹)", UpdatedAt = DateTime.UtcNow },
+                // Ride Fare Pricing Configurations (Auto)
+                new AppSetting { SettingKey = "ride_auto_base_fare", SettingValue = "35", Description = "Auto Rickshaw Base Fare (₹)", UpdatedAt = DateTime.UtcNow },
+                new AppSetting { SettingKey = "ride_auto_per_km_rate", SettingValue = "12", Description = "Auto Rickshaw Per Km Rate (₹/km)", UpdatedAt = DateTime.UtcNow },
+                new AppSetting { SettingKey = "ride_auto_minimum_fare", SettingValue = "50", Description = "Auto Rickshaw Minimum Fare (₹)", UpdatedAt = DateTime.UtcNow },
+                // Ride Fare Pricing Configurations (Cab)
+                new AppSetting { SettingKey = "ride_cab_base_fare", SettingValue = "55", Description = "Economy Cab Base Fare (₹)", UpdatedAt = DateTime.UtcNow },
+                new AppSetting { SettingKey = "ride_cab_per_km_rate", SettingValue = "16", Description = "Economy Cab Per Km Rate (₹/km)", UpdatedAt = DateTime.UtcNow },
+                new AppSetting { SettingKey = "ride_cab_minimum_fare", SettingValue = "90", Description = "Economy Cab Minimum Fare (₹)", UpdatedAt = DateTime.UtcNow }
             };
             _db.AppSettings.AddRange(defaultSettings);
             await _db.SaveChangesAsync();
