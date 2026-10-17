@@ -115,7 +115,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
     const hasRole = currentRoles.includes(roleName);
     try {
       await apiClient.post('/admin/users', {
-        action: 'ROLE',
+        action: hasRole ? 'REMOVE_ROLE' : 'ROLE',
         userId,
         roleName,
       });

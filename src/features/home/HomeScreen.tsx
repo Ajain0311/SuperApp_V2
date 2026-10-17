@@ -12,20 +12,27 @@ import {
   ActivityIndicator,
   FlatList,
   BackHandler,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-
 import { LinearGradient } from 'expo-linear-gradient';
+
 import { AppColors } from '../../theme/colors';
-import { AppRadius } from '../../theme/spacing';
+import { AppRadius, spacing } from '../../theme/spacing';
 import { AppTypography } from '../../theme/typography';
 import { AppSearchBar } from '../../components/common/AppSearchBar';
 import { useAuthStore } from '../../store/authStore';
+import { useCartStore } from '../../store/cartStore';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { AppEnvironment } from '../../config/environment';
+import { RestaurantSummary, FoodItem } from '../../models/food';
+import { ListingSummary } from '../../models/marketplace';
+import { DEFAULT_RESTAURANTS, resolveRestaurantImage } from '../food/FoodHomeScreen';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function resolveBannerImage(url: string) {
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -47,12 +54,43 @@ interface HomeScreenProps {
   navigation: any;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+export interface TodayDealItem {
+  id: number;
+  restaurantId: number;
+  restaurantName: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  basePrice: number;
+  discountedPrice: number;
+  discountPercent: number;
+  isVeg: boolean;
+  isCustomizable: boolean;
+  tag: string;
+}
 
+const CUISINE_RECOMMENDATIONS = [
+  { id: 'biryani', name: 'Biryani', icon: 'flame', count: '12+ spots' },
+  { id: 'north_indian', name: 'North Indian', icon: 'restaurant', count: '18+ spots' },
+  { id: 'south_indian', name: 'South Indian', icon: 'leaf', count: '10+ spots' },
+  { id: 'burgers', name: 'Burgers', icon: 'fast-food', count: '8+ spots' },
+  { id: 'desserts', name: 'Desserts', icon: 'ice-cream', count: '14+ spots' },
+  { id: 'rolls', name: 'Rolls & Wraps', icon: 'nutrition', count: '9+ spots' },
+];
+
+export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const user = useAuthStore((state) => state.user);
+  const addItemToCart = useCartStore((state) => state.addItem);
+  const cartRestaurantId = useCartStore((state) => state.restaurantId);
+  const cartRestaurantName = useCartStore((state) => state.restaurantName);
+
   const [activeRide, setActiveRide] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
   const [deliverTo, setDeliverTo] = useState<string>('Add delivery address');
+  const [restaurants, setRestaurants] = useState<RestaurantSummary[]>(DEFAULT_RESTAURANTS);
+  const [todayDeals, setTodayDeals] = useState<TodayDealItem[]>([]);
+  const [bazaarListings, setBazaarListings] = useState<ListingSummary[]>([]);
+  const [isLoadingHome, setIsLoadingHome] = useState<boolean>(true);
 
   // Multi-Category Search Overlay State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -61,6 +99,107 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [foodPool, setFoodPool] = useState<any[]>([]);
   const [bazaarPool, setBazaarPool] = useState<any[]>([]);
+
+  const loadHomeData = useCallback(async () => {
+    setIsLoadingHome(true);
+    try {
+      const [bannersRes, restsRes, listingsRes, ridesRes] = await Promise.allSettled([
+        apiClient.get<any>(ApiEndpoints.common.banners),
+        apiClient.get<any>(ApiEndpoints.food.restaurants),
+        apiClient.get<any>(ApiEndpoints.marketplace.listings),
+        apiClient.get<any>(ApiEndpoints.ride.myRides),
+      ]);
+
+      // 1. Banners
+      if (bannersRes.status === 'fulfilled') {
+        const data = bannersRes.value?.data?.data || bannersRes.value?.data;
+        if (Array.isArray(data) && data.length > 0) {
+          setBanners(data);
+        }
+      }
+
+      // 2. Restaurants & Food Deals
+      let loadedRests: RestaurantSummary[] = DEFAULT_RESTAURANTS;
+      if (restsRes.status === 'fulfilled') {
+        const payload = restsRes.value?.data?.data || restsRes.value?.data;
+        const items = payload?.items || payload;
+        if (Array.isArray(items) && items.length > 0) {
+          loadedRests = items;
+          setRestaurants(items);
+        }
+      }
+
+      // Extract actual deals/combos from top restaurant detail menus
+      if (loadedRests.length > 0) {
+        const topRest = loadedRests[0];
+        try {
+          const detailRes = await apiClient.get<any>(ApiEndpoints.food.restaurantDetail(topRest.id));
+          const detailData = detailRes?.data?.data || detailRes?.data;
+          if (detailData && Array.isArray(detailData.categories)) {
+            const deals: TodayDealItem[] = [];
+            for (const cat of detailData.categories) {
+              const catItems: FoodItem[] = cat.items || [];
+              for (const item of catItems) {
+                if (item.isAvailable) {
+                  const discountPct = Number(item.discountPercent) || 0;
+                  const isDealOrCombo =
+                    item.isBestseller ||
+                    discountPct > 0 ||
+                    item.name.toLowerCase().includes('combo') ||
+                    item.name.toLowerCase().includes('thali') ||
+                    item.name.toLowerCase().includes('special');
+
+                  if (isDealOrCombo && deals.length < 6) {
+                    deals.push({
+                      id: item.id,
+                      restaurantId: topRest.id,
+                      restaurantName: detailData.name || topRest.name,
+                      name: item.name,
+                      description: item.description || '',
+                      imageUrl: item.imageUrl || topRest.imageUrl || '',
+                      basePrice: Number(item.basePrice) || 0,
+                      discountedPrice: Number(item.discountedPrice) || Number(item.basePrice) || 0,
+                      discountPercent: discountPct,
+                      isVeg: Boolean(item.isVeg),
+                      isCustomizable: Boolean(item.isCustomizable),
+                      tag: discountPct > 0 ? `${discountPct}% OFF` : item.isBestseller ? 'BESTSELLER' : 'SPECIAL',
+                    });
+                  }
+                }
+              }
+            }
+            if (deals.length > 0) {
+              setTodayDeals(deals);
+            }
+          }
+        } catch {
+          // Keep existing or empty deals safely
+        }
+      }
+
+      // 3. Bazaar Listings
+      if (listingsRes.status === 'fulfilled') {
+        const payload = listingsRes.value?.data?.data || listingsRes.value?.data;
+        const items = payload?.items || payload;
+        if (Array.isArray(items)) {
+          setBazaarListings(items.slice(0, 6));
+        }
+      }
+
+      // 4. Live Ride
+      if (ridesRes.status === 'fulfilled') {
+        const data = ridesRes.value?.data?.data || ridesRes.value?.data;
+        if (Array.isArray(data) && data.length > 0) {
+          const live = data.find(
+            (r: any) => r.status === 'PENDING' || r.status === 'ACCEPTED' || r.status === 'STARTED'
+          );
+          setActiveRide(live || null);
+        }
+      }
+    } finally {
+      setIsLoadingHome(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -71,9 +210,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           setDeliverTo(resolveDeliveryAddress(payload));
         })
         .catch(() => {
-          // Never substitute Connaught Place or fabricated address on failure
           setDeliverTo('Add delivery address');
         });
+
+      loadHomeData();
 
       const onBackPress = () => {
         if (isSearchOpen) {
@@ -85,44 +225,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
-    }, [isSearchOpen])
+    }, [isSearchOpen, loadHomeData])
   );
-
-
-
-  useEffect(() => {
-    // Fetch live promotional banners
-    apiClient
-      .get<any>(ApiEndpoints.common.banners)
-      .then((res) => {
-        const data = res.data?.data || res.data;
-        if (Array.isArray(data) && data.length > 0) {
-          setBanners(data);
-        }
-      })
-      .catch(() => {});
-
-    // Check for real active ride in transit
-    apiClient
-      .get<any>(ApiEndpoints.ride.myRides)
-      .then((res) => {
-        const data = res.data?.data || res.data;
-        if (Array.isArray(data) && data.length > 0) {
-          const live = data.find(
-            (r: any) =>
-              r.status === 'PENDING' ||
-              r.status === 'ACCEPTED' ||
-              r.status === 'STARTED'
-          );
-          if (live) {
-            setActiveRide(live);
-          } else {
-            setActiveRide(null);
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const openSearch = () => {
     setIsSearchOpen(true);
@@ -243,6 +347,53 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
   };
 
+  const handleAddDealToCart = (deal: TodayDealItem) => {
+    if (deal.isCustomizable) {
+      // Navigate to Restaurant Detail so user can customize variants and addons safely
+      navigation.navigate('RestaurantDetail', { restaurantId: deal.restaurantId.toString() });
+      return;
+    }
+
+    // Guard against silent mixed restaurant cart corruption
+    if (cartRestaurantId !== null && cartRestaurantId !== deal.restaurantId) {
+      Alert.alert(
+        'Replace Cart?',
+        `Your cart contains items from "${cartRestaurantName}". Do you want to discard them and add this deal from "${deal.restaurantName}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Yes, Replace',
+            style: 'destructive',
+            onPress: () => {
+              addItemToCart(deal.restaurantId, deal.restaurantName, {
+                id: Date.now(),
+                foodItemId: deal.id,
+                name: deal.name,
+                basePrice: deal.discountedPrice,
+                quantity: 1,
+                addons: [],
+                totalPrice: deal.discountedPrice,
+              });
+              Alert.alert('Added to Cart', `${deal.name} added to your cart.`);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    addItemToCart(deal.restaurantId, deal.restaurantName, {
+      id: Date.now(),
+      foodItemId: deal.id,
+      name: deal.name,
+      basePrice: deal.discountedPrice,
+      quantity: 1,
+      addons: [],
+      totalPrice: deal.discountedPrice,
+    });
+    Alert.alert('Added to Cart', `${deal.name} added to your cart.`);
+  };
+
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const results: Array<{
@@ -305,7 +456,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Location Bar */}
+        {/* 1. TOP HEADER: Address, Notification Button & Profile */}
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.locationGroup}
@@ -315,37 +466,48 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             accessibilityLabel="Select delivery address"
           >
             <View style={styles.locationIconBox}>
-              <Ionicons name="location-sharp" size={20} color={AppColors.error} />
+              <Ionicons name="location-sharp" size={18} color={AppColors.primary} />
             </View>
             <View style={styles.locationTextColumn}>
               <Text style={styles.deliverToCaption}>DELIVER TO</Text>
               <View style={styles.cityRow}>
                 <Text style={styles.cityName} numberOfLines={1}>{deliverTo}</Text>
-                <Ionicons name="chevron-down" size={16} color={AppColors.textSecondary} />
+                <Ionicons name="chevron-down" size={15} color={AppColors.textSecondary} />
               </View>
             </View>
           </TouchableOpacity>
 
+          <View style={styles.headerRightActions}>
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="View notifications"
+            >
+              <Ionicons name="notifications-outline" size={20} color={AppColors.textPrimary} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.profileAvatar}
-            onPress={() => navigation.navigate('Profile')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.avatarInitials}>{getInitials()}</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.profileAvatar}
+              onPress={() => navigation.navigate('Profile')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.avatarInitials}>{getInitials()}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Search Bar */}
+        {/* 2. UNIFIED SEARCH BAR */}
         <View style={styles.searchWrapper}>
           <AppSearchBar
-            placeholder="Search food, rides, items & groceries..."
+            placeholder="Search food, restaurants, dishes & marketplace..."
             editable={false}
             onPress={openSearch}
           />
         </View>
 
-        {/* Live Ride Card (Rendered only when a real ride is active/in-transit) */}
+        {/* 3. ACTIVE RIDE STATUS CARD (If user has a live ride in transit) */}
         {activeRide ? (
           <View style={styles.liveRideCard}>
             <View style={styles.liveRideHeader}>
@@ -374,16 +536,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 </Text>
                 <View style={styles.driverOtpRow}>
                   <Text style={styles.driverText}>
-                    {activeRide.driver?.fullName ? `Driver: ${activeRide.driver.fullName} • ` : ''}OTP:{' '}
+                    {activeRide.driver?.fullName ? `Captain: ${activeRide.driver.fullName} • ` : ''}OTP:{' '}
                   </Text>
-                  <Text style={styles.otpHighlight}>{activeRide.otpCode || '4829'}</Text>
+                  <Text style={styles.otpHighlight}>{activeRide.otpCode || '----'}</Text>
                 </View>
               </View>
               <TouchableOpacity
                 style={styles.trackButton}
                 onPress={() =>
                   navigation.navigate('ActiveRide', {
-                    rideId: activeRide.rideNumber || 'RD-5021',
+                    rideId: activeRide.rideNumber || 'RD-LIVE',
                     rideNumericId: activeRide.id,
                   })
                 }
@@ -396,115 +558,279 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </View>
         ) : null}
 
-        {banners.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dealsScroll}>
-            {banners.map((banner) => (
+        {/* 4. PROMOTIONAL BANNERS CAROUSEL */}
+        {banners.length > 0 && (
+          <View style={styles.bannerSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.bannersScroll}
+              decelerationRate="fast"
+              snapToInterval={SCREEN_WIDTH - 48}
+            >
+              {banners.map((banner) => (
+                <TouchableOpacity
+                  key={String(banner.id)}
+                  style={styles.bannerCard}
+                  activeOpacity={0.9}
+                  onPress={() => openBanner(banner)}
+                >
+                  {banner.imageUrl ? (
+                    <Image
+                      source={{ uri: resolveBannerImage(banner.imageUrl) }}
+                      style={styles.bannerImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.bannerImagePlaceholder}>
+                      <Ionicons name="sparkles" size={28} color={AppColors.primary} />
+                    </View>
+                  )}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.8)']}
+                    style={styles.bannerOverlay}
+                  >
+                    <Text style={styles.bannerTitle} numberOfLines={1}>{banner.title}</Text>
+                    {banner.subtitle ? (
+                      <Text style={styles.bannerSubtitle} numberOfLines={1}>{banner.subtitle}</Text>
+                    ) : null}
+                    {banner.ctaText ? (
+                      <View style={styles.bannerCtaBadge}>
+                        <Text style={styles.bannerCtaText}>{banner.ctaText} →</Text>
+                      </View>
+                    ) : null}
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 5. QUICK RIDE SHORTCUT STRIP */}
+        <TouchableOpacity
+          style={styles.rideShortcutStrip}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Rides')}
+        >
+          <View style={styles.rideShortcutLeft}>
+            <View style={styles.rideShortcutIconBox}>
+              <Ionicons name="car-sport" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.rideShortcutTextCol}>
+              <Text style={styles.rideShortcutTitle}>Need a quick ride?</Text>
+              <Text style={styles.rideShortcutSubtitle}>Bike, Auto & Cabs nearby • Tap to book</Text>
+            </View>
+          </View>
+          <View style={styles.rideShortcutActionBtn}>
+            <Text style={styles.rideShortcutActionText}>Book Ride</Text>
+            <Ionicons name="arrow-forward" size={14} color={AppColors.primary} />
+          </View>
+        </TouchableOpacity>
+
+        {/* 6. TODAY'S DEALS & COMBOS SECTION */}
+        {todayDeals.length > 0 && (
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeading}>Today's Deals & Combos</Text>
+                <Text style={styles.sectionSubheading}>Freshly discounted items from verified restaurants</Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('Food')}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalCardList}
+            >
+              {todayDeals.map((deal) => (
+                <View key={deal.id} style={styles.dealCard}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => navigation.navigate('RestaurantDetail', { restaurantId: deal.restaurantId.toString() })}
+                  >
+                    <Image
+                      source={{ uri: resolveRestaurantImage(deal.imageUrl) }}
+                      style={styles.dealCardImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.dealTagBadge}>
+                      <Text style={styles.dealTagText}>{deal.tag}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <View style={styles.dealCardContent}>
+                    <Text style={styles.dealRestName} numberOfLines={1}>{deal.restaurantName}</Text>
+                    <Text style={styles.dealItemName} numberOfLines={1}>{deal.name}</Text>
+
+                    <View style={styles.dealPriceRow}>
+                      <Text style={styles.dealPrice}>₹{deal.discountedPrice.toFixed(0)}</Text>
+                      {deal.basePrice > deal.discountedPrice && (
+                        <Text style={styles.dealBasePrice}>₹{deal.basePrice.toFixed(0)}</Text>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.addDealBtn}
+                      activeOpacity={0.8}
+                      onPress={() => handleAddDealToCart(deal)}
+                    >
+                      <Ionicons name="add" size={16} color="#FFFFFF" />
+                      <Text style={styles.addDealBtnText}>ADD</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 7. FOOD DISCOVERY CUISINES */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionHeading}>Explore Cuisines</Text>
+              <Text style={styles.sectionSubheading}>Curated culinary selections</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Food')}>
+              <Text style={styles.seeAllText}>Explore Menu</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.cuisinesScroll}
+          >
+            {CUISINE_RECOMMENDATIONS.map((c) => (
               <TouchableOpacity
-                key={String(banner.id)}
-                style={styles.promoCard}
-                activeOpacity={0.85}
-                onPress={() => openBanner(banner)}
+                key={c.id}
+                style={styles.cuisinePill}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('Food')}
               >
-                {banner.imageUrl ? (
-                  <Image source={{ uri: resolveBannerImage(banner.imageUrl) }} style={styles.promoImage} />
-                ) : null}
-                <Text style={styles.dealTitle}>{banner.title}</Text>
-                {banner.subtitle ? <Text style={styles.dealSubtitle}>{banner.subtitle}</Text> : null}
-                {banner.ctaText ? <Text style={styles.promoCta}>{banner.ctaText}</Text> : null}
+                <View style={styles.cuisineIconCircle}>
+                  <Ionicons name={c.icon as any} size={20} color={AppColors.primary} />
+                </View>
+                <Text style={styles.cuisineName}>{c.name}</Text>
+                <Text style={styles.cuisineCount}>{c.count}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-        ) : null}
-
-        {/* Section Title */}
-        <Text style={[AppTypography.sectionTitle, styles.sectionMargin]}>
-          Super App Services
-        </Text>
-
-        {/* Food Delivery Service Card */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('Food')}
-          style={styles.foodCardContainer}
-        >
-          <LinearGradient
-            colors={['#EA580C', '#C2410C']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.foodCardGradient}
-          >
-            <View style={styles.foodCardLeft}>
-              <View style={styles.dealBadge}>
-                <Text style={styles.dealBadgeText}>50% OFF • FAST DROP</Text>
-              </View>
-              <Text style={styles.serviceTitle}>Food Delivery</Text>
-              <Text style={styles.serviceSubtitle}>Biryani, Burgers, Pizzas in 20m</Text>
-            </View>
-            <View style={styles.serviceIconContainer}>
-              <Ionicons name="pizza" size={34} color="#FFFFFF" />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Rides & Marketplace Grid */}
-        <View style={styles.servicesGrid}>
-          {/* Rides Service Card */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('Rides')}
-            style={styles.gridCardContainer}
-          >
-            <LinearGradient
-              colors={['#059669', '#047857']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gridCardGradient}
-            >
-              <View style={styles.gridCardTop}>
-                <View style={styles.gridIconBox}>
-                  <Ionicons name="bicycle" size={22} color="#FFFFFF" />
-                </View>
-                <View style={styles.gridTag}>
-                  <Text style={styles.gridTagText}>Fastest</Text>
-                </View>
-              </View>
-              <View>
-                <Text style={styles.gridTitle}>Book Rides</Text>
-                <Text style={styles.gridSubtitle}>Bike, Auto, Cabs</Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Marketplace Service Card */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('Bazaar')}
-            style={styles.gridCardContainer}
-          >
-            <LinearGradient
-              colors={['#2563EB', '#1D4ED8']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gridCardGradient}
-            >
-              <View style={styles.gridCardTop}>
-                <View style={styles.gridIconBox}>
-                  <Ionicons name="pricetag" size={20} color="#FFFFFF" />
-                </View>
-                <View style={styles.gridTag}>
-                  <Text style={styles.gridTagText}>Direct</Text>
-                </View>
-              </View>
-              <View>
-                <Text style={styles.gridTitle}>Marketplace</Text>
-                <Text style={styles.gridSubtitle}>Buy & Sell Local</Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
+
+        {/* 8. POPULAR RESTAURANTS NEAR YOU */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionHeading}>Popular Near You</Text>
+              <Text style={styles.sectionSubheading}>Top-rated restaurants delivered to your doorstep</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Food')}>
+              <Text style={styles.seeAllText}>View all ({restaurants.length})</Text>
+            </TouchableOpacity>
+          </View>
+
+          {restaurants.slice(0, 4).map((restaurant) => (
+            <TouchableOpacity
+              key={restaurant.id}
+              style={styles.restCard}
+              activeOpacity={0.9}
+              onPress={() =>
+                navigation.navigate('RestaurantDetail', {
+                  restaurantId: restaurant.id.toString(),
+                })
+              }
+            >
+              <Image
+                source={{ uri: resolveRestaurantImage(restaurant.imageUrl) }}
+                style={styles.restImage}
+                resizeMode="cover"
+              />
+              <View style={styles.restInfo}>
+                <View style={styles.restTitleRow}>
+                  <Text style={styles.restName} numberOfLines={1}>{restaurant.name}</Text>
+                  <View style={styles.ratingBadge}>
+                    <Ionicons name="star" size={11} color="#FFFFFF" />
+                    <Text style={styles.ratingText}>{Number(restaurant.rating || 4.5).toFixed(1)}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.restCuisines} numberOfLines={1}>
+                  {restaurant.cuisines || restaurant.description || 'Multi-cuisine • Fast Food'}
+                </Text>
+
+                <View style={styles.restMetaRow}>
+                  <View style={styles.restMetaItem}>
+                    <Ionicons name="time-outline" size={13} color={AppColors.textSecondary} />
+                    <Text style={styles.restMetaText}>
+                      {restaurant.avgDeliveryTimeMinutes || 25} mins
+                    </Text>
+                  </View>
+                  <Text style={styles.metaDot}>•</Text>
+                  <View style={styles.restMetaItem}>
+                    <Ionicons name="bicycle-outline" size={13} color={AppColors.textSecondary} />
+                    <Text style={styles.restMetaText}>
+                      {restaurant.deliveryFee === 0 ? 'Free Delivery' : `₹${restaurant.deliveryFee} drop`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* 9. COMPACT BAZAAR PICKS */}
+        {bazaarListings.length > 0 && (
+          <View style={[styles.sectionContainer, { marginBottom: 16 }]}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeading}>Community Bazaar</Text>
+                <Text style={styles.sectionSubheading}>Fresh pre-loved items from verified local sellers</Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('Bazaar')}>
+                <Text style={styles.seeAllText}>Browse Bazaar</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalCardList}
+            >
+              {bazaarListings.map((listing) => (
+                <TouchableOpacity
+                  key={listing.id}
+                  style={styles.bazaarCard}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('ListingDetail', { listingId: String(listing.id) })}
+                >
+                  <Image
+                    source={{
+                      uri:
+                        listing.primaryImageUrl ||
+                        'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400',
+                    }}
+                    style={styles.bazaarCardImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.bazaarCardContent}>
+                    <Text style={styles.bazaarPrice}>₹{Number(listing.price || 0).toFixed(0)}</Text>
+                    <Text style={styles.bazaarTitle} numberOfLines={1}>{listing.title}</Text>
+                    <Text style={styles.bazaarCategory} numberOfLines={1}>
+                      {listing.categoryName || 'General'} • {listing.location || 'Local'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </ScrollView>
 
-      {/* Global Search Overlay Modal */}
+      {/* GLOBAL SEARCH OVERLAY MODAL */}
       <Modal visible={isSearchOpen} animationType="slide" onRequestClose={() => setIsSearchOpen(false)}>
         <SafeAreaView style={styles.searchModalContainer}>
           <View style={styles.searchModalHeader}>
@@ -616,7 +942,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 28,
+    paddingBottom: 32,
   },
   topBar: {
     flexDirection: 'row',
@@ -627,24 +953,27 @@ const styles = StyleSheet.create({
   locationGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
   },
   locationIconBox: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: `${AppColors.error}33`,
+    backgroundColor: `${AppColors.primary}22`,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   locationTextColumn: {
+    flex: 1,
     justifyContent: 'center',
   },
   deliverToCaption: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     color: AppColors.textTertiary,
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
   },
   cityRow: {
     flexDirection: 'row',
@@ -656,6 +985,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: AppColors.textPrimary,
     marginRight: 4,
+    maxWidth: '85%',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   profileAvatar: {
     width: 38,
@@ -681,7 +1026,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${AppColors.secondary}4D`,
     padding: 14,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   liveRideHeader: {
     flexDirection: 'row',
@@ -768,192 +1113,347 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 2,
   },
-  payTestBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: AppColors.surface,
-    borderWidth: 1,
-    borderColor: AppColors.primary,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+  bannerSection: {
+    marginBottom: 20,
+  },
+  bannersScroll: {
+    paddingRight: 16,
     gap: 12,
   },
-  payTestIcon: {
-    width: 44,
-    height: 44,
+  bannerCard: {
+    width: SCREEN_WIDTH - 64,
+    height: 140,
+    borderRadius: AppRadius.md,
+    overflow: 'hidden',
+    backgroundColor: AppColors.surface,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: `${AppColors.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+    justifyContent: 'flex-end',
+  },
+  bannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  bannerSubtitle: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  bannerCtaBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: AppColors.primary,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 6,
+  },
+  bannerCtaText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  rideShortcutStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: `${AppColors.primary}33`,
+    borderRadius: AppRadius.md,
+    padding: 14,
+    marginBottom: 24,
+  },
+  rideShortcutLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  rideShortcutIconBox: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
     backgroundColor: AppColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
-  payTestKicker: {
-    color: AppColors.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+  rideShortcutTextCol: {
+    flex: 1,
   },
-  payTestTitle: {
-    color: AppColors.textPrimary,
-    fontSize: 15,
+  rideShortcutTitle: {
+    fontSize: 14,
     fontWeight: '700',
+    color: AppColors.textPrimary,
+  },
+  rideShortcutSubtitle: {
+    fontSize: 11,
+    color: AppColors.textSecondary,
     marginTop: 2,
   },
-  sectionMargin: {
-    marginBottom: 14,
-  },
-  foodCardContainer: {
-    height: 125,
-    borderRadius: 20,
-    marginBottom: 12,
-    shadowColor: '#EA580C',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  foodCardGradient: {
-    flex: 1,
-    borderRadius: 20,
-    padding: 18,
+  rideShortcutActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: `${AppColors.primary}1A`,
   },
-  foodCardLeft: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  dealBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  dealBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  serviceTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 4,
-  },
-  serviceSubtitle: {
-    color: 'rgba(255, 255, 255, 0.85)',
+  rideShortcutActionText: {
     fontSize: 12,
-    fontWeight: '500',
-  },
-  serviceIconContainer: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  servicesGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 28,
-  },
-  gridCardContainer: {
-    flex: 1,
-    height: 140,
-    marginHorizontal: 4,
-    borderRadius: 20,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  gridCardGradient: {
-    flex: 1,
-    borderRadius: 20,
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  gridCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  gridIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gridTag: {
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  gridTagText: {
-    color: '#FFFFFF',
-    fontSize: 10,
     fontWeight: '700',
+    color: AppColors.primary,
   },
-  gridTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionHeading: {
+    fontSize: 17,
     fontWeight: '800',
-    marginBottom: 2,
+    color: AppColors.textPrimary,
   },
-  gridSubtitle: {
-    color: 'rgba(255, 255, 255, 0.85)',
+  sectionSubheading: {
     fontSize: 12,
-    fontWeight: '500',
+    color: AppColors.textTertiary,
+    marginTop: 2,
   },
-  dealsScroll: {
+  seeAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AppColors.primary,
+    marginTop: 2,
+  },
+  horizontalCardList: {
     paddingRight: 16,
+    gap: 12,
   },
   dealCard: {
-    width: 165,
-    backgroundColor: AppColors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: `${AppColors.border}99`,
-    padding: 14,
-    marginRight: 12,
-  },
-  dealTitle: {
-    color: AppColors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 8,
-    marginBottom: 2,
-  },
-  promoCard: {
-    width: 260,
-    marginRight: 12,
+    width: 170,
     backgroundColor: AppColors.surface,
     borderRadius: AppRadius.md,
-    padding: 12,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    overflow: 'hidden',
   },
-  promoImage: {
+  dealCardImage: {
     width: '100%',
-    height: 110,
-    borderRadius: AppRadius.sm,
+    height: 105,
+  },
+  dealTagBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: AppColors.primary,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  dealTagText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  dealCardContent: {
+    padding: 10,
+  },
+  dealRestName: {
+    fontSize: 10,
+    color: AppColors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  dealItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+    marginBottom: 6,
+  },
+  dealPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 8,
   },
-  promoCta: {
-    marginTop: 6,
-    color: AppColors.primary,
+  dealPrice: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: AppColors.textPrimary,
+  },
+  dealBasePrice: {
+    fontSize: 11,
+    color: AppColors.textTertiary,
+    textDecorationLine: 'line-through',
+  },
+  addDealBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.primary,
+    borderRadius: 6,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  addDealBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  cuisinesScroll: {
+    paddingRight: 16,
+    gap: 10,
+  },
+  cuisinePill: {
+    alignItems: 'center',
+    width: 82,
+    paddingVertical: 10,
+    backgroundColor: AppColors.surface,
+    borderRadius: AppRadius.md,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  cuisineIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${AppColors.primary}18`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  cuisineName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+    textAlign: 'center',
+  },
+  cuisineCount: {
+    fontSize: 9,
+    color: AppColors.textTertiary,
+    marginTop: 2,
+  },
+  restCard: {
+    flexDirection: 'row',
+    backgroundColor: AppColors.surface,
+    borderRadius: AppRadius.md,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    padding: 12,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  restImage: {
+    width: 74,
+    height: 74,
+    borderRadius: 10,
+    marginRight: 12,
+  },
+  restInfo: {
+    flex: 1,
+  },
+  restTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  restName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+    flex: 1,
+    marginRight: 6,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    gap: 3,
+  },
+  ratingText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: '700',
   },
-  dealSubtitle: {
-    color: AppColors.textSecondary,
+  restCuisines: {
     fontSize: 11,
+    color: AppColors.textSecondary,
+    marginBottom: 6,
+  },
+  restMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  restMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  restMetaText: {
+    fontSize: 11,
+    color: AppColors.textSecondary,
+    fontWeight: '500',
+  },
+  metaDot: {
+    marginHorizontal: 6,
+    color: AppColors.textTertiary,
+    fontSize: 11,
+  },
+  bazaarCard: {
+    width: 140,
+    backgroundColor: AppColors.surface,
+    borderRadius: AppRadius.md,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    overflow: 'hidden',
+  },
+  bazaarCardImage: {
+    width: '100%',
+    height: 95,
+  },
+  bazaarCardContent: {
+    padding: 8,
+  },
+  bazaarPrice: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: AppColors.textPrimary,
+  },
+  bazaarTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AppColors.textSecondary,
+    marginTop: 2,
+  },
+  bazaarCategory: {
+    fontSize: 10,
+    color: AppColors.textTertiary,
+    marginTop: 3,
   },
   searchModalContainer: {
     flex: 1,

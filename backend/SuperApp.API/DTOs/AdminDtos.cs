@@ -37,16 +37,21 @@ public class AdminUserDto
 
 public class AdminUserActionRequest
 {
-    public string Action { get; set; } = "STATUS"; // STATUS, ROLE
+    public string Action { get; set; } = "STATUS"; // STATUS, ROLE, REMOVE_ROLE
     public long UserId { get; set; }
     public bool? IsActive { get; set; }
     public string? RoleName { get; set; }
     public long? RestaurantId { get; set; }
+    public string? AdminPassword { get; set; }
 }
 
 public class AdminAssignProfileRequest
 {
     public long UserId { get; set; }
+    public string? MobileNumber { get; set; }
+    public string? FullName { get; set; }
+    public string? Role { get; set; }
+    public string? AdminPassword { get; set; }
     public List<string> Roles { get; set; } = new();
     public string? RestaurantName { get; set; }
     public string? Address { get; set; }

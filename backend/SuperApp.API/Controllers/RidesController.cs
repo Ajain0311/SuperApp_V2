@@ -47,6 +47,42 @@ public class RidesController : ControllerBase
         var options = await _db.RideFareOptions.AsNoTracking().ToListAsync();
         if (rules.Count == 0) rules = RideFareEngine.DefaultRules();
         if (options.Count == 0) options = RideFareEngine.DefaultOptions();
+
+        // Check if Admin has configured ride fare settings in AppSettings
+        var rideSettings = await _db.AppSettings
+            .AsNoTracking()
+            .Where(s => s.SettingKey.StartsWith("ride_") || s.SettingKey == "surge_pricing_multiplier")
+            .ToDictionaryAsync(s => s.SettingKey, s => s.SettingValue);
+
+        if (rideSettings.Count > 0)
+        {
+            if (rideSettings.TryGetValue("surge_pricing_multiplier", out var surgeStr) && decimal.TryParse(surgeStr, out var surgeVal) && surgeVal > 0)
+            {
+                foreach (var rule in rules)
+                {
+                    rule.PeakMultiplier = surgeVal;
+                }
+            }
+
+            void ApplyTierOverrides(string vehicleType, string prefix)
+            {
+                var rule = rules.FirstOrDefault(r => r.VehicleType.Equals(vehicleType, StringComparison.OrdinalIgnoreCase));
+                if (rule != null)
+                {
+                    if (rideSettings.TryGetValue($"{prefix}_base_fare", out var baseStr) && decimal.TryParse(baseStr, out var baseVal) && baseVal >= 0)
+                        rule.BaseFare = baseVal;
+                    if (rideSettings.TryGetValue($"{prefix}_per_km_rate", out var perKmStr) && decimal.TryParse(perKmStr, out var perKmVal) && perKmVal >= 0)
+                        rule.PerKmRate = perKmVal;
+                    if (rideSettings.TryGetValue($"{prefix}_minimum_fare", out var minStr) && decimal.TryParse(minStr, out var minVal) && minVal >= 0)
+                        rule.MinimumFare = minVal;
+                }
+            }
+
+            ApplyTierOverrides(VehicleTypes.Bike, "ride_bike");
+            ApplyTierOverrides(VehicleTypes.Auto, "ride_auto");
+            ApplyTierOverrides(VehicleTypes.Cab, "ride_cab");
+        }
+
         return (rules, options);
     }
 
