@@ -291,6 +291,181 @@ public class DriverTests
         var driver1Record = await db.Drivers.FirstOrDefaultAsync(d => d.UserId == 31);
         Assert.Equal(driver1Record!.Id, finalRide!.DriverId);
     }
+
+    [Fact]
+    public async Task AutoMarkArrived_WhenDisabledByDefault_DoesNotChangeStatusEvenWithinGeofence()
+    {
+        var (db, hub) = CreateContext();
+        var driverUser = new User { Id = 40, MobileNumber = "9876500040", FullName = "Auto Arrive Driver" };
+        var passenger = new User { Id = 70, MobileNumber = "9876500070", FullName = "Passenger Auto" };
+        db.Users.AddRange(driverUser, passenger);
+
+        var driver = new Driver
+        {
+            Id = 400,
+            UserId = driverUser.Id,
+            LicenseNumber = "DL-AUTO-400",
+            IsVerified = true,
+            IsOnline = true,
+            CurrentLatitude = 28.6315m,
+            CurrentLongitude = 77.2167m
+        };
+        db.Drivers.Add(driver);
+
+        // Ride accepted by driver at exact same coordinates (distance = 0m < 20m)
+        var ride = new Ride
+        {
+            Id = 404,
+            RideNumber = "RD-404",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Connaught Place",
+            PickupLatitude = 28.6315m,
+            PickupLongitude = 77.2167m,
+            DropoffAddress = "Hauz Khas",
+            DropoffLatitude = 28.5494m,
+            DropoffLongitude = 77.2001m,
+            EstimatedFare = 120,
+            Status = RideStatus.Accepted,
+            OtpCode = "5555"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, 40, RoleNames.Driver);
+
+        // Update location right on top of pickup point
+        var res = await controller.UpdateLocation(new UpdateDriverLocationRequest
+        {
+            Latitude = 28.6315m,
+            Longitude = 77.2167m,
+            RideId = 404
+        });
+
+        Assert.IsType<OkObjectResult>(res.Result);
+
+        // Feature flag is disabled by default (or missing). Status MUST remain Accepted!
+        var verifiedRide = await db.Rides.FindAsync(404L);
+        Assert.NotNull(verifiedRide);
+        Assert.Equal(RideStatus.Accepted, verifiedRide!.Status);
+    }
+
+    [Fact]
+    public async Task AutoMarkArrived_WhenExplicitlyEnabledByAdmin_TransitionsToArrivingWithinGeofence()
+    {
+        var (db, hub) = CreateContext();
+        var driverUser = new User { Id = 41, MobileNumber = "9876500041", FullName = "Auto Arrive Driver 2" };
+        var passenger = new User { Id = 71, MobileNumber = "9876500071", FullName = "Passenger Auto 2" };
+        db.Users.AddRange(driverUser, passenger);
+
+        // Admin enables feature flag in AppSettings
+        db.AppSettings.AddRange(
+            new AppSetting { SettingKey = "Ride.AutoMarkArrivedEnabled", SettingValue = "true", UpdatedAt = DateTime.UtcNow },
+            new AppSetting { SettingKey = "Ride.AutoMarkArrivedRadiusMeters", SettingValue = "20", UpdatedAt = DateTime.UtcNow }
+        );
+
+        var driver = new Driver
+        {
+            Id = 401,
+            UserId = driverUser.Id,
+            LicenseNumber = "DL-AUTO-401",
+            IsVerified = true,
+            IsOnline = true,
+            CurrentLatitude = 28.6315m,
+            CurrentLongitude = 77.2167m
+        };
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 405,
+            RideNumber = "RD-405",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            VehicleType = "CAB",
+            PickupAddress = "Connaught Place Inner Circle",
+            PickupLatitude = 28.6315000m,
+            PickupLongitude = 77.2167000m,
+            DropoffAddress = "Airport T3",
+            DropoffLatitude = 28.5562m,
+            DropoffLongitude = 77.1000m,
+            EstimatedFare = 350,
+            Status = RideStatus.Accepted,
+            OtpCode = "8899"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, 41, RoleNames.Driver);
+
+        // Location 5 meters away from pickup (within 20m radius)
+        var res = await controller.UpdateLocation(new UpdateDriverLocationRequest
+        {
+            Latitude = 28.6315400m,
+            Longitude = 77.2167000m,
+            RideId = 405
+        });
+
+        Assert.IsType<OkObjectResult>(res.Result);
+
+        // Since flag is enabled and driver is within 20m, status atomically updates to ARRIVING
+        var verifiedRide = await db.Rides.FindAsync(405L);
+        Assert.NotNull(verifiedRide);
+        Assert.Equal(RideStatus.Arriving, verifiedRide!.Status);
+    }
+
+    [Fact]
+    public async Task GetActiveRide_ReturnsPickupAndDropoffCoordinates()
+    {
+        var (db, hub) = CreateContext();
+        var driverUser = new User { Id = 42, MobileNumber = "9876500042", FullName = "Coords Driver" };
+        var passenger = new User { Id = 72, MobileNumber = "9876500072", FullName = "Passenger Coords" };
+        db.Users.AddRange(driverUser, passenger);
+
+        var driver = new Driver
+        {
+            Id = 402,
+            UserId = driverUser.Id,
+            LicenseNumber = "DL-AUTO-402",
+            IsVerified = true,
+            IsOnline = true,
+            CurrentLatitude = 28.6315m,
+            CurrentLongitude = 77.2167m
+        };
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 406,
+            RideNumber = "RD-406",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Delhi Cantt",
+            PickupLatitude = 28.5880m,
+            PickupLongitude = 77.1234m,
+            DropoffAddress = "Connaught Place",
+            DropoffLatitude = 28.6315m,
+            DropoffLongitude = 77.2167m,
+            EstimatedFare = 150,
+            Status = RideStatus.Accepted,
+            OtpCode = "3344"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, 42, RoleNames.Driver);
+        var res = await controller.GetActiveRide();
+
+        var ok = Assert.IsType<OkObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse<RideDto?>>(ok.Value);
+        Assert.NotNull(apiRes.Data);
+        Assert.Equal(28.5880m, apiRes.Data!.PickupLatitude);
+        Assert.Equal(77.1234m, apiRes.Data!.PickupLongitude);
+        Assert.Equal(28.6315m, apiRes.Data!.DropoffLatitude);
+        Assert.Equal(77.2167m, apiRes.Data!.DropoffLongitude);
+    }
 }
 
 public class FakeHubContext : IHubContext<RideTrackingHub>

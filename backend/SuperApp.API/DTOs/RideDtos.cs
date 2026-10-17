@@ -113,6 +113,10 @@ public class RideDto
     public string? PaymentMethod { get; set; }
     public string? PaymentStatus { get; set; }
     public DateTime CreatedAt { get; set; }
+    public decimal PickupLatitude { get; set; }
+    public decimal PickupLongitude { get; set; }
+    public decimal DropoffLatitude { get; set; }
+    public decimal DropoffLongitude { get; set; }
 
     // Driver Details
     public DriverSummaryDto? Driver { get; set; }
