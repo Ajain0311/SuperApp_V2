@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -95,6 +95,14 @@ export const RideBookingScreen: React.FC = () => {
   const [pickupInput, setPickupInput] = useState('');
   const [dropoffInput, setDropoffInput] = useState('');
   const [activeInput, setActiveInput] = useState<'pickup' | 'dropoff' | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const fetchEstimate = (
     pickup: { latitude: number; longitude: number } | null,
@@ -168,10 +176,17 @@ export const RideBookingScreen: React.FC = () => {
   };
 
   const handleLocateMe = async () => {
+    if (isLocating) return;
     setIsLocating(true);
     setGpsStatus('LOCATING');
     try {
-      const loc = await locationService.getCurrentLocation({ timeoutMs: 8000 });
+      const loc = await locationService.getCurrentLocation({ timeoutMs: 10000, throwOnError: true });
+      if (!isMountedRef.current) return;
+
+      if (loc.isFallback) {
+        throw new Error('Real GPS location unavailable. Search an address or drop a pin.');
+      }
+
       const newCoords = { latitude: loc.latitude, longitude: loc.longitude };
       const newAddress = loc.formattedAddress || `${loc.latitude.toFixed(4)}°, ${loc.longitude.toFixed(4)}°`;
       setPickupCoords(newCoords);
@@ -181,14 +196,24 @@ export const RideBookingScreen: React.FC = () => {
         fetchEstimate(newCoords, newAddress, dropoffCoords, dropoffAddress);
       }
     } catch (error) {
+      if (!isMountedRef.current) return;
       console.warn('[RideBookingScreen] Could not retrieve GPS:', error);
       const message = String((error as any)?.message || '');
-      setGpsStatus(message.toLowerCase().includes('denied') ? 'DENIED' : 'UNAVAILABLE');
-      setPickupAddress(message.toLowerCase().includes('denied')
-        ? 'Location permission denied. Search or move the map pin.'
-        : 'GPS unavailable. Search an address or move the map pin.');
+      const isDenied = message.toLowerCase().includes('denied');
+      const isDisabled = message.toLowerCase().includes('disabled');
+
+      setGpsStatus(isDenied ? 'DENIED' : 'UNAVAILABLE');
+      setPickupAddress(
+        isDenied
+          ? 'Location permission denied. Search or move the map pin.'
+          : isDisabled
+          ? 'Location services disabled. Please enable GPS on your device.'
+          : 'GPS unavailable. Search an address or move the map pin.'
+      );
     } finally {
-      setIsLocating(false);
+      if (isMountedRef.current) {
+        setIsLocating(false);
+      }
     }
   };
 
@@ -266,6 +291,7 @@ export const RideBookingScreen: React.FC = () => {
   const selectedVehicle = vehicles[selectedIndex] || vehicles[0];
 
   const handleBookRide = async () => {
+    if (isBooking) return;
     if (!pickupCoords) {
       Alert.alert('Pickup Required', 'Please set your pickup location on the map.');
       return;

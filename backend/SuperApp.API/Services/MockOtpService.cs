@@ -31,9 +31,11 @@ public class MockOtpService : IOtpService
 
     public async Task<string> GenerateAndSendOtpAsync(string mobileNumber, string purpose = "LOGIN")
     {
+        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(mobileNumber);
+
         // Invalidate previous unused OTPs for this number
         var previousOtps = await _db.OtpRequests
-            .Where(o => o.MobileNumber == mobileNumber && !o.IsUsed && o.Purpose == purpose)
+            .Where(o => (o.MobileNumber == mobileNumber || o.MobileNumber == cleanMobile) && !o.IsUsed && o.Purpose == purpose)
             .ToListAsync();
         
         foreach (var otp in previousOtps)
@@ -50,7 +52,7 @@ public class MockOtpService : IOtpService
 
         var otpRequest = new OtpRequest
         {
-            MobileNumber = mobileNumber,
+            MobileNumber = cleanMobile,
             OtpCode = otpCode,
             Purpose = purpose,
             ExpiresAt = DateTime.UtcNow.AddMinutes(OtpExpiryMinutes),
@@ -66,9 +68,10 @@ public class MockOtpService : IOtpService
 
     public async Task<bool> VerifyOtpAsync(string mobileNumber, string otpCode, string purpose = "LOGIN")
     {
+        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(mobileNumber);
         var cleanInputOtp = otpCode?.Trim() ?? string.Empty;
         var otpRequest = await _db.OtpRequests
-            .Where(o => o.MobileNumber == mobileNumber
+            .Where(o => (o.MobileNumber == mobileNumber || o.MobileNumber == cleanMobile)
                      && !o.IsUsed
                      && o.Purpose == purpose
                      && o.ExpiresAt > DateTime.UtcNow)
@@ -91,8 +94,8 @@ public class MockOtpService : IOtpService
         {
             var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
             var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
-            var configuredTestOtp = Environment.GetEnvironmentVariable("TEST_OTP") ?? "123456";
-            if (!isProd && isTestMode && (cleanInputOtp == configuredTestOtp || cleanInputOtp == "123456"))
+            var configuredTestOtp = Environment.GetEnvironmentVariable("TEST_OTP");
+            if (!isProd && isTestMode && !string.IsNullOrWhiteSpace(configuredTestOtp) && cleanInputOtp == configuredTestOtp)
             {
                 otpRequest.IsUsed = true;
                 await _db.SaveChangesAsync();

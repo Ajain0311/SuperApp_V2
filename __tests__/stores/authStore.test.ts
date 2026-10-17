@@ -94,6 +94,23 @@ describe('AuthStore - State Transitions & Fallback Hardening', () => {
     expect(state.user?.roles).toContain('Admin');
   });
 
+  it('should reject admin authentication when verification fails without creating fake dev session', async () => {
+    (apiClient.post as jest.Mock).mockRejectedValueOnce(new Error('Invalid or expired OTP'));
+
+    await expect(
+      useAuthStore.getState().adminLogin('9999999999', 'Admin@123', 'wrong_otp')
+    ).rejects.toThrow('Invalid or expired OTP');
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.token).toBeNull();
+    expect(state.user).toBeNull();
+    expect(state.isFallbackSession).toBe(false);
+
+    const savedToken = await storage.getToken();
+    expect(savedToken).toBeNull();
+  });
+
   it('should clear state and storage on logout', async () => {
     await storage.setToken('jwt_test_token_123');
     useAuthStore.setState({

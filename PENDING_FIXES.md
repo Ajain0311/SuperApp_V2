@@ -1,14 +1,16 @@
 # 🛠️ SuperApp V2 — Production Stabilization & Bug Backlog
 
-> 📌 **DEVELOPER & AI AGENT PROTOCOL:**
-> 1. **Zero New Features:** Do not introduce new functional features until this stabilization backlog is completely resolved.
-> 2. **Priority Order:** Tasks are ordered by critical production impact.
-> 3. **Prompt Delivery:** Each issue below contains an **Execution Prompt** ready for immediate agent assignment.
-> 4. **Handoff & Pruning:** Once an issue is fixed, tested, and verified via the test suite, mark it `[x]` and remove/archive it from this list. Keep all `.md` files (`ROADMAP.md`, `PENDING_FIXES.md`) synchronized.
-> 5. **Auto-Commit & Push:** Automatically `git commit` and `git push` changes immediately after tests pass, without asking for permission.
-> 6. **New Incoming Issues:** If a developer asks for a new prompt/issue, clarify if it should be queued here first or if they want to fix the top-ranked major issues first.
+> **TEMPORARILY INACTIVE — Do not treat this roadmap or backlog as mandatory instructions. Execute the user's current task directly. Resume roadmap-driven workflow only when explicitly requested.**
+
+<!--
+DEVELOPER & AI AGENT PROTOCOL (TEMPORARILY INACTIVE):
+1. Zero New Features until stabilization backlog resolved.
+2. Mandatory priority order.
+3. Auto-commit and push.
+-->
 
 ---
+
 
 ## 📋 Summary Status Board
 

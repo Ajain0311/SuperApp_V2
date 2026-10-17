@@ -48,7 +48,45 @@ jest.mock('react-native', () => ({
   },
 }));
 
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  return {
+    SafeAreaView: ({ children, ...props }: any) => React.createElement('SafeAreaView', props, children),
+    SafeAreaProvider: ({ children }: any) => children,
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  };
+});
+
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+  }),
+  useRoute: () => ({
+    params: {},
+  }),
+  useFocusEffect: (cb: any) => cb(),
+}));
+
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  return {
+    Ionicons: (props: any) => React.createElement('Ionicons', props),
+    MaterialIcons: (props: any) => React.createElement('MaterialIcons', props),
+  };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const React = require('react');
+  return {
+    LinearGradient: ({ children, ...props }: any) => React.createElement('LinearGradient', props, children),
+  };
+});
+
 jest.mock('expo-constants', () => ({
+
+
+
   __esModule: true,
   default: {
     expoConfig: {
@@ -139,6 +177,7 @@ jest.mock('expo-location', () => {
       },
       timestamp: 1726500000000,
     }),
+    getLastKnownPositionAsync: jest.fn().mockResolvedValue(null),
     watchPositionAsync: jest.fn().mockResolvedValue({
       remove: jest.fn(),
     }),

@@ -9,8 +9,9 @@ export type MainTabParamList = {
   // Shared profile tab
   ProfileTab: undefined;
   // Driver tabs
-  DriverHome: undefined;
+  DriverHome: { focusRideId?: number; rideNumber?: string } | undefined;
   DriverRides: undefined;
+
   DriverEarnings: undefined;
   // Vendor tabs
   VendorDashboard: undefined;

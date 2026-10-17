@@ -220,6 +220,32 @@ describe('NotificationService - Push Permissions, Scheduling & Deep-Link Routing
       });
     });
 
+    it('routes RIDE_REQUEST notifications to DriverHome tab with ride parameters for captain dispatch', () => {
+      const response: any = {
+        notification: {
+          request: {
+            content: {
+              data: {
+                module: 'RIDE_REQUEST',
+                rideId: 'RD-888',
+                rideNumericId: 888,
+              },
+            },
+          },
+        },
+      };
+
+      notificationService.handleNotificationResponse(response, mockNavigation);
+      expect(mockNavigation.navigate).toHaveBeenCalledWith('MainTabs', {
+        screen: 'DriverHome',
+        params: {
+          focusRideId: 888,
+          rideNumber: 'RD-888',
+        },
+      });
+    });
+
+
     it('routes MARKETPLACE notifications to ListingDetail screen', () => {
       const response: any = {
         notification: {

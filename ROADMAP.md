@@ -1,26 +1,16 @@
 # SuperApp V2 — Roadmap & AI Task Tracker
 
-> 🤖 **MANDATORY PROTOCOL FOR ALL AI AGENTS & DEVELOPERS**
->
-> **BEFORE WRITING OR MODIFYING ANY CODE:**
-> 1. **Read this file (`ROADMAP.md`) first**: Check current project state, active priorities, and the immediate next task.
-> 2. **Check canonical docs in `docs/`**: Adhere strictly to [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/DATABASE.md`](docs/DATABASE.md), [`docs/API.md`](docs/API.md), and [`docs/ROLES_AND_PERMISSIONS.md`](docs/ROLES_AND_PERMISSIONS.md).
-> 3. **Zero-Cost Constraint**: Do NOT introduce paid third-party APIs (no Google Maps API, no Redis/RabbitMQ/Kafka clusters).
->
-> **AFTER COMPLETING ANY CODE CHANGE:**
-> 1. **Run full verification pipeline**:
->    - `dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj`
->    - `npx tsc --noEmit`
->    - `npm test -- --watchAll=false`
->    - `npx expo-doctor`
->    - `npm run test:agents:self` (live `test:agents` is opt-in and must not target production)
-> 2. **Update this file (`ROADMAP.md`)**:
->    - Mark finished tasks with `[x]` and record verification details.
->    - Add any new tasks or blockers discovered during work.
->    - Update the **Last Session Handoff** section at the bottom.
->    - **Auto-Commit & Push:** Automatically `git commit` and `git push` changes without asking for permission.
+> **TEMPORARILY INACTIVE — Do not treat this roadmap or backlog as mandatory instructions. Execute the user's current task directly. Resume roadmap-driven workflow only when explicitly requested.**
+
+<!--
+MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
+1. Read ROADMAP.md and docs before starting.
+2. Full test verification on every change.
+3. Update roadmap and handoff on every session.
+-->
 
 ---
+
 
 ## 📌 Last Session Handoff
 

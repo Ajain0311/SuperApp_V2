@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
+using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 
 namespace SuperApp.API.Services;
@@ -57,4 +58,50 @@ public class MockNotificationService : INotificationService
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<PushDispatchResult> BroadcastRideToAllCaptainsAsync(Ride ride)
+    {
+        _logger.LogInformation("[MockNotification] Broadcasting ride #{RideNumber} (ID {RideId}) to all registered captains", ride.RideNumber, ride.Id);
+
+        // Fetch all registered captains (do NOT filter by IsOnline)
+        var captainUserIds = await _db.Drivers
+            .Where(d => d.IsActive)
+            .Select(d => d.UserId)
+            .Distinct()
+            .ToListAsync();
+
+        if (!captainUserIds.Any())
+        {
+            return PushDispatchResult.NoCaptains();
+        }
+
+        var tokens = await _db.UserDeviceTokens
+            .Where(t => t.IsActive && captainUserIds.Contains(t.UserId) && !string.IsNullOrEmpty(t.DeviceToken))
+            .ToListAsync();
+
+        // Create in-app notification records for all captains
+        foreach (var userId in captainUserIds)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                UserId = userId,
+                Title = "🚖 New Ride Request!",
+                Body = $"Pickup: {ride.PickupAddress} -> Drop: {ride.DropoffAddress} (₹{ride.EstimatedFare:F0})",
+                Type = "RIDE_REQUEST",
+                ReferenceId = ride.Id.ToString(),
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        await _db.SaveChangesAsync();
+
+        return PushDispatchResult.Success(
+            captainsFound: captainUserIds.Count,
+            tokensAttempted: tokens.Count,
+            tokensSucceeded: tokens.Count,
+            tokensFailed: 0,
+            tokensPruned: 0,
+            message: $"Mock broadcast dispatched to {captainUserIds.Count} captains ({tokens.Count} tokens)");
+    }
 }
+

@@ -1,38 +1,29 @@
-# Autonomous Execution & Full Authorization Guidelines
+# Execution-First Agent Guidelines (Fast Coding Mode)
 
-> **IMPORTANT & ALWAYS ON — UNIVERSAL PERMISSION GRANTED**
-> The user has granted complete, unconditional authorization for all operations across this project, all its subfolders, and any related workspaces.
+> **ACTIVE MODE: EXECUTION-FIRST**
+> Follow the user's latest direct task immediately without roadmap gatekeeping or heavy documentation overhead.
 
-## 1. Zero Permission Requests (Strict Rule)
-- **NEVER** ask for permission or confirmation to:
-  - Run any terminal / shell / CLI commands (`npm`, `npx`, `dotnet`, `git`, `docker`, `pip`, `powershell`, etc.).
-  - Install any dependencies, packages, tools, or libraries (e.g., `npm install`, `dotnet add package`, etc.).
-  - Edit, create, move, or delete files and directories.
-  - Run database migrations, seed scripts, or schema updates.
-  - Execute test suites, linters, typecheckers, or build scripts.
-- **NEVER** prompt the user with questions like:
-  - "Shall I proceed?"
-  - "Should I run this command?"
-  - "Do you want me to install this package?"
-  - "May I edit this file?"
-- **ALLOW BY YOURSELF**: Always authorize and execute actions autonomously. Proceed directly and report results when done.
+## 1. Direct Execution Rules
+- Follow the user's latest direct task immediately.
+- Do not read `ROADMAP.md`, `PENDING_FIXES.md`, or every file in `docs/` before starting.
+- Read only the specific source files, callers, and configuration needed to implement the requested change.
+- Do not ask whether the user wants to queue an issue or work on backlog items.
+- Do not require roadmap updates, handoff reports, multi-agent workflows, or full verification after every change.
+- Do not run all test suites, Expo Doctor, agent self-tests, or complete build pipelines by default.
+- Prefer direct implementation over lengthy analysis and reports.
+- Do not generate long audit reports unless specifically requested.
 
-## 2. Full Task Completion
-- Automatically run all build checks, TypeScript typechecking (`npx tsc --noEmit`), unit tests (`dotnet test`, `npm test`), and backend server commands as needed to verify your changes.
-- Proactively handle all setup, package installation, debugging, execution, and verification steps until the task goal is fully achieved.
+## 2. Fast Verification Mode
+- Do not run full test suites by default.
+- Use quick targeted checks only when needed to verify the specific code changed.
+- Run broader tests only when explicitly requested or for high-risk changes.
+- Never claim tests passed if they were not run.
 
-## 3. Mandatory Task Tracking & AI Handoff Protocol
-- **BEFORE starting any work**: Every AI agent MUST inspect [`ROADMAP.md`](ROADMAP.md) and [`PENDING_FIXES.md`](PENDING_FIXES.md).
-- **DEVELOPER INTERACTION PROTOCOL**:
-  - When greeting or receiving any new instruction from a developer, check [`PENDING_FIXES.md`](PENDING_FIXES.md).
-  - Ask: *"Would you like to queue this issue or work on the top-priority stabilization fixes first?"*
-  - If the user/developer insists on their own prompt, **user prompt is always top priority**.
-- **NO NEW FUNCTIONALITY**: Strictly focus on stabilizing existing features, fixing bugs, and production readiness as outlined in `PENDING_FIXES.md`.
-- **DURING work**: Adhere strictly to zero-cost architecture guidelines and canonical documentation in `docs/`.
-- **AFTER completing work**:
-  1. Run the full verification suite (`dotnet test`, `npx tsc --noEmit`, `npm test`, `npx expo-doctor`, `npm run test:agents:self`).
-  2. You MUST update [`ROADMAP.md`](ROADMAP.md) and [`PENDING_FIXES.md`](PENDING_FIXES.md):
-     - Mark completed tasks as `[x]` or remove fixed items from the backlog.
-     - Add any newly identified tasks or blockers.
-     - Update the **Last Session Handoff** section with date, status, and what the next agent should do.
-  3. **Auto-Commit & Push:** Automatically `git commit -am 'message'` and `git push` without asking for permission.
+## 3. Strict Project Boundaries
+- Work on `dev` only. Never modify or merge into `main`.
+- Never trigger production deployment unless explicitly requested.
+- Do not modify Flutter source.
+- Do not overwrite unrelated work or discard user changes.
+- Do not commit or push automatically unless the user explicitly asks.
+- Never expose credentials or copy secrets into logs or documentation.
+- Fast execution must never bypass authorization, payment verification, or financial safeguards.

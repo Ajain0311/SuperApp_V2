@@ -336,6 +336,17 @@ export class NotificationService {
         });
         break;
 
+      case 'RIDE_REQUEST':
+        // Captain incoming ride alert deep-link
+        navigation.navigate('MainTabs', {
+          screen: 'DriverHome',
+          params: {
+            focusRideId: data.rideNumericId || (data.referenceId ? parseInt(data.referenceId, 10) : undefined),
+            rideNumber: data.rideId,
+          },
+        });
+        break;
+
       case 'RIDE':
       case 'RIDES':
         navigation.navigate('ActiveRide', {
@@ -343,6 +354,7 @@ export class NotificationService {
           rideNumericId: data.rideNumericId,
         });
         break;
+
 
       case 'MARKETPLACE':
       case 'BAZAAR':

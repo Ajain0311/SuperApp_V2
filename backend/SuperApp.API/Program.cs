@@ -136,9 +136,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
+
 builder.Services.AddAuthorization();
+
 
 // --- Provider-Agnostic External Service Abstractions ---
 // 1. Storage Provider (Local by default; Azure in production)
@@ -231,14 +246,32 @@ else
     builder.Services.AddScoped<IMapService, MockMapService>();
 }
 
-// 5. Notification Provider (Mock in development; Firebase FCM in production)
+// 5. Notification Provider (Mock in development; PushNotificationDispatcher in production or when configured)
 var notificationProvider = Environment.GetEnvironmentVariable("NOTIFICATION_PROVIDER") 
     ?? builder.Configuration["Providers:Notification"] 
     ?? "Mock";
-builder.Services.AddScoped<INotificationService, MockNotificationService>();
+builder.Services.AddHttpClient<PushNotificationDispatcherService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<MockNotificationService>();
+
+if (string.Equals(notificationProvider, "Push", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(notificationProvider, "Fcm", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(notificationProvider, "Firebase", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(notificationProvider, "Expo", StringComparison.OrdinalIgnoreCase) ||
+    isProduction)
+{
+    builder.Services.AddScoped<INotificationService>(sp => sp.GetRequiredService<PushNotificationDispatcherService>());
+}
+else
+{
+    builder.Services.AddScoped<INotificationService, MockNotificationService>();
+}
 
 // 6. Security & Identity Tokens
 builder.Services.AddScoped<ITokenService, TokenService>();
+
 
 // 7. Background Services
 builder.Services.AddHostedService<PushNotificationSchedulerService>();
