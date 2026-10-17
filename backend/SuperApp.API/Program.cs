@@ -301,6 +301,7 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 
 // 7. Background Services
 builder.Services.AddHostedService<PushNotificationSchedulerService>();
+builder.Services.AddHostedService<RideExpiryBackgroundService>();
 
 // --- SignalR Real-Time Hubs ---
 builder.Services.AddSignalR();

@@ -101,16 +101,19 @@ export const DriverHomeScreen: React.FC = () => {
         setAvailableRides(available);
         const matched = available.find((r) => r.id === focusRideId);
         if (matched) {
-          Alert.alert(
-            '🚖 Ride Request',
-            `Ride #${matched.rideNumber}\nPickup: ${matched.pickupAddress}\nDrop: ${matched.dropoffAddress}\nFare: ₹${matched.fare}`,
-            [
-              { text: 'Ignore', style: 'cancel' },
-              { text: 'Accept Trip', onPress: () => handleAcceptRide(matched.id) },
-            ]
-          );
+          if (!alertedRideIdsRef.current.has(matched.id)) {
+            alertedRideIdsRef.current.add(matched.id);
+            Alert.alert(
+              '🚖 Ride Request',
+              `Ride #${matched.rideNumber}\nPickup: ${matched.pickupAddress}\nDrop: ${matched.dropoffAddress}\nFare: ₹${matched.fare}`,
+              [
+                { text: 'Ignore', style: 'cancel' },
+                { text: 'Accept Trip', onPress: () => handleAcceptRide(matched.id) },
+              ]
+            );
+          }
         } else {
-          Alert.alert('Ride Notice', 'This ride is no longer available or has already been accepted.');
+          Alert.alert('Ride Notice', 'This ride is no longer available, has expired, or has already been accepted.');
         }
       } catch {
         Alert.alert('Ride Notice', 'This ride is no longer available.');
@@ -126,6 +129,8 @@ export const DriverHomeScreen: React.FC = () => {
     let unregisterStatus: (() => void) | null = null;
     let unregisterRequested: (() => void) | null = null;
     let unregisterAcceptedByOther: (() => void) | null = null;
+    let unregisterCancelled: (() => void) | null = null;
+    let unregisterExpired: (() => void) | null = null;
 
     const setupSignalR = async () => {
       try {
@@ -141,7 +146,7 @@ export const DriverHomeScreen: React.FC = () => {
           unregisterStatus = signalRService.onRideStatusChanged((event) => {
             if (activeRide && event.rideId === activeRide.id) {
               setActiveRide((prev: any) => prev ? { ...prev, status: event.status } : null);
-              if (event.status === 'COMPLETED' || event.status === 'CANCELLED') {
+              if (event.status === 'COMPLETED' || event.status === 'CANCELLED' || event.status === 'EXPIRED') {
                 loadDriverData();
               }
             }
@@ -150,6 +155,10 @@ export const DriverHomeScreen: React.FC = () => {
           // Real-time live incoming ride requests broadcast
           unregisterRequested = signalRService.onRideRequested((incoming: any) => {
             if (!incoming) return;
+            // Mark incoming as alerted to deduplicate with incoming push notifications
+            if (alertedRideIdsRef.current.has(incoming.id)) return;
+            alertedRideIdsRef.current.add(incoming.id);
+
             setAvailableRides((prev) => {
               if (prev.some((r) => r.id === incoming.id)) return prev;
               const mapped: DriverRideItem = {
@@ -170,17 +179,14 @@ export const DriverHomeScreen: React.FC = () => {
             });
 
             if (isOnline && !activeRide) {
-              if (!alertedRideIdsRef.current.has(incoming.id)) {
-                alertedRideIdsRef.current.add(incoming.id);
-                Alert.alert(
-                  '🔔 New Ride Request Available!',
-                  `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
-                  [
-                    { text: 'Ignore', style: 'cancel' },
-                    { text: 'Accept Trip', onPress: () => handleAcceptRide(incoming.id) },
-                  ]
-                );
-              }
+              Alert.alert(
+                '🔔 New Ride Request Available!',
+                `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
+                [
+                  { text: 'Ignore', style: 'cancel' },
+                  { text: 'Accept Trip', onPress: () => handleAcceptRide(incoming.id) },
+                ]
+              );
             }
           });
 
@@ -188,7 +194,33 @@ export const DriverHomeScreen: React.FC = () => {
           // Live sync when another driver accepts first
           unregisterAcceptedByOther = signalRService.onRideAcceptedByOther((data: any) => {
             if (data?.rideId) {
+              alertedRideIdsRef.current.add(data.rideId);
               setAvailableRides((prev) => prev.filter((r) => r.id !== data.rideId));
+            }
+          });
+
+          // Live sync when customer cancels ride
+          unregisterCancelled = signalRService.onRideCancelled((data: any) => {
+            if (data?.rideId) {
+              alertedRideIdsRef.current.add(data.rideId);
+              setAvailableRides((prev) => prev.filter((r) => r.id !== data.rideId));
+              if (activeRide && activeRide.id === data.rideId) {
+                setActiveRide(null);
+                Alert.alert('Ride Cancelled', 'The customer has cancelled this ride request.');
+                loadDriverData();
+              }
+            }
+          });
+
+          // Live sync when ride request expires (after 5 minutes)
+          unregisterExpired = signalRService.onRideExpired((data: any) => {
+            if (data?.rideId) {
+              alertedRideIdsRef.current.add(data.rideId);
+              setAvailableRides((prev) => prev.filter((r) => r.id !== data.rideId));
+              if (activeRide && activeRide.id === data.rideId) {
+                setActiveRide(null);
+                loadDriverData();
+              }
             }
           });
         }
@@ -203,6 +235,8 @@ export const DriverHomeScreen: React.FC = () => {
       if (unregisterStatus) unregisterStatus();
       if (unregisterRequested) unregisterRequested();
       if (unregisterAcceptedByOther) unregisterAcceptedByOther();
+      if (unregisterCancelled) unregisterCancelled();
+      if (unregisterExpired) unregisterExpired();
     };
   }, [activeRide?.id, isOnline, loadDriverData]);
 

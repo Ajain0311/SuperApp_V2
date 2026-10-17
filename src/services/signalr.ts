@@ -174,6 +174,22 @@ class SignalRService {
     return () => this.rideHubConnection?.off('RideAcceptedByOther', callback);
   }
 
+  onRideCancelled(callback: (data: any) => void): () => void {
+    if (!this.rideHubConnection) {
+      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+    }
+    this.rideHubConnection.on('RideCancelled', callback);
+    return () => this.rideHubConnection?.off('RideCancelled', callback);
+  }
+
+  onRideExpired(callback: (data: any) => void): () => void {
+    if (!this.rideHubConnection) {
+      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+    }
+    this.rideHubConnection.on('RideExpired', callback);
+    return () => this.rideHubConnection?.off('RideExpired', callback);
+  }
+
   // --- Order Status Hub ---
   async connectOrderHub(): Promise<signalR.HubConnection> {
     if (this.orderHubConnection && this.orderHubConnection.state === signalR.HubConnectionState.Connected) {

@@ -393,4 +393,175 @@ public class CaptainPushNotificationTests
         Assert.False(t1.IsActive);
         Assert.True(t2.IsActive);
     }
+
+    [Fact]
+    public async Task Test_9_CustomerCancelsRide_CaptainAcceptanceIsRejected_WithConflict()
+    {
+        var db = CreateDb();
+        var driverUser = new User { Id = 501, FullName = "Driver One" };
+        var customerUser = new User { Id = 502, FullName = "Customer One" };
+        db.Users.AddRange(driverUser, customerUser);
+
+        var driver = new Driver { Id = 51, UserId = driverUser.Id, IsOnline = true, IsActive = true };
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 910,
+            RideNumber = "RD-910",
+            UserId = customerUser.Id,
+            PickupAddress = "Location A",
+            DropoffAddress = "Location B",
+            EstimatedFare = 150,
+            VehicleType = "BIKE",
+            Status = RideStatus.Cancelled, // Customer cancelled
+            CancelledAt = DateTime.UtcNow
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var hubMock = new Mock<IHubContext<RideTrackingHub>>();
+        var hubClients = new Mock<IHubClients>();
+        var clientProxy = new Mock<IClientProxy>();
+        hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxy.Object);
+        hubMock.Setup(h => h.Clients).Returns(hubClients.Object);
+
+        var controller = new DriverController(db, hubMock.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, driverUser.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.Driver)
+                }, "TestAuth"))
+            }
+        };
+
+        var response = await controller.AcceptRide(910);
+        var conflict = Assert.IsType<ConflictObjectResult>(response.Result);
+        var apiRes = Assert.IsType<ApiResponse<RideDto>>(conflict.Value);
+        Assert.False(apiRes.Success);
+        Assert.Contains("cancelled", apiRes.Message, StringComparison.OrdinalIgnoreCase);
+
+        // Ride must remain CANCELLED without driver assignment
+        var persisted = await db.Rides.FindAsync(910L);
+        Assert.Equal(RideStatus.Cancelled, persisted!.Status);
+        Assert.Null(persisted.DriverId);
+    }
+
+    [Fact]
+    public async Task Test_10_RideOlderThan5Minutes_IsRejectedAsExpiredOnAcceptance()
+    {
+        var db = CreateDb();
+        var driverUser = new User { Id = 601, FullName = "Driver Two" };
+        var customerUser = new User { Id = 602, FullName = "Customer Two" };
+        db.Users.AddRange(driverUser, customerUser);
+
+        var driver = new Driver { Id = 61, UserId = driverUser.Id, IsOnline = true, IsActive = true };
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 920,
+            RideNumber = "RD-920",
+            UserId = customerUser.Id,
+            PickupAddress = "Location C",
+            DropoffAddress = "Location D",
+            EstimatedFare = 200,
+            VehicleType = "CAB",
+            Status = RideStatus.Requested,
+            CreatedAt = DateTime.UtcNow.AddMinutes(-6) // Over 5 minutes ago
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var hubMock = new Mock<IHubContext<RideTrackingHub>>();
+        var hubClients = new Mock<IHubClients>();
+        var clientProxy = new Mock<IClientProxy>();
+        hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxy.Object);
+        hubMock.Setup(h => h.Clients).Returns(hubClients.Object);
+
+        var controller = new DriverController(db, hubMock.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, driverUser.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.Driver)
+                }, "TestAuth"))
+            }
+        };
+
+        var response = await controller.AcceptRide(920);
+        var conflict = Assert.IsType<ConflictObjectResult>(response.Result);
+        var apiRes = Assert.IsType<ApiResponse<RideDto>>(conflict.Value);
+        Assert.False(apiRes.Success);
+        Assert.Contains("expired", apiRes.Message, StringComparison.OrdinalIgnoreCase);
+
+        var persisted = await db.Rides.FindAsync(920L);
+        Assert.Equal(RideStatus.Expired, persisted!.Status);
+        Assert.Null(persisted.DriverId);
+    }
+
+    [Fact]
+    public async Task Test_11_RideExpiryBackgroundService_SweepsOverdueRides_Atomically()
+    {
+        var db = CreateDb();
+        var user = new User { Id = 701, FullName = "Customer Three" };
+        db.Users.Add(user);
+
+        var overdueRide = new Ride
+        {
+            Id = 930,
+            RideNumber = "RD-930",
+            UserId = user.Id,
+            PickupAddress = "Pickup X",
+            DropoffAddress = "Dropoff Y",
+            EstimatedFare = 120,
+            VehicleType = "AUTO",
+            Status = RideStatus.Requested,
+            CreatedAt = DateTime.UtcNow.AddMinutes(-7)
+        };
+        var activeFreshRide = new Ride
+        {
+            Id = 931,
+            RideNumber = "RD-931",
+            UserId = user.Id,
+            PickupAddress = "Pickup X2",
+            DropoffAddress = "Dropoff Y2",
+            EstimatedFare = 120,
+            VehicleType = "AUTO",
+            Status = RideStatus.Requested,
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2) // Only 2 mins old
+        };
+        db.Rides.AddRange(overdueRide, activeFreshRide);
+        await db.SaveChangesAsync();
+
+        var hubMock = new Mock<IHubContext<RideTrackingHub>>();
+        var hubClients = new Mock<IHubClients>();
+        var clientProxy = new Mock<IClientProxy>();
+        hubClients.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxy.Object);
+        hubMock.Setup(h => h.Clients).Returns(hubClients.Object);
+
+        var serviceCollection = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        serviceCollection.AddScoped(_ => db);
+        serviceCollection.AddScoped(_ => hubMock.Object);
+        var serviceProvider = serviceCollection.BuildServiceProvider();
+
+        var loggerMock = new Mock<ILogger<RideExpiryBackgroundService>>();
+        var expiryService = new RideExpiryBackgroundService(loggerMock.Object, serviceProvider);
+
+        var sweptCount = await expiryService.SweepExpiredRidesAsync();
+        Assert.Equal(1, sweptCount);
+
+        var sweptRide = await db.Rides.FindAsync(930L);
+        var freshRide = await db.Rides.FindAsync(931L);
+
+        Assert.Equal(RideStatus.Expired, sweptRide!.Status);
+        Assert.Equal(RideStatus.Requested, freshRide!.Status);
+    }
 }

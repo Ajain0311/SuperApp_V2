@@ -95,4 +95,5 @@ public static class RideStatus
     public const string Started = "STARTED";
     public const string Completed = "COMPLETED";
     public const string Cancelled = "CANCELLED";
+    public const string Expired = "EXPIRED";
 }

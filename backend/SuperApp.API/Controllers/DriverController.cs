@@ -21,6 +21,7 @@ public class DriverController : ControllerBase
     private readonly INotificationService? _notificationService;
     private readonly IHubContext<OrderStatusHub>? _orderHub;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, SemaphoreSlim> FoodAcceptLocks = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, SemaphoreSlim> RideAcceptLocks = new();
 
     public DriverController(
         AppDbContext db,
@@ -164,9 +165,12 @@ public class DriverController : ControllerBase
         if (!driver.IsOnline)
             return Ok(ApiResponse<List<DriverRideSummaryDto>>.Ok(new List<DriverRideSummaryDto>(), "Go online to see available rides"));
 
+        var cutoff = DateTime.UtcNow.AddMinutes(-5);
         var rides = await _db.Rides
             .Include(r => r.User)
-            .Where(r => (r.Status == RideStatus.Requested || r.Status == "SEARCHING") && (r.DriverId == null || r.DriverId == driver.Id))
+            .Where(r => (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching) 
+                     && (r.DriverId == null || r.DriverId == driver.Id)
+                     && r.CreatedAt >= cutoff)
             .OrderByDescending(r => r.CreatedAt)
             .Take(20)
             .Select(r => new DriverRideSummaryDto
@@ -252,53 +256,97 @@ public class DriverController : ControllerBase
         if (driver == null)
             return Forbid();
 
-        var ride = await _db.Rides.Include(r => r.User).FirstOrDefaultAsync(r => r.Id == id);
-        if (ride == null)
-            return NotFound(ApiResponse<RideDto>.Fail("Ride not found"));
-
-        if (ride.DriverId != null && ride.DriverId != driver.Id)
+        var gate = RideAcceptLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
         {
-            return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
-        }
+            var ride = await _db.Rides.Include(r => r.User).FirstOrDefaultAsync(r => r.Id == id);
+            if (ride == null)
+                return NotFound(ApiResponse<RideDto>.Fail("Ride not found"));
 
-        if (ride.Status != RideStatus.Requested && ride.Status != "SEARCHING" && ride.DriverId != driver.Id)
-        {
-            return Conflict(ApiResponse<RideDto>.Fail("This ride is no longer available for booking."));
-        }
+            // Check if cancelled, completed, expired, or already assigned
+            if (ride.Status == RideStatus.Cancelled)
+            {
+                return Conflict(ApiResponse<RideDto>.Fail("This ride has been cancelled by the customer."));
+            }
 
-        var vehicle = driver.Vehicles.FirstOrDefault(v => v.IsActive);
+            if (ride.Status == RideStatus.Expired || (ride.Status == RideStatus.Requested && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5)))
+            {
+                if (ride.Status != RideStatus.Expired)
+                {
+                    ride.Status = RideStatus.Expired;
+                    ride.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
 
-        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            if (ride.DriverId != null || (ride.Status != RideStatus.Requested && ride.Status != RideStatus.Searching))
+                    await _hub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
+                    {
+                        rideId = ride.Id,
+                        status = RideStatus.Expired,
+                        reason = "No driver accepted within 5 minutes.",
+                        updatedAt = ride.UpdatedAt
+                    });
+                    await _hub.Clients.Group("drivers-pool").SendAsync("RideExpired", new
+                    {
+                        rideId = ride.Id,
+                        status = RideStatus.Expired
+                    });
+                }
+                return Conflict(ApiResponse<RideDto>.Fail("This ride request has expired (5-minute limit exceeded)."));
+            }
+
+            if (ride.DriverId != null && ride.DriverId != driver.Id)
             {
                 return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
             }
-            ride.DriverId = driver.Id;
-            ride.VehicleId = vehicle?.Id;
-            ride.Status = RideStatus.Accepted;
-            ride.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-        }
-        else
-        {
-            var claimed = await _db.Rides
-                .Where(r => r.Id == ride.Id && r.DriverId == null && (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching))
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(r => r.DriverId, driver.Id)
-                    .SetProperty(r => r.Status, RideStatus.Accepted)
-                    .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
-            if (claimed == 0)
-                return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
 
-            ride.DriverId = driver.Id;
-            _db.Entry(ride).Property(r => r.DriverId).IsModified = false;
-            _db.Entry(ride).Property(r => r.Status).IsModified = false;
-            ride.VehicleId = vehicle?.Id;
-            ride.Status = RideStatus.Accepted;
-            ride.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-        }
+            if (ride.Status != RideStatus.Requested && ride.Status != RideStatus.Searching && ride.DriverId != driver.Id)
+            {
+                return Conflict(ApiResponse<RideDto>.Fail("This ride is no longer available for booking."));
+            }
+
+            var vehicle = driver.Vehicles.FirstOrDefault(v => v.IsActive);
+
+            if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                if (ride.DriverId != null || (ride.Status != RideStatus.Requested && ride.Status != RideStatus.Searching))
+                {
+                    return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
+                }
+                ride.DriverId = driver.Id;
+                ride.VehicleId = vehicle?.Id;
+                ride.Status = RideStatus.Accepted;
+                ride.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+            else
+            {
+                var cutoff = DateTime.UtcNow.AddMinutes(-5);
+                var claimed = await _db.Rides
+                    .Where(r => r.Id == ride.Id && r.DriverId == null && (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching) && r.CreatedAt >= cutoff)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(r => r.DriverId, driver.Id)
+                        .SetProperty(r => r.Status, RideStatus.Accepted)
+                        .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
+                if (claimed == 0)
+                {
+                    // Re-check why claim failed
+                    var currentStatus = await _db.Rides.Where(r => r.Id == ride.Id).Select(r => new { r.Status, r.CreatedAt }).FirstOrDefaultAsync();
+                    if (currentStatus?.Status == RideStatus.Cancelled)
+                        return Conflict(ApiResponse<RideDto>.Fail("This ride has been cancelled by the customer."));
+                    if (currentStatus != null && (currentStatus.Status == RideStatus.Expired || currentStatus.CreatedAt < cutoff))
+                        return Conflict(ApiResponse<RideDto>.Fail("This ride request has expired (5-minute limit exceeded)."));
+
+                    return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
+                }
+
+                ride.DriverId = driver.Id;
+                _db.Entry(ride).Property(r => r.DriverId).IsModified = false;
+                _db.Entry(ride).Property(r => r.Status).IsModified = false;
+                ride.VehicleId = vehicle?.Id;
+                ride.Status = RideStatus.Accepted;
+                ride.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
 
         var driverSummary = new DriverSummaryDto
         {
@@ -357,6 +405,11 @@ public class DriverController : ControllerBase
             CreatedAt = ride.CreatedAt,
             Driver = driverSummary
         }, "Ride accepted"));
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>

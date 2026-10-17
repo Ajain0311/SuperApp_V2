@@ -135,13 +135,21 @@ export const ActiveRideScreen: React.FC = () => {
       } else if (ride.status === 'CANCELLED') {
         setTransitStatus('Ride Cancelled');
         setArrivalEta('Trip Terminated');
+      } else if (ride.status === 'EXPIRED') {
+        setTransitStatus('Request Expired');
+        setArrivalEta('No captain accepted within 5 minutes');
       }
     } else {
       setDriverId(null);
       setDriverName('');
       setDriverPhone('');
-      setTransitStatus('Finding your driver…');
-      setArrivalEta('Waiting for driver assignment');
+      if (ride.status === 'EXPIRED') {
+        setTransitStatus('Request Expired');
+        setArrivalEta('No captain accepted within 5 minutes');
+      } else {
+        setTransitStatus('Finding your driver…');
+        setArrivalEta('Waiting for driver assignment');
+      }
     }
   };
 
@@ -222,6 +230,10 @@ export const ActiveRideScreen: React.FC = () => {
             } else if (data.status === 'CANCELLED') {
               setTransitStatus('Ride Cancelled');
               setArrivalEta('Trip Terminated');
+            } else if (data.status === 'EXPIRED') {
+              setTransitStatus('Request Expired');
+              setArrivalEta('No captain accepted within 5 minutes');
+              Alert.alert('Request Expired ⏱️', 'No captain was able to accept your ride request within 5 minutes. Please try booking again.');
             }
           }
         });
@@ -588,7 +600,7 @@ export const ActiveRideScreen: React.FC = () => {
         )}
 
         {/* Cancel Ride Button */}
-        {rideStatus !== 'COMPLETED' && rideStatus !== 'CANCELLED' && (
+        {rideStatus !== 'COMPLETED' && rideStatus !== 'CANCELLED' && rideStatus !== 'EXPIRED' && (
           <TouchableOpacity
             activeOpacity={0.8}
             style={[styles.cancelButton, isCancelling && { opacity: 0.7 }]}
