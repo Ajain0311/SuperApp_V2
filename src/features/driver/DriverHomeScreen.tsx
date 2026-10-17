@@ -34,8 +34,6 @@ export const DriverHomeScreen: React.FC = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [activeRide, setActiveRide] = useState<any | null>(null);
   const [availableRides, setAvailableRides] = useState<DriverRideItem[]>([]);
-  const [availableFood, setAvailableFood] = useState<any[]>([]);
-  const [activeFood, setActiveFood] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isTogglingDuty, setIsTogglingDuty] = useState(false);
@@ -50,17 +48,13 @@ export const DriverHomeScreen: React.FC = () => {
       setProfile(p);
       setIsOnline(p.isOnline);
 
-      const [active, available, foodActive, foodOpen] = await Promise.all([
+      const [active, available] = await Promise.all([
         driverService.getActiveRide(),
         p.isOnline ? driverService.getAvailableRides() : Promise.resolve([]),
-        driverService.getActiveFoodOrder().catch(() => null),
-        p.isOnline ? driverService.getAvailableFoodOrders().catch(() => []) : Promise.resolve([]),
       ]);
 
       setActiveRide(active);
       setAvailableRides(available);
-      setActiveFood(foodActive);
-      setAvailableFood(foodOpen);
     } catch (e: any) {
       console.warn('[DriverHome] Error loading driver data:', e.message);
     } finally {
@@ -132,7 +126,6 @@ export const DriverHomeScreen: React.FC = () => {
     let unregisterStatus: (() => void) | null = null;
     let unregisterRequested: (() => void) | null = null;
     let unregisterAcceptedByOther: (() => void) | null = null;
-    let unregisterFood: (() => void) | null = null;
 
     const setupSignalR = async () => {
       try {
@@ -145,9 +138,6 @@ export const DriverHomeScreen: React.FC = () => {
             await hub.invoke('JoinRide', activeRide.id).catch(() => {});
           }
 
-          unregisterFood = signalRService.onFoodDeliveryAvailable(() => {
-            loadDriverData();
-          });
           unregisterStatus = signalRService.onRideStatusChanged((event) => {
             if (activeRide && event.rideId === activeRide.id) {
               setActiveRide((prev: any) => prev ? { ...prev, status: event.status } : null);
@@ -213,7 +203,6 @@ export const DriverHomeScreen: React.FC = () => {
       if (unregisterStatus) unregisterStatus();
       if (unregisterRequested) unregisterRequested();
       if (unregisterAcceptedByOther) unregisterAcceptedByOther();
-      if (unregisterFood) unregisterFood();
     };
   }, [activeRide?.id, isOnline, loadDriverData]);
 
@@ -420,44 +409,6 @@ export const DriverHomeScreen: React.FC = () => {
             </View>
           </View>
         </View>
-
-        {(activeFood || availableFood.length > 0) && (
-          <View style={styles.headerCard}>
-            <Text style={styles.driverName}>Food deliveries</Text>
-            {activeFood && (
-              <View style={{ marginTop: 8 }}>
-                <Text style={styles.vehicleSubtitle}>
-                  {activeFood.orderNumber} · {activeFood.restaurantName} · {activeFood.status}
-                </Text>
-                <Text style={styles.vehicleSubtitle}>{activeFood.deliveryAddress || 'Address on order'}</Text>
-                {activeFood.status === 'READY' && (
-                  <TouchableOpacity onPress={async () => { await driverService.pickupFoodOrder(activeFood.id); loadDriverData(); }}>
-                    <Text style={[styles.toggleLabel, { color: '#10B981' }]}>Mark picked up</Text>
-                  </TouchableOpacity>
-                )}
-                {activeFood.status === 'PICKED_UP' && (
-                  <TouchableOpacity onPress={async () => { await driverService.deliverFoodOrder(activeFood.id); loadDriverData(); }}>
-                    <Text style={[styles.toggleLabel, { color: '#10B981' }]}>Mark delivered</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-            {availableFood.map((order) => (
-              <TouchableOpacity key={order.id} onPress={async () => {
-                try {
-                  await driverService.acceptFoodOrder(order.id);
-                  loadDriverData();
-                } catch (e: any) {
-                  Alert.alert('Could not accept', e?.message || 'Another captain took this delivery');
-                }
-              }} style={{ marginTop: 10 }}>
-                <Text style={styles.vehicleSubtitle}>
-                  Accept {order.orderNumber} · {order.restaurantName} · ₹{order.grandTotal}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
         {/* Active Trip Section */}
         {activeRide && (
