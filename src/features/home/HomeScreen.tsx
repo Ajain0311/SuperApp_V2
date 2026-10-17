@@ -32,7 +32,7 @@ import { RestaurantSummary, FoodItem } from '../../models/food';
 import { ListingSummary } from '../../models/marketplace';
 import { DEFAULT_RESTAURANTS, resolveRestaurantImage } from '../food/FoodHomeScreen';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SCREEN_WIDTH = typeof Dimensions !== 'undefined' && Dimensions.get ? (Dimensions.get('window')?.width || 375) : 375;
 
 function resolveBannerImage(url: string) {
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
