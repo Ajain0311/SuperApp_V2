@@ -51,7 +51,9 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [timerSeconds, setTimerSeconds] = useState<number>(AppConstants.otpTimeoutSeconds);
 
-  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [fullName, setFullName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
@@ -66,7 +68,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   const forgotPassword = useAuthStore((state) => state.forgotPassword);
   const resetPassword = useAuthStore((state) => state.resetPassword);
 
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const hiddenInputRef = useRef<TextInput | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -93,59 +95,57 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     return () => clearInterval(interval);
   }, [timerSeconds]);
 
-  const handleAutoFill = (code: string) => {
-    const clean = code.trim().replace(/\D/g, '');
-    const digits = clean.slice(0, 6).split('');
-    while (digits.length < 6) digits.push('');
-    setOtpDigits(digits);
-    setErrorMessage(null);
-    inputRefs.current[Math.min(clean.length - 1, 5)]?.focus();
-  };
-
-  const handleDigitChange = (value: string, index: number) => {
-    setErrorMessage(null);
-    const clean = value.replace(/\D/g, '');
-    const newDigits = [...otpDigits];
-
-    if (clean.length > 1) {
-      const pasted = clean.slice(0, 6).split('');
-      pasted.forEach((digit, i) => {
-        if (i < 6) newDigits[i] = digit;
-      });
-      setOtpDigits(newDigits);
-      const nextFocus = Math.min(pasted.length, 5);
-      inputRefs.current[nextFocus]?.focus();
+  const triggerSubmit = (codeToVerify: string) => {
+    if (isSubmittingRef.current || codeToVerify.length !== AppConstants.otpLength) {
       return;
     }
-
-    newDigits[index] = clean;
-    setOtpDigits(newDigits);
-
-    if (clean.length > 0 && index < 5) {
-      inputRefs.current[index + 1]?.focus();
+    if (isResettingPassword) {
+      handleResetPasswordSubmit(codeToVerify);
+    } else if (isAdmin) {
+      handleAdminLogin(codeToVerify);
+    } else {
+      handleVerify(codeToVerify);
     }
   };
 
-  const handleKeyPress = (e: any, index: number) => {
+  const handleOtpChange = (text: string) => {
     setErrorMessage(null);
-    if (e.nativeEvent.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    const clean = text.replace(/\D/g, '').slice(0, AppConstants.otpLength);
+    setOtp(clean);
+    if (clean.length === AppConstants.otpLength) {
+      triggerSubmit(clean);
     }
   };
 
-  const handleAdminLogin = async () => {
+  const handleAutoFill = (code: string) => {
+    const clean = code.trim().replace(/\D/g, '').slice(0, AppConstants.otpLength);
+    setOtp(clean);
+    setErrorMessage(null);
+    hiddenInputRef.current?.focus();
+    if (clean.length === AppConstants.otpLength) {
+      triggerSubmit(clean);
+    }
+  };
+
+  const focusOtpInput = () => {
+    hiddenInputRef.current?.focus();
+  };
+
+  const handleAdminLogin = async (codeOverride?: string) => {
+    const fullOtp = codeOverride ?? otp;
     setErrorMessage(null);
     if (!adminPassword.trim()) {
       setErrorMessage('Please enter your admin password');
       return;
     }
 
-    const fullOtp = otpDigits.join('');
     if (fullOtp.length < AppConstants.otpLength) {
       setErrorMessage('Please enter the complete 6-digit OTP code');
       return;
     }
 
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsLoading(true);
     try {
       await adminLogin(mobileNumber, adminPassword.trim(), fullOtp);
@@ -157,17 +157,20 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       setErrorMessage(err.message || 'Invalid admin credentials or OTP. Please check and try again.');
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
-  const handleVerify = async () => {
+  const handleVerify = async (codeOverride?: string) => {
+    const fullOtp = codeOverride ?? otp;
     setErrorMessage(null);
-    const fullOtp = otpDigits.join('');
     if (fullOtp.length < AppConstants.otpLength) {
       setErrorMessage('Please enter the complete 6-digit OTP code');
       return;
     }
 
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     const resolvedName = fullName.trim() || (isNewUser ? 'Guest User' : undefined);
 
     setIsLoading(true);
@@ -181,6 +184,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       setErrorMessage(err.message || 'Invalid or expired OTP. Please enter the correct code.');
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -195,7 +199,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       }
       const newOtp = response.devOtp;
       if (newOtp) setDisplayedOtp(newOtp);
-      setOtpDigits(['', '', '', '', '', '']);
+      // Keep existing OTP input intact if user was mid-typing or want to retry
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
       Alert.alert('Success', 'A new OTP has been sent to your mobile number.');
     } catch (err: any) {
@@ -211,7 +215,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       const response = await forgotPassword(mobileNumber);
       setIsResettingPassword(true);
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
-      setOtpDigits(['', '', '', '', '', '']);
+      setOtp('');
       if (response.devOtp) setDisplayedOtp(response.devOtp);
       Alert.alert('Password Reset', 'A new OTP has been sent. Please enter it along with your new password.');
     } catch (err: any) {
@@ -221,7 +225,8 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     }
   };
 
-  const handleResetPasswordSubmit = async () => {
+  const handleResetPasswordSubmit = async (codeOverride?: string) => {
+    const fullOtp = codeOverride ?? otp;
     setErrorMessage(null);
     if (!newPassword.trim() || !confirmPassword.trim()) {
       setErrorMessage('Please fill in all password fields');
@@ -231,12 +236,13 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       setErrorMessage('Passwords do not match');
       return;
     }
-    const fullOtp = otpDigits.join('');
     if (fullOtp.length < AppConstants.otpLength) {
       setErrorMessage('Please enter the complete 6-digit OTP code');
       return;
     }
 
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsLoading(true);
     try {
       await resetPassword(mobileNumber, fullOtp, newPassword);
@@ -246,7 +252,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
           setAdminPassword('');
           setNewPassword('');
           setConfirmPassword('');
-          setOtpDigits(['', '', '', '', '', '']);
+          setOtp('');
           handleResend(); // Resend OTP for normal login flow
         }}
       ]);
@@ -254,6 +260,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       setErrorMessage(err.message || 'Failed to reset password');
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -263,7 +270,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     return `${mins}:${secs}`;
   };
 
-  const fullOtpEntered = otpDigits.join('').length === 6;
+  const fullOtpEntered = otp.length === AppConstants.otpLength;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -386,26 +393,52 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 
               <Text style={styles.otpLabel}>{isResettingPassword ? 'Enter Verification Code' : '6-Digit Code'}</Text>
               
-              <View style={styles.otpRow}>
-                {otpDigits.map((digit, idx) => (
-                  <TextInput
-                    key={idx}
-                    ref={(el) => { inputRefs.current[idx] = el; }}
-                    style={[
-                      styles.otpBox,
-                      digit ? styles.otpBoxFilled : null,
-                      errorMessage ? styles.otpBoxError : null,
-                    ]}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    value={digit}
-                    onChangeText={(val) => handleDigitChange(val, idx)}
-                    onKeyPress={(e) => handleKeyPress(e, idx)}
-                    textAlign="center"
-                    selectionColor="#FF6B35"
-                  />
-                ))}
-              </View>
+              {/* Invisible native text input handling keyboard focus, OS SMS autofill, and clipboard paste */}
+              <TextInput
+                ref={hiddenInputRef}
+                value={otp}
+                onChangeText={handleOtpChange}
+                maxLength={AppConstants.otpLength}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
+                importantForAutofill="yes"
+                style={styles.hiddenInput}
+                autoFocus={!isAdmin}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                caretHidden
+              />
+
+              {/* Visual touch-interactive digit boxes */}
+              <TouchableOpacity
+                style={styles.otpRow}
+                activeOpacity={1}
+                onPress={focusOtpInput}
+                accessibilityRole="button"
+                accessibilityLabel="OTP digit input fields"
+              >
+                {Array.from({ length: AppConstants.otpLength }).map((_, idx) => {
+                  const digit = otp[idx] || '';
+                  const isCurrent = isFocused && (idx === otp.length || (idx === AppConstants.otpLength - 1 && otp.length === AppConstants.otpLength));
+                  return (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.otpBox,
+                        digit ? styles.otpBoxFilled : null,
+                        isCurrent ? styles.otpBoxFocused : null,
+                        errorMessage ? styles.otpBoxError : null,
+                      ]}
+                    >
+                      <Text style={[styles.otpBoxText, digit ? styles.otpBoxTextFilled : null]}>
+                        {digit}
+                      </Text>
+                      {isCurrent && !digit && <View style={styles.cursorBar} />}
+                    </View>
+                  );
+                })}
+              </TouchableOpacity>
 
               <View style={styles.resendContainer}>
                 {timerSeconds > 0 ? (
@@ -421,7 +454,7 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
 
               <TouchableOpacity
                 style={[styles.continueBtn, (!fullOtpEntered || isLoading) && styles.continueBtnDisabled]}
-                onPress={isResettingPassword ? handleResetPasswordSubmit : isAdmin ? handleAdminLogin : handleVerify}
+                onPress={() => (isResettingPassword ? handleResetPasswordSubmit() : isAdmin ? handleAdminLogin() : handleVerify())}
                 disabled={!fullOtpEntered || isLoading}
                 activeOpacity={0.85}
               >
@@ -499,13 +532,42 @@ const styles = StyleSheet.create({
   forgotBtnText: { color: '#FF6B35', fontSize: 13, fontWeight: '700' },
   otpLabel: { fontSize: 13, fontWeight: '700', color: '#94A3B8', marginBottom: 12, alignSelf: 'center' },
   otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
+  hiddenInput: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0.01,
+  },
   otpBox: {
-    width: 44, height: 54, backgroundColor: '#0A0E21',
-    borderRadius: 12, borderWidth: 1.5, borderColor: '#2A2D3E',
-    color: '#FFFFFF', fontSize: 22, fontWeight: '800',
+    width: 44,
+    height: 54,
+    backgroundColor: '#0A0E21',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#2A2D3E',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   otpBoxFilled: { borderColor: '#FF6B35', backgroundColor: '#120f1e' },
+  otpBoxFocused: { borderColor: '#FF6B35', shadowColor: '#FF6B35', shadowOpacity: 0.3, shadowRadius: 4, elevation: 2 },
   otpBoxError: { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.1)' },
+  otpBoxText: {
+    color: '#94A3B8',
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  otpBoxTextFilled: {
+    color: '#FFFFFF',
+  },
+  cursorBar: {
+    position: 'absolute',
+    bottom: 10,
+    width: 16,
+    height: 2,
+    backgroundColor: '#FF6B35',
+    borderRadius: 1,
+  },
   resendContainer: { alignItems: 'center', marginBottom: 24 },
   timerText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
   timerCountdown: { color: '#FF6B35', fontWeight: '800' },
