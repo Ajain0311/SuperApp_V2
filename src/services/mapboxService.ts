@@ -154,4 +154,35 @@ export const mapboxService = {
       pinCode: suggestion?.pinCode,
     };
   },
+
+  async getDirectionsRoute(
+    origin: { latitude: number; longitude: number },
+    destination: { latitude: number; longitude: number }
+  ): Promise<{
+    coordinates: [number, number][];
+    distanceKm: number;
+    durationMinutes: number;
+  } | null> {
+    const token = this.getAccessToken();
+    if (!token) return null;
+
+    try {
+      const coords = `${origin.longitude.toFixed(6)},${origin.latitude.toFixed(6)};${destination.longitude.toFixed(6)},${destination.latitude.toFixed(6)}`;
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&access_token=${token}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+
+      const data = await res.json();
+      const route = data?.routes?.[0];
+      if (!route || !route.geometry?.coordinates) return null;
+
+      return {
+        coordinates: route.geometry.coordinates as [number, number][],
+        distanceKm: Number((route.distance / 1000).toFixed(2)),
+        durationMinutes: Math.round(route.duration / 60),
+      };
+    } catch {
+      return null;
+    }
+  },
 };

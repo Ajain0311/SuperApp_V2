@@ -94,6 +94,9 @@ export const DriverHomeScreen: React.FC = () => {
     }
   }, []);
 
+  const [roadRouteCoordinates, setRoadRouteCoordinates] = useState<[number, number][] | null>(null);
+  const [roadRouteMeta, setRoadRouteMeta] = useState<{ distanceKm: number; durationMinutes: number } | null>(null);
+
   const pickupCoordsValid = useMemo(() => {
     if (!activeRide) return false;
     const lat = Number(activeRide.pickupLatitude);
@@ -101,34 +104,119 @@ export const DriverHomeScreen: React.FC = () => {
     return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && !(lat === 0 && lng === 0);
   }, [activeRide?.pickupLatitude, activeRide?.pickupLongitude]);
 
-  const distanceToPickupText = useMemo(() => {
-    if (!pickupCoordsValid || !captainCoords || !activeRide) return null;
-    const pLat = Number(activeRide.pickupLatitude);
-    const pLng = Number(activeRide.pickupLongitude);
-    const distKm = locationService.calculateDistanceKm(captainCoords.latitude, captainCoords.longitude, pLat, pLng);
+  const dropoffCoordsValid = useMemo(() => {
+    if (!activeRide) return false;
+    const lat = Number(activeRide.dropoffLatitude);
+    const lng = Number(activeRide.dropoffLongitude);
+    return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && !(lat === 0 && lng === 0);
+  }, [activeRide?.dropoffLatitude, activeRide?.dropoffLongitude]);
+
+  // Determine current navigation target based on ride status:
+  // If ride is STARTED, captain navigates to Dropoff. Otherwise (ACCEPTED/ARRIVING), captain navigates to Pickup.
+  const isTripStarted = activeRide?.status === 'STARTED';
+  const targetCoords = useMemo(() => {
+    if (!activeRide) return null;
+    if (isTripStarted && dropoffCoordsValid) {
+      return {
+        latitude: Number(activeRide.dropoffLatitude),
+        longitude: Number(activeRide.dropoffLongitude),
+        address: activeRide.dropoffAddress || 'Customer Destination',
+        label: 'Destination',
+      };
+    }
+    if (pickupCoordsValid) {
+      return {
+        latitude: Number(activeRide.pickupLatitude),
+        longitude: Number(activeRide.pickupLongitude),
+        address: activeRide.pickupAddress || 'Customer Pickup',
+        label: 'Pickup',
+      };
+    }
+    return null;
+  }, [isTripStarted, dropoffCoordsValid, pickupCoordsValid, activeRide?.pickupLatitude, activeRide?.pickupLongitude, activeRide?.pickupAddress, activeRide?.dropoffLatitude, activeRide?.dropoffLongitude, activeRide?.dropoffAddress]);
+
+  // Fetch actual road directions from Mapbox Directions API whenever captain or target changes
+  useEffect(() => {
+    if (!targetCoords) {
+      setRoadRouteCoordinates(null);
+      setRoadRouteMeta(null);
+      return;
+    }
+
+    const origin = captainCoords || (isTripStarted && pickupCoordsValid ? { latitude: Number(activeRide.pickupLatitude), longitude: Number(activeRide.pickupLongitude) } : null);
+    if (!origin) {
+      setRoadRouteCoordinates(null);
+      setRoadRouteMeta(null);
+      return;
+    }
+
+    let isSubscribed = true;
+    mapboxService.getDirectionsRoute(
+      { latitude: origin.latitude, longitude: origin.longitude },
+      { latitude: targetCoords.latitude, longitude: targetCoords.longitude }
+    ).then((res) => {
+      if (!isSubscribed) return;
+      if (res && res.coordinates.length > 0) {
+        setRoadRouteCoordinates(res.coordinates);
+        setRoadRouteMeta({ distanceKm: res.distanceKm, durationMinutes: res.durationMinutes });
+      } else {
+        setRoadRouteCoordinates(null);
+        setRoadRouteMeta(null);
+      }
+    }).catch(() => {
+      if (isSubscribed) {
+        setRoadRouteCoordinates(null);
+        setRoadRouteMeta(null);
+      }
+    });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [captainCoords?.latitude, captainCoords?.longitude, targetCoords?.latitude, targetCoords?.longitude, isTripStarted]);
+
+  const navigationDistanceText = useMemo(() => {
+    if (roadRouteMeta) {
+      const dist = roadRouteMeta.distanceKm < 1 ? `${Math.round(roadRouteMeta.distanceKm * 1000)} m` : `${roadRouteMeta.distanceKm.toFixed(1)} km`;
+      return `${dist} • ~${roadRouteMeta.durationMinutes} min`;
+    }
+    if (!targetCoords || !captainCoords) return null;
+    const distKm = locationService.calculateDistanceKm(captainCoords.latitude, captainCoords.longitude, targetCoords.latitude, targetCoords.longitude);
     if (!Number.isFinite(distKm)) return null;
     if (distKm < 1.0) {
       return `${Math.round(distKm * 1000)} m`;
     }
     return `${distKm.toFixed(1)} km`;
-  }, [pickupCoordsValid, captainCoords, activeRide?.pickupLatitude, activeRide?.pickupLongitude]);
+  }, [roadRouteMeta, targetCoords, captainCoords]);
 
   const routeGeoJson = useMemo(() => {
-    if (!pickupCoordsValid || !captainCoords || !activeRide) return null;
-    const pLat = Number(activeRide.pickupLatitude);
-    const pLng = Number(activeRide.pickupLongitude);
+    if (!targetCoords) return null;
+    const origin = captainCoords || (isTripStarted && pickupCoordsValid ? { latitude: Number(activeRide.pickupLatitude), longitude: Number(activeRide.pickupLongitude) } : null);
+    if (!origin) return null;
+
+    if (roadRouteCoordinates && roadRouteCoordinates.length > 1) {
+      return {
+        type: 'Feature' as const,
+        properties: {},
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: roadRouteCoordinates,
+        },
+      };
+    }
+
     return {
       type: 'Feature' as const,
       properties: {},
       geometry: {
         type: 'LineString' as const,
         coordinates: [
-          [captainCoords.longitude, captainCoords.latitude],
-          [pLng, pLat],
+          [origin.longitude, origin.latitude],
+          [targetCoords.longitude, targetCoords.latitude],
         ],
       },
     };
-  }, [pickupCoordsValid, captainCoords, activeRide?.pickupLatitude, activeRide?.pickupLongitude]);
+  }, [targetCoords, captainCoords, isTripStarted, pickupCoordsValid, roadRouteCoordinates]);
 
   useEffect(() => {
     loadDriverData();
@@ -564,26 +652,30 @@ export const DriverHomeScreen: React.FC = () => {
               </View>
             </View>
 
-            {/* Captain Pickup Location Map */}
+            {/* Captain Live Navigation Map */}
             <View style={styles.captainMapWrapper}>
               <View style={styles.mapHeaderRow}>
                 <View style={styles.mapHeaderTitleRow}>
                   <Ionicons name="navigate-circle" size={18} color="#3B82F6" />
-                  <Text style={styles.mapSectionTitle}>Live Pickup Navigation Map</Text>
+                  <Text style={styles.mapSectionTitle}>
+                    {isTripStarted ? 'Trip In-Progress: Navigation to Dropoff' : 'Pickup Navigation Map'}
+                  </Text>
                 </View>
-                {distanceToPickupText ? (
-                  <View style={styles.distanceBadge}>
-                    <Ionicons name="speedometer-outline" size={13} color="#10B981" />
-                    <Text style={styles.distanceBadgeText}>{distanceToPickupText} to pickup</Text>
+                {navigationDistanceText ? (
+                  <View style={[styles.distanceBadge, isTripStarted && { backgroundColor: '#3B82F620' }]}>
+                    <Ionicons name="speedometer-outline" size={13} color={isTripStarted ? '#3B82F6' : '#10B981'} />
+                    <Text style={[styles.distanceBadgeText, isTripStarted && { color: '#3B82F6' }]}>
+                      {navigationDistanceText} to {isTripStarted ? 'dropoff' : 'pickup'}
+                    </Text>
                   </View>
                 ) : null}
               </View>
 
-              {!pickupCoordsValid ? (
+              {(!pickupCoordsValid && !dropoffCoordsValid) ? (
                 <View style={styles.mapFallbackCard}>
                   <Ionicons name="alert-circle-outline" size={22} color="#F59E0B" />
                   <Text style={styles.mapFallbackText}>
-                    Pickup GPS coordinates unavailable or invalid. Please refer to written pickup address above.
+                    GPS coordinates unavailable or invalid. Please refer to written address above.
                   </Text>
                 </View>
               ) : canUseNativeMap && MapView && Camera && PointAnnotation && tokenReady ? (
@@ -596,30 +688,50 @@ export const DriverHomeScreen: React.FC = () => {
                   >
                     <Camera
                       ref={cameraRef}
-                      zoomLevel={14}
+                      zoomLevel={13}
                       centerCoordinate={
                         captainCoords && Number.isFinite(captainCoords.longitude)
                           ? [captainCoords.longitude, captainCoords.latitude]
-                          : [Number(activeRide.pickupLongitude), Number(activeRide.pickupLatitude)]
+                          : targetCoords
+                          ? [targetCoords.longitude, targetCoords.latitude]
+                          : [77.2177, 28.6304]
                       }
                       animationMode="flyTo"
                       animationDuration={400}
                     />
 
                     {/* Customer Pickup Location Marker - Green Pin */}
-                    <PointAnnotation
-                      id={`pickup-marker-${activeRide.id}`}
-                      coordinate={[Number(activeRide.pickupLongitude), Number(activeRide.pickupLatitude)]}
-                      title="Customer Pickup Location"
-                    >
-                      <View style={styles.pickupMarkerWrap}>
-                        <View style={styles.pickupPinHead}>
-                          <Ionicons name="person" size={14} color="#FFFFFF" />
+                    {pickupCoordsValid && (
+                      <PointAnnotation
+                        id={`pickup-marker-${activeRide.id}`}
+                        coordinate={[Number(activeRide.pickupLongitude), Number(activeRide.pickupLatitude)]}
+                        title="Customer Pickup Location"
+                      >
+                        <View style={styles.pickupMarkerWrap}>
+                          <View style={styles.pickupPinHead}>
+                            <Ionicons name="person" size={14} color="#FFFFFF" />
+                          </View>
+                          <View style={styles.pinTriangle} />
+                          <View style={styles.pickupPulseDot} />
                         </View>
-                        <View style={styles.pinTriangle} />
-                        <View style={styles.pickupPulseDot} />
-                      </View>
-                    </PointAnnotation>
+                      </PointAnnotation>
+                    )}
+
+                    {/* Customer Destination Marker - Red Pin (Shown always if valid) */}
+                    {dropoffCoordsValid && (
+                      <PointAnnotation
+                        id={`destination-marker-${activeRide.id}`}
+                        coordinate={[Number(activeRide.dropoffLongitude), Number(activeRide.dropoffLatitude)]}
+                        title="Destination Dropoff"
+                      >
+                        <View style={styles.pickupMarkerWrap}>
+                          <View style={[styles.pickupPinHead, { backgroundColor: '#EF4444' }]}>
+                            <Ionicons name="location" size={14} color="#FFFFFF" />
+                          </View>
+                          <View style={[styles.pinTriangle, { borderTopColor: '#EF4444' }]} />
+                        </View>
+                      </PointAnnotation>
+                    )}
 
                     {/* Captain Live Location Marker - Distinct Blue Vehicle Icon */}
                     {captainCoords &&
@@ -640,17 +752,16 @@ export const DriverHomeScreen: React.FC = () => {
                         </PointAnnotation>
                       )}
 
-                    {/* Straight Route Line between Captain and Pickup */}
+                    {/* Active Navigation Route Line */}
                     {routeGeoJson && ShapeSource && LineLayer ? (
                       <ShapeSource id="routeLineSource" shape={routeGeoJson}>
                         <LineLayer
                           id="routeLineLayer"
                           style={{
-                            lineColor: '#3B82F6',
+                            lineColor: isTripStarted ? '#10B981' : '#3B82F6',
                             lineWidth: 4,
                             lineCap: 'round',
                             lineJoin: 'round',
-                            lineDasharray: [1.5, 1.5],
                           }}
                         />
                       </ShapeSource>
@@ -659,16 +770,16 @@ export const DriverHomeScreen: React.FC = () => {
 
                   <TouchableOpacity
                     style={styles.openExternalNavBtn}
-                    onPress={() =>
-                      openDirectionsInExternalApp(
-                        Number(activeRide.pickupLatitude),
-                        Number(activeRide.pickupLongitude),
-                        activeRide.pickupAddress || 'Customer Pickup'
-                      )
-                    }
+                    onPress={() => {
+                      if (targetCoords) {
+                        openDirectionsInExternalApp(targetCoords.latitude, targetCoords.longitude, targetCoords.address);
+                      }
+                    }}
                   >
                     <Ionicons name="navigate" size={14} color="#FFFFFF" />
-                    <Text style={styles.openExternalNavText}>Open Google / Apple Maps</Text>
+                    <Text style={styles.openExternalNavText}>
+                      Open {isTripStarted ? 'Destination' : 'Pickup'} in Google / Apple Maps
+                    </Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -676,10 +787,14 @@ export const DriverHomeScreen: React.FC = () => {
                   <View style={styles.fallbackHeader}>
                     <MaterialIcons name="map" size={24} color="#3B82F6" />
                     <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                      <Text style={styles.fallbackPickupTitle}>Pickup: {activeRide.pickupAddress}</Text>
-                      <Text style={styles.fallbackCoords}>
-                        Lat: {Number(activeRide.pickupLatitude).toFixed(5)}, Lng: {Number(activeRide.pickupLongitude).toFixed(5)}
+                      <Text style={styles.fallbackPickupTitle}>
+                        {isTripStarted ? `Dropoff: ${activeRide.dropoffAddress}` : `Pickup: ${activeRide.pickupAddress}`}
                       </Text>
+                      {targetCoords ? (
+                        <Text style={styles.fallbackCoords}>
+                          Target: {targetCoords.latitude.toFixed(5)}, {targetCoords.longitude.toFixed(5)}
+                        </Text>
+                      ) : null}
                       {captainCoords ? (
                         <Text style={styles.fallbackCaptainCoords}>
                           Captain GPS: {captainCoords.latitude.toFixed(5)}, {captainCoords.longitude.toFixed(5)}
@@ -688,19 +803,17 @@ export const DriverHomeScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.openExternalNavBtnFallback}
-                    onPress={() =>
-                      openDirectionsInExternalApp(
-                        Number(activeRide.pickupLatitude),
-                        Number(activeRide.pickupLongitude),
-                        activeRide.pickupAddress || 'Customer Pickup'
-                      )
-                    }
-                  >
-                    <Ionicons name="navigate" size={16} color="#FFFFFF" />
-                    <Text style={styles.openExternalNavText}>Launch Turn-by-Turn Navigation</Text>
-                  </TouchableOpacity>
+                  {targetCoords && (
+                    <TouchableOpacity
+                      style={styles.openExternalNavBtnFallback}
+                      onPress={() => openDirectionsInExternalApp(targetCoords.latitude, targetCoords.longitude, targetCoords.address)}
+                    >
+                      <Ionicons name="navigate" size={16} color="#FFFFFF" />
+                      <Text style={styles.openExternalNavText}>
+                        Launch Turn-by-Turn to {isTripStarted ? 'Dropoff' : 'Pickup'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>

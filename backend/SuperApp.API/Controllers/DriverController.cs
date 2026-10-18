@@ -523,6 +523,11 @@ public class DriverController : ControllerBase
         if (ride == null)
             return NotFound(ApiResponse.Fail("Ride not found for this driver"));
 
+        if (ride.Status != RideStatus.Started)
+        {
+            return BadRequest(ApiResponse.Fail($"Cannot complete a ride with status '{ride.Status}'. The ride must be STARTED (passenger picked up via OTP) before it can be completed."));
+        }
+
         RideCompletion.MarkCompleted(ride);
 
         driver.TotalRides += 1;
