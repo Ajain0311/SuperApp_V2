@@ -130,4 +130,48 @@ describe('Integration Flow: End-to-End Food Ordering & SignalR Tracking', () => 
     await signalRService.leaveOrder(501);
     expect(conn.invoke).toHaveBeenCalledWith('LeaveOrder', 501);
   });
+
+  it('correctly maps variantId and selectedAddonIds into the order payload', async () => {
+    useCartStore.getState().addItem(1, 'Meghana Foods', {
+      id: 2,
+      foodItemId: 101,
+      name: 'Special Biryani',
+      basePrice: 340,
+      quantity: 2,
+      variantId: 4,
+      portionName: 'Jumbo',
+      portionPrice: 200,
+      selectedAddonIds: [7, 8],
+      addons: ['Extra Gravy (+₹40)', 'Raita (+₹20)'],
+      totalPrice: 1200, // (340 + 200 + 40 + 20) * 2
+    });
+
+    const expectedPayload = {
+      restaurantId: 1,
+      items: [
+        {
+          foodItemId: 101,
+          quantity: 2,
+          variantId: 4,
+          selectedAddonIds: [7, 8],
+        },
+      ],
+      paymentMethod: 'COD',
+    };
+
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          id: 502,
+          orderNumber: 'FO-9922',
+          grandTotal: 1260,
+        },
+      },
+    });
+
+    const res = await apiClient.post(ApiEndpoints.food.orders, expectedPayload);
+    expect(apiClient.post).toHaveBeenCalledWith(ApiEndpoints.food.orders, expectedPayload);
+    expect(res.data.data.id).toBe(502);
+  });
 });

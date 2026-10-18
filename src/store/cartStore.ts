@@ -35,11 +35,28 @@ export const useCartStore = create<CartState>((set, get) => ({
       return;
     }
 
-    set({
-      restaurantId,
-      restaurantName,
-      items: [...state.items, item],
+    const lineKey = item.cartLineKey || `${item.foodItemId}-${item.variantId ?? ''}-${(item.selectedAddonIds || []).sort().join(',')}`;
+    const existingIndex = state.items.findIndex((i) => {
+      const iKey = i.cartLineKey || `${i.foodItemId}-${i.variantId ?? ''}-${(i.selectedAddonIds || []).sort().join(',')}`;
+      return iKey === lineKey;
     });
+
+    if (existingIndex > -1) {
+      const updated = [...state.items];
+      const existing = { ...updated[existingIndex] };
+      const newQty = existing.quantity + item.quantity;
+      const unitPrice = existing.totalPrice / existing.quantity;
+      existing.quantity = newQty;
+      existing.totalPrice = Math.round(unitPrice * newQty * 100) / 100;
+      updated[existingIndex] = existing;
+      set({ items: updated, restaurantId, restaurantName });
+    } else {
+      set({
+        restaurantId,
+        restaurantName,
+        items: [...state.items, { ...item, cartLineKey: lineKey }],
+      });
+    }
   },
 
   getItemQuantity: (foodItemId: number) => {
@@ -47,9 +64,13 @@ export const useCartStore = create<CartState>((set, get) => ({
     return items.reduce((sum, item) => sum + item.quantity, 0);
   },
 
-  updateQuantity: (foodItemId: number, delta: number) => {
+  updateQuantity: (foodItemIdOrId: number, delta: number) => {
     const state = get();
-    const existingIndex = state.items.findIndex((i) => i.foodItemId === foodItemId);
+    // Find either by exact cart item id, or fallback to first matching foodItemId
+    let existingIndex = state.items.findIndex((i) => i.id === foodItemIdOrId);
+    if (existingIndex === -1) {
+      existingIndex = state.items.findIndex((i) => i.foodItemId === foodItemIdOrId);
+    }
     if (existingIndex === -1) return;
 
     const items = [...state.items];
