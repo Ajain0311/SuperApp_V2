@@ -347,6 +347,27 @@ public class RidesController : ControllerBase
             return Forbid();
         }
 
+        // Automatic 5-minute expiry enforcement
+        if (ride.Status == RideStatus.Requested && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5))
+        {
+            ride.Status = RideStatus.Expired;
+            ride.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            await _rideHub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
+            {
+                rideId = ride.Id,
+                status = RideStatus.Expired,
+                reason = "No driver accepted within 5 minutes.",
+                updatedAt = ride.UpdatedAt
+            });
+            await _rideHub.Clients.Group("drivers-pool").SendAsync("RideExpired", new
+            {
+                rideId = ride.Id,
+                status = RideStatus.Expired
+            });
+        }
+
         DriverSummaryDto? driverSummary = null;
         if (ride.Driver != null)
         {
@@ -504,15 +525,49 @@ public class RidesController : ControllerBase
         if (!isRider && !isDriver && !isAdmin)
             return Forbid();
 
-        if (ride.Status == RideStatus.Started || ride.Status == RideStatus.Completed)
-            return BadRequest(ApiResponse.Fail("Active or completed rides cannot be cancelled"));
+        if (ride.Status == RideStatus.Started || ride.Status == RideStatus.Completed || ride.Status == RideStatus.Expired)
+            return BadRequest(ApiResponse.Fail("Active, completed, or expired rides cannot be cancelled"));
 
         var previousStatus = ride.Status;
-        ride.Status = RideStatus.Cancelled;
-        ride.CancelledAt = DateTime.UtcNow;
-        ride.CancellationReason = request?.Reason ?? (isRider ? "Cancelled by passenger" : "Cancelled by driver");
-        ride.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        var reason = request?.Reason ?? (isRider ? "Cancelled by passenger" : "Cancelled by driver");
+        var now = DateTime.UtcNow;
+
+        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            if (ride.Status == RideStatus.Started || ride.Status == RideStatus.Completed || ride.Status == RideStatus.Expired)
+                return BadRequest(ApiResponse.Fail("Active, completed, or expired rides cannot be cancelled"));
+
+            ride.Status = RideStatus.Cancelled;
+            ride.CancelledAt = now;
+            ride.CancellationReason = reason;
+            ride.UpdatedAt = now;
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            var affected = await _db.Rides
+                .Where(r => r.Id == ride.Id && r.Status != RideStatus.Started && r.Status != RideStatus.Completed && r.Status != RideStatus.Cancelled && r.Status != RideStatus.Expired)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(r => r.Status, RideStatus.Cancelled)
+                    .SetProperty(r => r.CancelledAt, now)
+                    .SetProperty(r => r.CancellationReason, reason)
+                    .SetProperty(r => r.UpdatedAt, now));
+
+            if (affected == 0)
+            {
+                var refreshed = await _db.Rides.AsNoTracking().FirstOrDefaultAsync(r => r.Id == ride.Id);
+                if (refreshed?.Status == RideStatus.Started || refreshed?.Status == RideStatus.Completed)
+                    return BadRequest(ApiResponse.Fail("Ride was already started or completed and cannot be cancelled"));
+                if (refreshed?.Status == RideStatus.Expired)
+                    return BadRequest(ApiResponse.Fail("Ride has already expired"));
+                return Ok(ApiResponse.Ok("Ride already cancelled"));
+            }
+
+            ride.Status = RideStatus.Cancelled;
+            ride.CancelledAt = now;
+            ride.CancellationReason = reason;
+            ride.UpdatedAt = now;
+        }
 
         await _rideHub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
         {
@@ -522,14 +577,12 @@ public class RidesController : ControllerBase
             cancelledAt = ride.CancelledAt
         });
 
-        if (previousStatus == RideStatus.Requested)
+        // Always broadcast cancellation to drivers-pool so any online driver screens or open modals instantly discard it
+        await _rideHub.Clients.Group("drivers-pool").SendAsync("RideCancelled", new
         {
-            await _rideHub.Clients.Group("drivers-pool").SendAsync("RideCancelled", new
-            {
-                rideId = ride.Id,
-                status = ride.Status
-            });
-        }
+            rideId = ride.Id,
+            status = ride.Status
+        });
 
         // Send notifications
         if (ride.UserId > 0 && _notificationService != null)

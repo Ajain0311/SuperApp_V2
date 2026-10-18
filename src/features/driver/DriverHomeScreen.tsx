@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   TextInput,
   AppState,
   AppStateStatus,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -20,9 +21,21 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import { driverService, DriverProfile, DriverRideItem } from '../../services/driverService';
 import { signalRService } from '../../services/signalr';
 import { locationService } from '../../services/locationService';
+import { mapboxService } from '../../services/mapboxService';
 import { useRoleStore } from '../../store/roleStore';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+
+const canUseNativeMap = Platform.OS === 'ios' || Platform.OS === 'android';
+let MapboxMaps: typeof import('@rnmapbox/maps') | null = null;
+if (canUseNativeMap) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    MapboxMaps = require('@rnmapbox/maps');
+  } catch {
+    MapboxMaps = null;
+  }
+}
 import { spacing } from '../../theme/spacing';
 import { MainTabParamList } from '../../navigation/types';
 
@@ -34,33 +47,45 @@ export const DriverHomeScreen: React.FC = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [activeRide, setActiveRide] = useState<any | null>(null);
   const [availableRides, setAvailableRides] = useState<DriverRideItem[]>([]);
-  const [availableFood, setAvailableFood] = useState<any[]>([]);
-  const [activeFood, setActiveFood] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isTogglingDuty, setIsTogglingDuty] = useState(false);
   const [startOtpInput, setStartOtpInput] = useState('');
   const [isStartingRide, setIsStartingRide] = useState(false);
+  const [captainCoords, setCaptainCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const locationWatcherRef = useRef<(() => void) | null>(null);
   const alertedRideIdsRef = useRef<Set<number>>(new Set());
+  const cameraRef = useRef<any>(null);
+
+  const tokenReady = mapboxService.isConfigured();
+  const MapView = MapboxMaps?.MapView;
+  const Camera = MapboxMaps?.Camera;
+  const PointAnnotation = MapboxMaps?.PointAnnotation;
+  const ShapeSource = MapboxMaps?.ShapeSource;
+  const LineLayer = MapboxMaps?.LineLayer;
+
+  useEffect(() => {
+    if (MapboxMaps?.default?.setAccessToken && tokenReady) {
+      MapboxMaps.default.setAccessToken(mapboxService.getAccessToken());
+    }
+  }, [tokenReady]);
 
   const loadDriverData = useCallback(async () => {
     try {
       const p = await driverService.getProfile();
+      if (p.currentLatitude && p.currentLongitude) {
+        setCaptainCoords({ latitude: p.currentLatitude, longitude: p.currentLongitude });
+      }
       setProfile(p);
       setIsOnline(p.isOnline);
 
-      const [active, available, foodActive, foodOpen] = await Promise.all([
+      const [active, available] = await Promise.all([
         driverService.getActiveRide(),
         p.isOnline ? driverService.getAvailableRides() : Promise.resolve([]),
-        driverService.getActiveFoodOrder().catch(() => null),
-        p.isOnline ? driverService.getAvailableFoodOrders().catch(() => []) : Promise.resolve([]),
       ]);
 
       setActiveRide(active);
       setAvailableRides(available);
-      setActiveFood(foodActive);
-      setAvailableFood(foodOpen);
     } catch (e: any) {
       console.warn('[DriverHome] Error loading driver data:', e.message);
     } finally {
@@ -68,6 +93,42 @@ export const DriverHomeScreen: React.FC = () => {
       setIsRefreshing(false);
     }
   }, []);
+
+  const pickupCoordsValid = useMemo(() => {
+    if (!activeRide) return false;
+    const lat = Number(activeRide.pickupLatitude);
+    const lng = Number(activeRide.pickupLongitude);
+    return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && !(lat === 0 && lng === 0);
+  }, [activeRide?.pickupLatitude, activeRide?.pickupLongitude]);
+
+  const distanceToPickupText = useMemo(() => {
+    if (!pickupCoordsValid || !captainCoords || !activeRide) return null;
+    const pLat = Number(activeRide.pickupLatitude);
+    const pLng = Number(activeRide.pickupLongitude);
+    const distKm = locationService.calculateDistanceKm(captainCoords.latitude, captainCoords.longitude, pLat, pLng);
+    if (!Number.isFinite(distKm)) return null;
+    if (distKm < 1.0) {
+      return `${Math.round(distKm * 1000)} m`;
+    }
+    return `${distKm.toFixed(1)} km`;
+  }, [pickupCoordsValid, captainCoords, activeRide?.pickupLatitude, activeRide?.pickupLongitude]);
+
+  const routeGeoJson = useMemo(() => {
+    if (!pickupCoordsValid || !captainCoords || !activeRide) return null;
+    const pLat = Number(activeRide.pickupLatitude);
+    const pLng = Number(activeRide.pickupLongitude);
+    return {
+      type: 'Feature' as const,
+      properties: {},
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: [
+          [captainCoords.longitude, captainCoords.latitude],
+          [pLng, pLat],
+        ],
+      },
+    };
+  }, [pickupCoordsValid, captainCoords, activeRide?.pickupLatitude, activeRide?.pickupLongitude]);
 
   useEffect(() => {
     loadDriverData();
@@ -107,16 +168,19 @@ export const DriverHomeScreen: React.FC = () => {
         setAvailableRides(available);
         const matched = available.find((r) => r.id === focusRideId);
         if (matched) {
-          Alert.alert(
-            '🚖 Ride Request',
-            `Ride #${matched.rideNumber}\nPickup: ${matched.pickupAddress}\nDrop: ${matched.dropoffAddress}\nFare: ₹${matched.fare}`,
-            [
-              { text: 'Ignore', style: 'cancel' },
-              { text: 'Accept Trip', onPress: () => handleAcceptRide(matched.id) },
-            ]
-          );
+          if (!alertedRideIdsRef.current.has(matched.id)) {
+            alertedRideIdsRef.current.add(matched.id);
+            Alert.alert(
+              '🚖 Ride Request',
+              `Ride #${matched.rideNumber}\nPickup: ${matched.pickupAddress}\nDrop: ${matched.dropoffAddress}\nFare: ₹${matched.fare}`,
+              [
+                { text: 'Ignore', style: 'cancel' },
+                { text: 'Accept Trip', onPress: () => handleAcceptRide(matched.id) },
+              ]
+            );
+          }
         } else {
-          Alert.alert('Ride Notice', 'This ride is no longer available or has already been accepted.');
+          Alert.alert('Ride Notice', 'This ride is no longer available, has expired, or has already been accepted.');
         }
       } catch {
         Alert.alert('Ride Notice', 'This ride is no longer available.');
@@ -132,7 +196,8 @@ export const DriverHomeScreen: React.FC = () => {
     let unregisterStatus: (() => void) | null = null;
     let unregisterRequested: (() => void) | null = null;
     let unregisterAcceptedByOther: (() => void) | null = null;
-    let unregisterFood: (() => void) | null = null;
+    let unregisterCancelled: (() => void) | null = null;
+    let unregisterExpired: (() => void) | null = null;
 
     const setupSignalR = async () => {
       try {
@@ -145,13 +210,10 @@ export const DriverHomeScreen: React.FC = () => {
             await hub.invoke('JoinRide', activeRide.id).catch(() => {});
           }
 
-          unregisterFood = signalRService.onFoodDeliveryAvailable(() => {
-            loadDriverData();
-          });
           unregisterStatus = signalRService.onRideStatusChanged((event) => {
             if (activeRide && event.rideId === activeRide.id) {
               setActiveRide((prev: any) => prev ? { ...prev, status: event.status } : null);
-              if (event.status === 'COMPLETED' || event.status === 'CANCELLED') {
+              if (event.status === 'COMPLETED' || event.status === 'CANCELLED' || event.status === 'EXPIRED') {
                 loadDriverData();
               }
             }
@@ -160,6 +222,10 @@ export const DriverHomeScreen: React.FC = () => {
           // Real-time live incoming ride requests broadcast
           unregisterRequested = signalRService.onRideRequested((incoming: any) => {
             if (!incoming) return;
+            // Mark incoming as alerted to deduplicate with incoming push notifications
+            if (alertedRideIdsRef.current.has(incoming.id)) return;
+            alertedRideIdsRef.current.add(incoming.id);
+
             setAvailableRides((prev) => {
               if (prev.some((r) => r.id === incoming.id)) return prev;
               const mapped: DriverRideItem = {
@@ -174,23 +240,24 @@ export const DriverHomeScreen: React.FC = () => {
                 status: incoming.status || 'REQUESTED',
                 customerName: incoming.customerName || 'Customer',
                 customerPhone: incoming.customerPhone || '',
+                pickupLatitude: incoming.pickupLatitude,
+                pickupLongitude: incoming.pickupLongitude,
+                dropoffLatitude: incoming.dropoffLatitude,
+                dropoffLongitude: incoming.dropoffLongitude,
                 createdAt: incoming.createdAt || new Date().toISOString(),
               };
               return [mapped, ...prev];
             });
 
             if (isOnline && !activeRide) {
-              if (!alertedRideIdsRef.current.has(incoming.id)) {
-                alertedRideIdsRef.current.add(incoming.id);
-                Alert.alert(
-                  '🔔 New Ride Request Available!',
-                  `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
-                  [
-                    { text: 'Ignore', style: 'cancel' },
-                    { text: 'Accept Trip', onPress: () => handleAcceptRide(incoming.id) },
-                  ]
-                );
-              }
+              Alert.alert(
+                '🔔 New Ride Request Available!',
+                `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
+                [
+                  { text: 'Ignore', style: 'cancel' },
+                  { text: 'Accept Trip', onPress: () => handleAcceptRide(incoming.id) },
+                ]
+              );
             }
           });
 
@@ -198,7 +265,33 @@ export const DriverHomeScreen: React.FC = () => {
           // Live sync when another driver accepts first
           unregisterAcceptedByOther = signalRService.onRideAcceptedByOther((data: any) => {
             if (data?.rideId) {
+              alertedRideIdsRef.current.add(data.rideId);
               setAvailableRides((prev) => prev.filter((r) => r.id !== data.rideId));
+            }
+          });
+
+          // Live sync when customer cancels ride
+          unregisterCancelled = signalRService.onRideCancelled((data: any) => {
+            if (data?.rideId) {
+              alertedRideIdsRef.current.add(data.rideId);
+              setAvailableRides((prev) => prev.filter((r) => r.id !== data.rideId));
+              if (activeRide && activeRide.id === data.rideId) {
+                setActiveRide(null);
+                Alert.alert('Ride Cancelled', 'The customer has cancelled this ride request.');
+                loadDriverData();
+              }
+            }
+          });
+
+          // Live sync when ride request expires (after 5 minutes)
+          unregisterExpired = signalRService.onRideExpired((data: any) => {
+            if (data?.rideId) {
+              alertedRideIdsRef.current.add(data.rideId);
+              setAvailableRides((prev) => prev.filter((r) => r.id !== data.rideId));
+              if (activeRide && activeRide.id === data.rideId) {
+                setActiveRide(null);
+                loadDriverData();
+              }
             }
           });
         }
@@ -213,7 +306,8 @@ export const DriverHomeScreen: React.FC = () => {
       if (unregisterStatus) unregisterStatus();
       if (unregisterRequested) unregisterRequested();
       if (unregisterAcceptedByOther) unregisterAcceptedByOther();
-      if (unregisterFood) unregisterFood();
+      if (unregisterCancelled) unregisterCancelled();
+      if (unregisterExpired) unregisterExpired();
     };
   }, [activeRide?.id, isOnline, loadDriverData]);
 
@@ -234,6 +328,8 @@ export const DriverHomeScreen: React.FC = () => {
                 ) {
                   return;
                 }
+
+                setCaptainCoords({ latitude: coords.latitude, longitude: coords.longitude });
 
                 await driverService.updateLocation(
                   coords.latitude,
@@ -367,6 +463,19 @@ export const DriverHomeScreen: React.FC = () => {
     ]);
   };
 
+  const openDirectionsInExternalApp = (lat: number, lng: number, label: string) => {
+    const url = Platform.select({
+      ios: `maps:0,0?q=${encodeURIComponent(label)}@${lat},${lng}`,
+      android: `geo:0,0?q=${lat},${lng}(${encodeURIComponent(label)})`,
+      default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+    });
+    if (url) {
+      Linking.openURL(url).catch(() => {
+        Alert.alert('Navigation Error', 'Could not open native maps application.');
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -421,44 +530,6 @@ export const DriverHomeScreen: React.FC = () => {
           </View>
         </View>
 
-        {(activeFood || availableFood.length > 0) && (
-          <View style={styles.headerCard}>
-            <Text style={styles.driverName}>Food deliveries</Text>
-            {activeFood && (
-              <View style={{ marginTop: 8 }}>
-                <Text style={styles.vehicleSubtitle}>
-                  {activeFood.orderNumber} · {activeFood.restaurantName} · {activeFood.status}
-                </Text>
-                <Text style={styles.vehicleSubtitle}>{activeFood.deliveryAddress || 'Address on order'}</Text>
-                {activeFood.status === 'READY' && (
-                  <TouchableOpacity onPress={async () => { await driverService.pickupFoodOrder(activeFood.id); loadDriverData(); }}>
-                    <Text style={[styles.toggleLabel, { color: '#10B981' }]}>Mark picked up</Text>
-                  </TouchableOpacity>
-                )}
-                {activeFood.status === 'PICKED_UP' && (
-                  <TouchableOpacity onPress={async () => { await driverService.deliverFoodOrder(activeFood.id); loadDriverData(); }}>
-                    <Text style={[styles.toggleLabel, { color: '#10B981' }]}>Mark delivered</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-            {availableFood.map((order) => (
-              <TouchableOpacity key={order.id} onPress={async () => {
-                try {
-                  await driverService.acceptFoodOrder(order.id);
-                  loadDriverData();
-                } catch (e: any) {
-                  Alert.alert('Could not accept', e?.message || 'Another captain took this delivery');
-                }
-              }} style={{ marginTop: 10 }}>
-                <Text style={styles.vehicleSubtitle}>
-                  Accept {order.orderNumber} · {order.restaurantName} · ₹{order.grandTotal}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         {/* Active Trip Section */}
         {activeRide && (
           <View style={styles.activeRideCard}>
@@ -474,8 +545,13 @@ export const DriverHomeScreen: React.FC = () => {
               <View style={styles.stopRow}>
                 <Ionicons name="radio-button-on" size={18} color="#10B981" />
                 <View style={styles.stopDetails}>
-                  <Text style={styles.stopLabel}>PICKUP</Text>
+                  <Text style={styles.stopLabel}>PICKUP LOCATION</Text>
                   <Text style={styles.stopAddress} numberOfLines={2}>{activeRide.pickupAddress}</Text>
+                  {pickupCoordsValid ? (
+                    <Text style={styles.stopCoordsText}>
+                      GPS: {Number(activeRide.pickupLatitude).toFixed(5)}, {Number(activeRide.pickupLongitude).toFixed(5)}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
               <View style={styles.routeDivider} />
@@ -486,6 +562,147 @@ export const DriverHomeScreen: React.FC = () => {
                   <Text style={styles.stopAddress} numberOfLines={2}>{activeRide.dropoffAddress}</Text>
                 </View>
               </View>
+            </View>
+
+            {/* Captain Pickup Location Map */}
+            <View style={styles.captainMapWrapper}>
+              <View style={styles.mapHeaderRow}>
+                <View style={styles.mapHeaderTitleRow}>
+                  <Ionicons name="navigate-circle" size={18} color="#3B82F6" />
+                  <Text style={styles.mapSectionTitle}>Live Pickup Navigation Map</Text>
+                </View>
+                {distanceToPickupText ? (
+                  <View style={styles.distanceBadge}>
+                    <Ionicons name="speedometer-outline" size={13} color="#10B981" />
+                    <Text style={styles.distanceBadgeText}>{distanceToPickupText} to pickup</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {!pickupCoordsValid ? (
+                <View style={styles.mapFallbackCard}>
+                  <Ionicons name="alert-circle-outline" size={22} color="#F59E0B" />
+                  <Text style={styles.mapFallbackText}>
+                    Pickup GPS coordinates unavailable or invalid. Please refer to written pickup address above.
+                  </Text>
+                </View>
+              ) : canUseNativeMap && MapView && Camera && PointAnnotation && tokenReady ? (
+                <View style={styles.nativeMapContainer}>
+                  <MapView
+                    style={StyleSheet.absoluteFill}
+                    styleURL="mapbox://styles/mapbox/navigation-night-v1"
+                    logoEnabled={false}
+                    attributionEnabled={false}
+                  >
+                    <Camera
+                      ref={cameraRef}
+                      zoomLevel={14}
+                      centerCoordinate={
+                        captainCoords && Number.isFinite(captainCoords.longitude)
+                          ? [captainCoords.longitude, captainCoords.latitude]
+                          : [Number(activeRide.pickupLongitude), Number(activeRide.pickupLatitude)]
+                      }
+                      animationMode="flyTo"
+                      animationDuration={400}
+                    />
+
+                    {/* Customer Pickup Location Marker - Green Pin */}
+                    <PointAnnotation
+                      id={`pickup-marker-${activeRide.id}`}
+                      coordinate={[Number(activeRide.pickupLongitude), Number(activeRide.pickupLatitude)]}
+                      title="Customer Pickup Location"
+                    >
+                      <View style={styles.pickupMarkerWrap}>
+                        <View style={styles.pickupPinHead}>
+                          <Ionicons name="person" size={14} color="#FFFFFF" />
+                        </View>
+                        <View style={styles.pinTriangle} />
+                        <View style={styles.pickupPulseDot} />
+                      </View>
+                    </PointAnnotation>
+
+                    {/* Captain Live Location Marker - Distinct Blue Vehicle Icon */}
+                    {captainCoords &&
+                      Number.isFinite(captainCoords.latitude) &&
+                      Number.isFinite(captainCoords.longitude) &&
+                      captainCoords.latitude !== 0 && (
+                        <PointAnnotation
+                          id={`captain-marker-${activeRide.id}`}
+                          coordinate={[captainCoords.longitude, captainCoords.latitude]}
+                          title="Captain (Your Location)"
+                        >
+                          <View style={styles.captainMarkerWrap}>
+                            <View style={styles.captainMarkerHead}>
+                              <Ionicons name="car" size={14} color="#FFFFFF" />
+                            </View>
+                            <View style={styles.captainMarkerAura} />
+                          </View>
+                        </PointAnnotation>
+                      )}
+
+                    {/* Straight Route Line between Captain and Pickup */}
+                    {routeGeoJson && ShapeSource && LineLayer ? (
+                      <ShapeSource id="routeLineSource" shape={routeGeoJson}>
+                        <LineLayer
+                          id="routeLineLayer"
+                          style={{
+                            lineColor: '#3B82F6',
+                            lineWidth: 4,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                            lineDasharray: [1.5, 1.5],
+                          }}
+                        />
+                      </ShapeSource>
+                    ) : null}
+                  </MapView>
+
+                  <TouchableOpacity
+                    style={styles.openExternalNavBtn}
+                    onPress={() =>
+                      openDirectionsInExternalApp(
+                        Number(activeRide.pickupLatitude),
+                        Number(activeRide.pickupLongitude),
+                        activeRide.pickupAddress || 'Customer Pickup'
+                      )
+                    }
+                  >
+                    <Ionicons name="navigate" size={14} color="#FFFFFF" />
+                    <Text style={styles.openExternalNavText}>Open Google / Apple Maps</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.mapFallbackCard}>
+                  <View style={styles.fallbackHeader}>
+                    <MaterialIcons name="map" size={24} color="#3B82F6" />
+                    <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                      <Text style={styles.fallbackPickupTitle}>Pickup: {activeRide.pickupAddress}</Text>
+                      <Text style={styles.fallbackCoords}>
+                        Lat: {Number(activeRide.pickupLatitude).toFixed(5)}, Lng: {Number(activeRide.pickupLongitude).toFixed(5)}
+                      </Text>
+                      {captainCoords ? (
+                        <Text style={styles.fallbackCaptainCoords}>
+                          Captain GPS: {captainCoords.latitude.toFixed(5)}, {captainCoords.longitude.toFixed(5)}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.openExternalNavBtnFallback}
+                    onPress={() =>
+                      openDirectionsInExternalApp(
+                        Number(activeRide.pickupLatitude),
+                        Number(activeRide.pickupLongitude),
+                        activeRide.pickupAddress || 'Customer Pickup'
+                      )
+                    }
+                  >
+                    <Ionicons name="navigate" size={16} color="#FFFFFF" />
+                    <Text style={styles.openExternalNavText}>Launch Turn-by-Turn Navigation</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* Trip Action Controls */}
@@ -997,5 +1214,185 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+  stopCoordsText: {
+    fontSize: 11,
+    color: '#3B82F6',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  captainMapWrapper: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: 14,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#3B82F640',
+  },
+  mapHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+    paddingHorizontal: 4,
+  },
+  mapHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mapSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  distanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B98120',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  distanceBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  nativeMapContainer: {
+    height: 220,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    marginTop: spacing.xs,
+  },
+  pickupMarkerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickupPinHead: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  pinTriangle: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#10B981',
+    marginTop: -1,
+  },
+  pickupPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginTop: 2,
+  },
+  captainMarkerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captainMarkerHead: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  captainMarkerAura: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3B82F630',
+    zIndex: -1,
+  },
+  openExternalNavBtn: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: '#0F172AEE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#3B82F680',
+  },
+  openExternalNavText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  mapFallbackCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    padding: spacing.md,
+    marginTop: spacing.xs,
+  },
+  mapFallbackText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 18,
+  },
+  fallbackHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fallbackPickupTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  fallbackCoords: {
+    fontSize: 11,
+    color: '#10B981',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  fallbackCaptainCoords: {
+    fontSize: 11,
+    color: '#3B82F6',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  openExternalNavBtnFallback: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+    marginTop: spacing.sm,
   },
 });

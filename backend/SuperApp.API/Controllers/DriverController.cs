@@ -20,18 +20,22 @@ public class DriverController : ControllerBase
     private readonly IHubContext<RideTrackingHub> _hub;
     private readonly INotificationService? _notificationService;
     private readonly IHubContext<OrderStatusHub>? _orderHub;
+    private readonly ILogger<DriverController>? _logger;
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, SemaphoreSlim> FoodAcceptLocks = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, SemaphoreSlim> RideAcceptLocks = new();
 
     public DriverController(
         AppDbContext db,
         IHubContext<RideTrackingHub> hub,
         INotificationService? notificationService = null,
-        IHubContext<OrderStatusHub>? orderHub = null)
+        IHubContext<OrderStatusHub>? orderHub = null,
+        ILogger<DriverController>? logger = null)
     {
         _db = db;
         _hub = hub;
         _notificationService = notificationService;
         _orderHub = orderHub;
+        _logger = logger;
     }
 
     private async Task<Driver?> GetAuthorizedDriverAsync()
@@ -164,9 +168,12 @@ public class DriverController : ControllerBase
         if (!driver.IsOnline)
             return Ok(ApiResponse<List<DriverRideSummaryDto>>.Ok(new List<DriverRideSummaryDto>(), "Go online to see available rides"));
 
+        var cutoff = DateTime.UtcNow.AddMinutes(-5);
         var rides = await _db.Rides
             .Include(r => r.User)
-            .Where(r => (r.Status == RideStatus.Requested || r.Status == "SEARCHING") && (r.DriverId == null || r.DriverId == driver.Id))
+            .Where(r => (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching) 
+                     && (r.DriverId == null || r.DriverId == driver.Id)
+                     && r.CreatedAt >= cutoff)
             .OrderByDescending(r => r.CreatedAt)
             .Take(20)
             .Select(r => new DriverRideSummaryDto
@@ -180,7 +187,11 @@ public class DriverController : ControllerBase
                 CreatedAt = r.CreatedAt,
                 CustomerName = r.User.FullName ?? "Passenger",
                 CustomerPhone = r.User.MobileNumber,
-                OtpCode = r.OtpCode
+                OtpCode = r.OtpCode,
+                PickupLatitude = r.PickupLatitude,
+                PickupLongitude = r.PickupLongitude,
+                DropoffLatitude = r.DropoffLatitude,
+                DropoffLongitude = r.DropoffLongitude
             })
             .ToListAsync();
 
@@ -216,6 +227,10 @@ public class DriverController : ControllerBase
             VehicleType = ride.VehicleType,
             PickupAddress = ride.PickupAddress,
             DropoffAddress = ride.DropoffAddress,
+            PickupLatitude = ride.PickupLatitude,
+            PickupLongitude = ride.PickupLongitude,
+            DropoffLatitude = ride.DropoffLatitude,
+            DropoffLongitude = ride.DropoffLongitude,
             DistanceKm = ride.DistanceKm,
             EstimatedFare = ride.EstimatedFare,
             ActualFare = ride.ActualFare,
@@ -252,53 +267,97 @@ public class DriverController : ControllerBase
         if (driver == null)
             return Forbid();
 
-        var ride = await _db.Rides.Include(r => r.User).FirstOrDefaultAsync(r => r.Id == id);
-        if (ride == null)
-            return NotFound(ApiResponse<RideDto>.Fail("Ride not found"));
-
-        if (ride.DriverId != null && ride.DriverId != driver.Id)
+        var gate = RideAcceptLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
         {
-            return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
-        }
+            var ride = await _db.Rides.Include(r => r.User).FirstOrDefaultAsync(r => r.Id == id);
+            if (ride == null)
+                return NotFound(ApiResponse<RideDto>.Fail("Ride not found"));
 
-        if (ride.Status != RideStatus.Requested && ride.Status != "SEARCHING" && ride.DriverId != driver.Id)
-        {
-            return Conflict(ApiResponse<RideDto>.Fail("This ride is no longer available for booking."));
-        }
+            // Check if cancelled, completed, expired, or already assigned
+            if (ride.Status == RideStatus.Cancelled)
+            {
+                return Conflict(ApiResponse<RideDto>.Fail("This ride has been cancelled by the customer."));
+            }
 
-        var vehicle = driver.Vehicles.FirstOrDefault(v => v.IsActive);
+            if (ride.Status == RideStatus.Expired || (ride.Status == RideStatus.Requested && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5)))
+            {
+                if (ride.Status != RideStatus.Expired)
+                {
+                    ride.Status = RideStatus.Expired;
+                    ride.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
 
-        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            if (ride.DriverId != null || (ride.Status != RideStatus.Requested && ride.Status != RideStatus.Searching))
+                    await _hub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
+                    {
+                        rideId = ride.Id,
+                        status = RideStatus.Expired,
+                        reason = "No driver accepted within 5 minutes.",
+                        updatedAt = ride.UpdatedAt
+                    });
+                    await _hub.Clients.Group("drivers-pool").SendAsync("RideExpired", new
+                    {
+                        rideId = ride.Id,
+                        status = RideStatus.Expired
+                    });
+                }
+                return Conflict(ApiResponse<RideDto>.Fail("This ride request has expired (5-minute limit exceeded)."));
+            }
+
+            if (ride.DriverId != null && ride.DriverId != driver.Id)
             {
                 return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
             }
-            ride.DriverId = driver.Id;
-            ride.VehicleId = vehicle?.Id;
-            ride.Status = RideStatus.Accepted;
-            ride.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-        }
-        else
-        {
-            var claimed = await _db.Rides
-                .Where(r => r.Id == ride.Id && r.DriverId == null && (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching))
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(r => r.DriverId, driver.Id)
-                    .SetProperty(r => r.Status, RideStatus.Accepted)
-                    .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
-            if (claimed == 0)
-                return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
 
-            ride.DriverId = driver.Id;
-            _db.Entry(ride).Property(r => r.DriverId).IsModified = false;
-            _db.Entry(ride).Property(r => r.Status).IsModified = false;
-            ride.VehicleId = vehicle?.Id;
-            ride.Status = RideStatus.Accepted;
-            ride.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-        }
+            if (ride.Status != RideStatus.Requested && ride.Status != RideStatus.Searching && ride.DriverId != driver.Id)
+            {
+                return Conflict(ApiResponse<RideDto>.Fail("This ride is no longer available for booking."));
+            }
+
+            var vehicle = driver.Vehicles.FirstOrDefault(v => v.IsActive);
+
+            if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                if (ride.DriverId != null || (ride.Status != RideStatus.Requested && ride.Status != RideStatus.Searching))
+                {
+                    return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
+                }
+                ride.DriverId = driver.Id;
+                ride.VehicleId = vehicle?.Id;
+                ride.Status = RideStatus.Accepted;
+                ride.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
+            else
+            {
+                var cutoff = DateTime.UtcNow.AddMinutes(-5);
+                var claimed = await _db.Rides
+                    .Where(r => r.Id == ride.Id && r.DriverId == null && (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching) && r.CreatedAt >= cutoff)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(r => r.DriverId, driver.Id)
+                        .SetProperty(r => r.Status, RideStatus.Accepted)
+                        .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
+                if (claimed == 0)
+                {
+                    // Re-check why claim failed
+                    var currentStatus = await _db.Rides.Where(r => r.Id == ride.Id).Select(r => new { r.Status, r.CreatedAt }).FirstOrDefaultAsync();
+                    if (currentStatus?.Status == RideStatus.Cancelled)
+                        return Conflict(ApiResponse<RideDto>.Fail("This ride has been cancelled by the customer."));
+                    if (currentStatus != null && (currentStatus.Status == RideStatus.Expired || currentStatus.CreatedAt < cutoff))
+                        return Conflict(ApiResponse<RideDto>.Fail("This ride request has expired (5-minute limit exceeded)."));
+
+                    return Conflict(ApiResponse<RideDto>.Fail("This ride has already been accepted by another driver."));
+                }
+
+                ride.DriverId = driver.Id;
+                _db.Entry(ride).Property(r => r.DriverId).IsModified = false;
+                _db.Entry(ride).Property(r => r.Status).IsModified = false;
+                ride.VehicleId = vehicle?.Id;
+                ride.Status = RideStatus.Accepted;
+                ride.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+            }
 
         var driverSummary = new DriverSummaryDto
         {
@@ -348,6 +407,10 @@ public class DriverController : ControllerBase
             VehicleType = ride.VehicleType,
             PickupAddress = ride.PickupAddress,
             DropoffAddress = ride.DropoffAddress,
+            PickupLatitude = ride.PickupLatitude,
+            PickupLongitude = ride.PickupLongitude,
+            DropoffLatitude = ride.DropoffLatitude,
+            DropoffLongitude = ride.DropoffLongitude,
             DistanceKm = ride.DistanceKm,
             EstimatedFare = ride.EstimatedFare,
             Status = ride.Status,
@@ -357,6 +420,11 @@ public class DriverController : ControllerBase
             CreatedAt = ride.CreatedAt,
             Driver = driverSummary
         }, "Ride accepted"));
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>
@@ -616,9 +684,133 @@ public class DriverController : ControllerBase
                 speed = request.Speed,
                 updatedAt = DateTime.UtcNow
             });
+
+            // Configurable Auto-Arrived Feature (MUST REMAIN DISABLED by default)
+            await CheckAndProcessAutoArrivalAsync(driver, request.RideId.Value, request.Latitude, request.Longitude);
         }
 
         return Ok(ApiResponse.Ok("Location updated"));
+    }
+
+    /// <summary>
+    /// Evaluates auto-arrival proximity when Ride.AutoMarkArrivedEnabled is explicitly configured true by admin.
+    /// MUST REMAIN DISABLED by default (safe default is false).
+    /// </summary>
+    private async Task CheckAndProcessAutoArrivalAsync(Driver driver, long rideId, decimal driverLat, decimal driverLng)
+    {
+        try
+        {
+            // 1. Fetch server configuration with safe defaults
+            var enabledSetting = await _db.AppSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.SettingKey == "Ride.AutoMarkArrivedEnabled");
+
+            var isAutoArriveEnabled = enabledSetting != null &&
+                string.Equals(enabledSetting.SettingValue?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+
+            var radiusSetting = await _db.AppSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.SettingKey == "Ride.AutoMarkArrivedRadiusMeters");
+
+            var radiusMeters = 20.0;
+            if (radiusSetting != null && double.TryParse(radiusSetting.SettingValue?.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsedRadius) && parsedRadius > 0)
+            {
+                radiusMeters = parsedRadius;
+            }
+
+            // 2. Proximity qualification check
+            var ride = await _db.Rides.FirstOrDefaultAsync(r => r.Id == rideId && r.DriverId == driver.Id);
+            if (ride == null || ride.Status != RideStatus.Accepted)
+            {
+                return;
+            }
+
+            // Validate coordinates
+            if (ride.PickupLatitude < -90m || ride.PickupLatitude > 90m ||
+                ride.PickupLongitude < -180m || ride.PickupLongitude > 180m ||
+                (ride.PickupLatitude == 0m && ride.PickupLongitude == 0m))
+            {
+                return;
+            }
+
+            var distanceMeters = CalculateStraightDistanceMeters(driverLat, driverLng, ride.PickupLatitude, ride.PickupLongitude);
+            var isWithinGeofence = distanceMeters <= radiusMeters;
+
+            if (isWithinGeofence)
+            {
+                if (!isAutoArriveEnabled)
+                {
+                    _logger?.LogInformation(
+                        "[AutoArrived] Ride {RideId} qualified for proximity ({Distance:F1}m <= {Radius}m) but feature flag Ride.AutoMarkArrivedEnabled is DISABLED.",
+                        ride.Id, distanceMeters, radiusMeters);
+                    return;
+                }
+
+                // Feature flag is enabled by admin: perform atomic and idempotent transition
+                var gate = RideAcceptLocks.GetOrAdd(ride.Id, _ => new SemaphoreSlim(1, 1));
+                await gate.WaitAsync();
+                try
+                {
+                    // Re-query fresh ride state inside concurrency lock
+                    var freshRide = await _db.Rides.FirstOrDefaultAsync(r => r.Id == ride.Id && r.DriverId == driver.Id);
+                    if (freshRide == null || freshRide.Status != RideStatus.Accepted)
+                    {
+                        return;
+                    }
+
+                    freshRide.Status = RideStatus.Arriving;
+                    freshRide.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+
+                    _logger?.LogInformation(
+                        "[AutoArrived] Ride {RideId} automatically transitioned to ARRIVING ({Distance:F1}m <= {Radius}m).",
+                        freshRide.Id, distanceMeters, radiusMeters);
+
+                    await _hub.Clients.Group($"ride-{freshRide.Id}").SendAsync("RideStatusChanged", new
+                    {
+                        rideId = freshRide.Id,
+                        status = freshRide.Status,
+                        updatedAt = DateTime.UtcNow,
+                        autoTriggered = true
+                    });
+
+                    if (freshRide.UserId > 0 && _notificationService != null)
+                    {
+                        await _notificationService.SendPushNotificationAsync(
+                            freshRide.UserId,
+                            "Driver Arrived! 📍",
+                            $"Your driver has arrived at the pickup location. Share OTP: {freshRide.OtpCode}",
+                            "RIDE",
+                            freshRide.Id.ToString());
+                    }
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "[AutoArrived] Error evaluating auto-arrival for ride {RideId}", rideId);
+        }
+    }
+
+    private static double CalculateStraightDistanceMeters(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
+    {
+        const double EarthRadiusMeters = 6371000.0;
+        var dLat = (double)(lat2 - lat1) * Math.PI / 180.0;
+        var dLon = (double)(lon2 - lon1) * Math.PI / 180.0;
+
+        var rLat1 = (double)lat1 * Math.PI / 180.0;
+        var rLat2 = (double)lat2 * Math.PI / 180.0;
+
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(rLat1) * Math.Cos(rLat2) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return EarthRadiusMeters * c;
     }
 
     /// <summary>

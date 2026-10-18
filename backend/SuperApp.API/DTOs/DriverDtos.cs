@@ -68,4 +68,8 @@ public class DriverRideSummaryDto
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public string? OtpCode { get; set; }
+    public decimal PickupLatitude { get; set; }
+    public decimal PickupLongitude { get; set; }
+    public decimal DropoffLatitude { get; set; }
+    public decimal DropoffLongitude { get; set; }
 }

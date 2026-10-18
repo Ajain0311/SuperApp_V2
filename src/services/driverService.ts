@@ -40,6 +40,10 @@ export interface DriverRideItem {
   customerName: string;
   customerPhone: string;
   otpCode?: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
+  dropoffLatitude?: number;
+  dropoffLongitude?: number;
 }
 
 export interface DriverEarnings {

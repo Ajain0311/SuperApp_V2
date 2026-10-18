@@ -7,6 +7,8 @@ interface CartState {
   items: CartItem[];
 
   addItem: (restaurantId: number, restaurantName: string, item: CartItem) => void;
+  updateQuantity: (foodItemId: number, delta: number) => void;
+  getItemQuantity: (foodItemId: number) => number;
   removeItem: (index: number) => void;
   clearCart: () => void;
 
@@ -38,6 +40,36 @@ export const useCartStore = create<CartState>((set, get) => ({
       restaurantName,
       items: [...state.items, item],
     });
+  },
+
+  getItemQuantity: (foodItemId: number) => {
+    const items = get().items.filter((i) => i.foodItemId === foodItemId);
+    return items.reduce((sum, item) => sum + item.quantity, 0);
+  },
+
+  updateQuantity: (foodItemId: number, delta: number) => {
+    const state = get();
+    const existingIndex = state.items.findIndex((i) => i.foodItemId === foodItemId);
+    if (existingIndex === -1) return;
+
+    const items = [...state.items];
+    const item = { ...items[existingIndex] };
+    const newQty = item.quantity + delta;
+
+    if (newQty <= 0) {
+      items.splice(existingIndex, 1);
+    } else {
+      const unitPrice = item.totalPrice / item.quantity;
+      item.quantity = newQty;
+      item.totalPrice = Math.round(unitPrice * newQty * 100) / 100;
+      items[existingIndex] = item;
+    }
+
+    if (items.length === 0) {
+      set({ items: [], restaurantId: null, restaurantName: '' });
+    } else {
+      set({ items });
+    }
   },
 
   removeItem: (index: number) => {

@@ -1068,7 +1068,10 @@ public class AdminController : ControllerBase
                 // Ride Fare Pricing Configurations (Cab)
                 new AppSetting { SettingKey = "ride_cab_base_fare", SettingValue = "55", Description = "Economy Cab Base Fare (₹)", UpdatedAt = DateTime.UtcNow },
                 new AppSetting { SettingKey = "ride_cab_per_km_rate", SettingValue = "16", Description = "Economy Cab Per Km Rate (₹/km)", UpdatedAt = DateTime.UtcNow },
-                new AppSetting { SettingKey = "ride_cab_minimum_fare", SettingValue = "90", Description = "Economy Cab Minimum Fare (₹)", UpdatedAt = DateTime.UtcNow }
+                new AppSetting { SettingKey = "ride_cab_minimum_fare", SettingValue = "90", Description = "Economy Cab Minimum Fare (₹)", UpdatedAt = DateTime.UtcNow },
+                // Configurable Auto-Arrived Features (MUST REMAIN DISABLED by default)
+                new AppSetting { SettingKey = "Ride.AutoMarkArrivedEnabled", SettingValue = "false", Description = "Auto-mark driver as arrived when within geofence of pickup (true/false, default: false)", UpdatedAt = DateTime.UtcNow },
+                new AppSetting { SettingKey = "Ride.AutoMarkArrivedRadiusMeters", SettingValue = "20", Description = "Geofence radius in meters for auto-mark arrived (default: 20)", UpdatedAt = DateTime.UtcNow }
             };
             _db.AppSettings.AddRange(defaultSettings);
             await _db.SaveChangesAsync();
