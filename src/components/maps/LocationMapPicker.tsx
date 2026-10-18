@@ -170,11 +170,31 @@ export const LocationMapPicker: React.FC<Props> = ({
               placeholder="Search area, landmark, address..."
               placeholderTextColor={colors.textTertiary}
               value={query}
-              onChangeText={setQuery}
+              onChangeText={(t) => {
+                setQuery(t);
+                if (selected) {
+                  setSelected(null);
+                }
+              }}
               autoCorrect={false}
               autoCapitalize="words"
+              selectTextOnFocus
             />
             {searching ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+            {query.length > 0 && !searching && (
+              <TouchableOpacity
+                onPress={() => {
+                  setQuery('');
+                  setSelected(null);
+                  setSuggestions([]);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.searchClearBtn}
+                accessibilityLabel="Clear search"
+              >
+                <MaterialIcons name="close" size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -263,6 +283,11 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.textPrimary,
     paddingVertical: 11,
+  },
+  searchClearBtn: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   error: { color: colors.error, fontSize: 12, marginBottom: 6 },
   suggestionBox: {

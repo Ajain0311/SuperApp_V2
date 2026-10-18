@@ -89,6 +89,7 @@ export const RideBookingScreen: React.FC = () => {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [placeQuery, setPlaceQuery] = useState('');
   const [placeHits, setPlaceHits] = useState<{ label: string; latitude: number; longitude: number }[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isMapModalVisible, setIsMapModalVisible] = useState(false);
   const [modalPoint, setModalPoint] = useState<'pickup' | 'dropoff'>('pickup');
@@ -96,11 +97,15 @@ export const RideBookingScreen: React.FC = () => {
   const [dropoffInput, setDropoffInput] = useState('');
   const [activeInput, setActiveInput] = useState<'pickup' | 'dropoff' | null>(null);
   const isMountedRef = useRef(true);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickupInputRef = useRef<TextInput | null>(null);
+  const dropoffInputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
   }, []);
 
@@ -229,22 +234,30 @@ export const RideBookingScreen: React.FC = () => {
     setIsMapModalVisible(true);
   };
 
-  const handlePlaceSelect = (place: SelectedMapPlace) => {
+  const handlePlaceSelect = (place: SelectedMapPlace, pointTarget?: 'pickup' | 'dropoff') => {
+    const target = pointTarget || modalPoint || activePoint;
     const coords = { latitude: place.latitude, longitude: place.longitude };
-    if (activePoint === 'pickup') {
+    const resolvedAddress = place.address || `${coords.latitude.toFixed(4)}°, ${coords.longitude.toFixed(4)}°`;
+
+    if (target === 'pickup') {
       setPickupCoords(coords);
-      setPickupAddress(place.address || `${coords.latitude.toFixed(4)}°, ${coords.longitude.toFixed(4)}°`);
-      setPickupInput(place.address || '');
+      setPickupAddress(resolvedAddress);
+      setPickupInput(resolvedAddress);
       if (dropoffCoords) {
-        fetchEstimate(coords, place.address, dropoffCoords, dropoffAddress);
+        fetchEstimate(coords, resolvedAddress, dropoffCoords, dropoffAddress);
+      } else {
+        setRouteMetrics(null);
       }
       return;
     }
+
     setDropoffCoords(coords);
-    setDropoffAddress(place.address || `${coords.latitude.toFixed(4)}°, ${coords.longitude.toFixed(4)}°`);
-    setDropoffInput(place.address || '');
+    setDropoffAddress(resolvedAddress);
+    setDropoffInput(resolvedAddress);
     if (pickupCoords) {
-      fetchEstimate(pickupCoords, pickupAddress, coords, place.address);
+      fetchEstimate(pickupCoords, pickupAddress, coords, resolvedAddress);
+    } else {
+      setRouteMetrics(null);
     }
   };
 
@@ -258,24 +271,73 @@ export const RideBookingScreen: React.FC = () => {
     }
   }, [selectedOptions.join('|')]);
 
-  const searchPlaces = async (text: string, point: 'pickup' | 'dropoff') => {
+  const searchPlaces = (text: string, point: 'pickup' | 'dropoff') => {
     setActiveInput(point);
+    setActivePoint(point);
+
     if (point === 'pickup') {
       setPickupInput(text);
+      // Invalidate confirmed place coordinates since query was edited
+      setPickupCoords(null);
+      setPickupAddress(text);
     } else {
       setDropoffInput(text);
+      // Invalidate confirmed place coordinates since query was edited
+      setDropoffCoords(null);
+      setDropoffAddress(text);
     }
+
+    // Invalidate route metrics as coordinates are unconfirmed
+    setRouteMetrics(null);
     setSearchError(null);
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
     if (text.trim().length < 2) {
       setPlaceHits([]);
+      setIsSearchingPlaces(false);
       return;
     }
-    try {
-      const hits = await mapboxService.searchPlaces(text.trim(), pickupCoords || undefined);
-      setPlaceHits(hits.map((hit) => ({ label: hit.address || hit.name, latitude: hit.latitude, longitude: hit.longitude })));
-    } catch {
-      setSearchError('Address search failed. Use map pin or try again.');
-      setPlaceHits([]);
+
+    setIsSearchingPlaces(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const hits = await mapboxService.searchPlaces(text.trim(), pickupCoords || undefined);
+        if (isMountedRef.current) {
+          setPlaceHits(hits.map((hit) => ({ label: hit.address || hit.name, latitude: hit.latitude, longitude: hit.longitude })));
+        }
+      } catch {
+        if (isMountedRef.current) {
+          setSearchError('Address search failed. Use map pin or try again.');
+          setPlaceHits([]);
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setIsSearchingPlaces(false);
+        }
+      }
+    }, 250);
+  };
+
+  const handleClearField = (point: 'pickup' | 'dropoff') => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    setPlaceHits([]);
+    setSearchError(null);
+    setIsSearchingPlaces(false);
+    setRouteMetrics(null);
+    setActiveInput(point);
+    setActivePoint(point);
+
+    if (point === 'pickup') {
+      setPickupCoords(null);
+      setPickupAddress('');
+      setPickupInput('');
+      pickupInputRef.current?.focus();
+    } else {
+      setDropoffCoords(null);
+      setDropoffAddress('');
+      setDropoffInput('');
+      dropoffInputRef.current?.focus();
     }
   };
 
@@ -289,7 +351,7 @@ export const RideBookingScreen: React.FC = () => {
     }
     const currentPoint = activeInput || activePoint;
     setActivePoint(currentPoint);
-    handlePlaceSelect({ latitude: hit.latitude, longitude: hit.longitude, address });
+    handlePlaceSelect({ latitude: hit.latitude, longitude: hit.longitude, address }, currentPoint);
     setPlaceHits([]);
     setActiveInput(null);
   };
@@ -401,18 +463,33 @@ export const RideBookingScreen: React.FC = () => {
                   <Text style={styles.locateMeText}>{isLocating ? 'Locating...' : 'Use GPS'}</Text>
                 </TouchableOpacity>
               </View>
-              <TextInput
-                value={activeInput === 'pickup' ? pickupInput : (pickupAddress || '')}
-                onChangeText={(t) => searchPlaces(t, 'pickup')}
-                onFocus={() => {
-                  setActiveInput('pickup');
-                  setActivePoint('pickup');
-                  setPickupInput(pickupAddress.startsWith('Locating') ? '' : pickupAddress);
-                }}
-                placeholder="Where to pick you up?"
-                placeholderTextColor={colors.textSecondary}
-                style={styles.textInput}
-              />
+              <View style={styles.inputFieldContainer}>
+                <TextInput
+                  ref={pickupInputRef}
+                  value={activeInput === 'pickup' ? pickupInput : (pickupAddress || '')}
+                  onChangeText={(t) => searchPlaces(t, 'pickup')}
+                  onFocus={() => {
+                    setActiveInput('pickup');
+                    setActivePoint('pickup');
+                    setPickupInput(pickupAddress.startsWith('Locating') ? '' : pickupAddress);
+                  }}
+                  placeholder="Where to pick you up?"
+                  placeholderTextColor={colors.textSecondary}
+                  style={styles.textInput}
+                  selectTextOnFocus
+                  autoCorrect={false}
+                />
+                {(activeInput === 'pickup' ? pickupInput.length > 0 : !!pickupAddress && !pickupAddress.startsWith('Locating')) && (
+                  <TouchableOpacity
+                    style={styles.clearBtn}
+                    onPress={() => handleClearField('pickup')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityLabel="Clear pickup location"
+                  >
+                    <MaterialIcons name="cancel" size={18} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
             <TouchableOpacity
               style={styles.pinMapBtn}
@@ -433,18 +510,33 @@ export const RideBookingScreen: React.FC = () => {
             <View style={[styles.dot, { backgroundColor: colors.error }]} />
             <View style={styles.inputWrapper}>
               <Text style={styles.locationLabel}>WHERE TO?</Text>
-              <TextInput
-                value={activeInput === 'dropoff' ? dropoffInput : (dropoffAddress.startsWith('Tap map') ? '' : dropoffAddress)}
-                onChangeText={(t) => searchPlaces(t, 'dropoff')}
-                onFocus={() => {
-                  setActiveInput('dropoff');
-                  setActivePoint('dropoff');
-                  setDropoffInput(dropoffAddress.startsWith('Tap map') ? '' : dropoffAddress);
-                }}
-                placeholder="Enter drop destination"
-                placeholderTextColor={colors.textSecondary}
-                style={styles.textInput}
-              />
+              <View style={styles.inputFieldContainer}>
+                <TextInput
+                  ref={dropoffInputRef}
+                  value={activeInput === 'dropoff' ? dropoffInput : (dropoffAddress.startsWith('Tap map') ? '' : dropoffAddress)}
+                  onChangeText={(t) => searchPlaces(t, 'dropoff')}
+                  onFocus={() => {
+                    setActiveInput('dropoff');
+                    setActivePoint('dropoff');
+                    setDropoffInput(dropoffAddress.startsWith('Tap map') ? '' : dropoffAddress);
+                  }}
+                  placeholder="Enter drop destination"
+                  placeholderTextColor={colors.textSecondary}
+                  style={styles.textInput}
+                  selectTextOnFocus
+                  autoCorrect={false}
+                />
+                {(activeInput === 'dropoff' ? dropoffInput.length > 0 : !!dropoffAddress && !dropoffAddress.startsWith('Tap map')) && (
+                  <TouchableOpacity
+                    style={styles.clearBtn}
+                    onPress={() => handleClearField('dropoff')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityLabel="Clear destination"
+                  >
+                    <MaterialIcons name="cancel" size={18} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
             <TouchableOpacity
               style={styles.pinMapBtn}
@@ -456,6 +548,12 @@ export const RideBookingScreen: React.FC = () => {
           </View>
 
           {/* Autocomplete Dropdown List */}
+          {isSearchingPlaces && placeHits.length === 0 && (
+            <View style={[styles.autocompleteContainer, { padding: 12, alignItems: 'center' }]}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          )}
+
           {placeHits.length > 0 && (
             <View style={styles.autocompleteContainer}>
               {placeHits.map((hit, idx) => (
@@ -804,12 +902,23 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flex: 1,
   },
+  inputFieldContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
   textInput: {
+    flex: 1,
     color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '600',
     paddingVertical: 4,
-    marginTop: 2,
+    paddingRight: 6,
+  },
+  clearBtn: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pinMapBtn: {
     padding: 8,
