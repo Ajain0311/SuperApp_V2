@@ -472,6 +472,11 @@ public class RidesController : ControllerBase
         if (!isDriver && !isAdmin)
             return Forbid();
 
+        if (ride.Status != RideStatus.Started)
+        {
+            return BadRequest(ApiResponse.Fail($"Cannot complete a ride with status '{ride.Status}'. The ride must be in STARTED status to be completed."));
+        }
+
         RideCompletion.MarkCompleted(ride);
         await _db.SaveChangesAsync();
 
