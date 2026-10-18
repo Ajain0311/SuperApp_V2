@@ -150,6 +150,24 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
             if (event.estimatedMinutes) {
               setEtaText(`${event.estimatedMinutes} Mins • On Time`);
             }
+            // Authoritative re-fetch of complete order details (captain assignment, delivery timestamps, driver details)
+            apiClient
+              .get<any>(ApiEndpoints.food.orderDetail(orderNumericId))
+              .then((res) => {
+                const refreshed = res.data?.data || res.data;
+                if (refreshed) {
+                  setOrderData(refreshed);
+                  if (refreshed.status) {
+                    setOrderStatus(refreshed.status);
+                    setCurrentStepIndex(mapStatusToStep(refreshed.status));
+                  }
+                  if (refreshed.restaurantName) setRestaurantName(refreshed.restaurantName);
+                  if (refreshed.restaurantPhone) setRestaurantPhone(refreshed.restaurantPhone);
+                  if (refreshed.restaurantAddress) setRestaurantAddress(refreshed.restaurantAddress);
+                  if (refreshed.deliveryAddress) setDeliveryAddress(refreshed.deliveryAddress);
+                }
+              })
+              .catch(() => {});
           }
         });
       })
@@ -166,19 +184,22 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
   }, [orderNumericId]);
 
   const handleCallOwner = () => {
-    const phoneToCall = restaurantPhone || '+919845012345';
-    const rawNumber = phoneToCall.replace(/\s+/g, '');
+    if (!restaurantPhone || !restaurantPhone.trim()) {
+      Alert.alert('Contact Unavailable', 'Restaurant phone number is not available.');
+      return;
+    }
+    const rawNumber = restaurantPhone.replace(/\s+/g, '');
     const url = `tel:${rawNumber}`;
     Linking.canOpenURL(url)
       .then((supported) => {
         if (supported) {
           Linking.openURL(url);
         } else {
-          Alert.alert('Restaurant Contact', `Call Restaurant Owner directly at:\n${phoneToCall}`);
+          Alert.alert('Restaurant Contact', `Call Restaurant directly at:\n${restaurantPhone}`);
         }
       })
       .catch(() => {
-        Alert.alert('Restaurant Contact', `Call Restaurant Owner directly at:\n${phoneToCall}`);
+        Alert.alert('Restaurant Contact', `Call Restaurant directly at:\n${restaurantPhone}`);
       });
   };
 

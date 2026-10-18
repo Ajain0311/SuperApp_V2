@@ -104,4 +104,44 @@ describe('CartStore - Order Price Calculation & Multi-Restaurant Logic', () => {
     expect(useCartStore.getState().items).toHaveLength(0);
     expect(useCartStore.getState().restaurantId).toBeNull();
   });
+
+  it('should treat different variants of the same dish as distinct cart line items', () => {
+    const regularItem: CartItem = {
+      id: 10,
+      foodItemId: 101,
+      name: 'Special Biryani',
+      basePrice: 340,
+      quantity: 1,
+      variantId: 1,
+      portionName: 'Regular',
+      portionPrice: 0,
+      selectedAddonIds: [],
+      addons: [],
+      totalPrice: 340,
+    };
+
+    const jumboItem: CartItem = {
+      id: 11,
+      foodItemId: 101,
+      name: 'Special Biryani',
+      basePrice: 340,
+      quantity: 1,
+      variantId: 2,
+      portionName: 'Jumbo Pack',
+      portionPrice: 200,
+      selectedAddonIds: [5],
+      addons: ['Extra Gravy (+₹40)'],
+      totalPrice: 580, // 340 + 200 + 40
+    };
+
+    useCartStore.getState().addItem(1, 'Meghana Foods', regularItem);
+    useCartStore.getState().addItem(1, 'Meghana Foods', jumboItem);
+
+    const state = useCartStore.getState();
+    expect(state.items).toHaveLength(2);
+    expect(state.getItemQuantity(101)).toBe(2);
+    expect(state.getItemTotal()).toBe(920); // 340 + 580
+    expect(state.getTaxesAndPackaging()).toBe(46); // 5% GST
+    expect(state.getGrandTotal()).toBe(966);
+  });
 });

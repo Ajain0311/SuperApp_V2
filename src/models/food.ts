@@ -83,10 +83,13 @@ export interface CartItem {
   name: string;
   basePrice: number;
   quantity: number;
+  variantId?: number | null;
   portionName?: string;
   portionPrice?: number;
+  selectedAddonIds?: number[];
   addons: string[];
   totalPrice: number;
+  cartLineKey?: string;
 }
 
 export interface PlaceFoodOrderRequest {

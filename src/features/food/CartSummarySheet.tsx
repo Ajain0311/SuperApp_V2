@@ -23,6 +23,7 @@ interface CartSummarySheetProps {
   onClose: () => void;
   restaurantName: string;
   cartItems: CartItem[];
+  deliveryFee?: number;
   onClear: () => void;
   onOrderPlaced: (couponCode?: string, paymentMethod?: 'COD' | 'ONLINE') => void;
   isSubmitting?: boolean;
@@ -33,6 +34,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   onClose,
   restaurantName,
   cartItems,
+  deliveryFee = 0,
   onClear,
   onOrderPlaced,
   isSubmitting = false,
@@ -46,7 +48,6 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'ONLINE'>('COD');
 
   const itemTotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const deliveryFee = 0; // FREE
   const discountedSubtotal = Math.max(0, itemTotal - discountAmount);
   const taxesAndPackaging = Math.round(discountedSubtotal * 0.05 * 100) / 100; // 5% GST
   const grandTotal = discountedSubtotal + deliveryFee + taxesAndPackaging;

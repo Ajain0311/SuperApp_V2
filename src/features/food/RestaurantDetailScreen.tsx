@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,7 +21,7 @@ import { VegBadge } from '../../components/common/VegBadge';
 import { ItemCustomizationSheet } from './ItemCustomizationSheet';
 import { CartSummarySheet } from './CartSummarySheet';
 import { useCartStore } from '../../store/cartStore';
-import { CartItem } from '../../models/food';
+import { CartItem, FoodItemVariant, FoodItemAddon } from '../../models/food';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { absoluteImageUrl } from '../../services/documentService';
@@ -47,84 +49,32 @@ interface FoodItemRow {
   price: number;
   description: string;
   isVeg: boolean;
+  isAvailable?: boolean;
   isBestseller: boolean;
   isCustomizable: boolean;
   image: string;
+  variants?: FoodItemVariant[];
+  addons?: FoodItemAddon[];
 }
-
-const MENU_CATEGORIES = ['All', 'Biryani Specials', 'Starters', 'Desserts'];
-
-const FOOD_ITEMS: FoodItemRow[] = [
-  {
-    id: 1,
-    name: 'Meghana Special Chicken Biryani',
-    category: 'Biryani Specials',
-    price: 340.0,
-    description:
-      'Fragrant Basmati rice topped with boneless spiced chicken marinated in Andhra green chili paste.',
-    isVeg: false,
-    isBestseller: true,
-    isCustomizable: true,
-    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300',
-  },
-  {
-    id: 2,
-    name: 'Paneer 65 Biryani (Dum Style)',
-    category: 'Biryani Specials',
-    price: 290.0,
-    description: 'Spiced golden paneer cubes layered with saffron long grain basmati rice.',
-    isVeg: true,
-    isBestseller: true,
-    isCustomizable: true,
-    image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=300',
-  },
-  {
-    id: 3,
-    name: 'Crispy Boneless Chicken 65',
-    category: 'Starters',
-    price: 310.0,
-    description:
-      'Tender chicken bites tossed with south curry leaves, mustard seeds, and Andhra red chili glaze.',
-    isVeg: false,
-    isBestseller: true,
-    isCustomizable: false,
-    image: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=300',
-  },
-  {
-    id: 4,
-    name: 'Apollo Fish Fry',
-    category: 'Starters',
-    price: 360.0,
-    description: 'Flaky fillets fried crisp and tossed in spiced yogurt seasoning.',
-    isVeg: false,
-    isBestseller: false,
-    isCustomizable: false,
-    image: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=300',
-  },
-  {
-    id: 5,
-    name: 'Gulab Jamun with Rabri',
-    category: 'Desserts',
-    price: 110.0,
-    description: 'Warm reduced milk dumplings served with chilled saffron rabri.',
-    isVeg: true,
-    isBestseller: false,
-    isCustomizable: false,
-    image: 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=300',
-  },
-];
 
 export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   route,
   navigation,
 }) => {
+  const restaurantNumericId = Number(route.params?.restaurantId) || 1;
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeItemForCustomization, setActiveItemForCustomization] = useState<FoodItemRow | null>(null);
   const [isCartVisible, setIsCartVisible] = useState(false);
-  const [restaurantName, setRestaurantName] = useState('Meghana Foods (Special Biryani)');
-  const [foodItems, setFoodItems] = useState<FoodItemRow[]>(FOOD_ITEMS);
-  const [menuCategories, setMenuCategories] = useState<string[]>(MENU_CATEGORIES);
+  const [restaurantName, setRestaurantName] = useState('Restaurant');
+  const [restaurantRating, setRestaurantRating] = useState<number>(4.5);
+  const [restaurantDeliveryFee, setRestaurantDeliveryFee] = useState<number>(0);
+  const [restaurantCuisines, setRestaurantCuisines] = useState<string>('Dishes & Delights');
+  const [foodItems, setFoodItems] = useState<FoodItemRow[]>([]);
+  const [menuCategories, setMenuCategories] = useState<string[]>(['All']);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const cartItems = useCartStore((state) => state.items);
   const addItemToCart = useCartStore((state) => state.addItem);
@@ -133,17 +83,19 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   const clearCart = useCartStore((state) => state.clearCart);
   const getItemTotal = useCartStore((state) => state.getItemTotal);
 
-  const [isDemoMode, setIsDemoMode] = useState(false);
-
-  useEffect(() => {
-    const rId = Number(route.params?.restaurantId) || 1;
+  const loadRestaurantData = () => {
+    setIsLoadingMenu(true);
+    setLoadError(null);
     apiClient
-      .get<any>(ApiEndpoints.food.restaurantDetail(rId))
+      .get<any>(ApiEndpoints.food.restaurantDetail(restaurantNumericId))
       .then((res) => {
         const data = res.data?.data || res.data;
         if (data) {
-          setIsDemoMode(false);
           if (data.name) setRestaurantName(data.name);
+          if (data.rating) setRestaurantRating(Number(data.rating));
+          if (data.deliveryFee !== undefined) setRestaurantDeliveryFee(Number(data.deliveryFee));
+          if (data.description || data.cuisines) setRestaurantCuisines(data.description || data.cuisines);
+
           const categoryList: any[] = Array.isArray(data.categories) ? data.categories : [];
           const fromCategories: FoodItemRow[] = categoryList.flatMap((cat: any) =>
             (cat.items || []).map((it: any) => ({
@@ -153,9 +105,12 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
               price: it.discountedPrice || it.basePrice || it.price,
               description: it.description || '',
               isVeg: Boolean(it.isVeg),
+              isAvailable: it.isAvailable !== undefined ? Boolean(it.isAvailable) : true,
               isBestseller: Boolean(it.isBestseller),
               isCustomizable: Boolean(it.variants?.length || it.addons?.length),
-              image: it.imageUrl || 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300',
+              image: it.imageUrl || '',
+              variants: it.variants || [],
+              addons: it.addons || [],
             }))
           );
           const fromItems: FoodItemRow[] = Array.isArray(data.items)
@@ -166,9 +121,12 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
                 price: it.discountedPrice || it.basePrice || it.price,
                 description: it.description || '',
                 isVeg: Boolean(it.isVeg),
+                isAvailable: it.isAvailable !== undefined ? Boolean(it.isAvailable) : true,
                 isBestseller: Boolean(it.isBestseller),
                 isCustomizable: Boolean(it.variants?.length || it.addons?.length),
-                image: it.imageUrl || 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300',
+                image: it.imageUrl || '',
+                variants: it.variants || [],
+                addons: it.addons || [],
               }))
             : [];
           const mapped = fromCategories.length > 0 ? fromCategories : fromItems;
@@ -177,16 +135,33 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
           setMenuCategories(cats as string[]);
         }
       })
-      .catch(() => {
-        // Safe offline default for testing/demo
-        setIsDemoMode(true);
+      .catch((err) => {
+        const msg = err?.response?.data?.message || err?.message || 'Unable to load menu. Please check your network connection.';
+        setLoadError(msg);
+      })
+      .finally(() => {
+        setIsLoadingMenu(false);
       });
-  }, [route.params?.restaurantId]);
+  };
 
-  const filteredItems =
-    selectedCategoryIndex === 0
-      ? foodItems
-      : foodItems.filter((f) => f.category === menuCategories[selectedCategoryIndex]);
+  useEffect(() => {
+    loadRestaurantData();
+  }, [restaurantNumericId]);
+
+  const filteredItems = foodItems.filter((f) => {
+    // Category filter
+    if (selectedCategoryIndex > 0) {
+      if (f.category !== menuCategories[selectedCategoryIndex]) return false;
+    }
+    // Search query filter
+    if (searchQuery.trim().length > 0) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = f.name.toLowerCase().includes(q);
+      const matchDesc = (f.description || '').toLowerCase().includes(q);
+      if (!matchName && !matchDesc) return false;
+    }
+    return true;
+  });
 
   const handlePlaceOrder = async (couponCode?: string, paymentMethod: 'COD' | 'ONLINE' = 'COD') => {
     if (isPlacingOrder) return;
@@ -196,7 +171,6 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
     }
     setIsPlacingOrder(true);
     try {
-      const restId = Number(route.params?.restaurantId) || 1;
       let addressId: number | null = null;
       try {
         const addrRes = await apiClient.get<any>(ApiEndpoints.common.addresses);
@@ -207,13 +181,14 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       } catch {
         addressId = null;
       }
+
       const payload = {
-        restaurantId: restId,
+        restaurantId: restaurantNumericId,
         items: cartItems.map((c) => ({
           foodItemId: c.foodItemId,
           quantity: c.quantity,
-          variantId: null,
-          selectedAddonIds: [],
+          variantId: c.variantId ?? null,
+          selectedAddonIds: c.selectedAddonIds || [],
         })),
         addressId,
         couponCode: couponCode || null,
@@ -269,6 +244,10 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   };
 
   const handleAddItem = (item: FoodItemRow) => {
+    if (item.isAvailable === false) {
+      Alert.alert('Item Sold Out', `${item.name} is currently out of stock.`);
+      return;
+    }
     if (item.isCustomizable) {
       setActiveItemForCustomization(item);
     } else {
@@ -278,10 +257,12 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         name: item.name,
         basePrice: item.price,
         quantity: 1,
+        variantId: null,
+        selectedAddonIds: [],
         addons: [],
         totalPrice: item.price,
       };
-      addItemToCart(1, restaurantName, cartItem);
+      addItemToCart(restaurantNumericId, restaurantName, cartItem);
     }
   };
 
@@ -290,7 +271,9 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
     portionName: string,
     portionPrice: number,
     addons: string[],
-    grandTotal: number
+    grandTotal: number,
+    variantId?: number | null,
+    selectedAddonIds?: number[]
   ) => {
     if (!activeItemForCustomization) return;
     const cartItem: CartItem = {
@@ -302,9 +285,11 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       portionName,
       portionPrice,
       addons,
+      variantId: variantId ?? null,
+      selectedAddonIds: selectedAddonIds || [],
       totalPrice: grandTotal,
     };
-    addItemToCart(1, restaurantName, cartItem);
+    addItemToCart(restaurantNumericId, restaurantName, cartItem);
     setActiveItemForCustomization(null);
   };
 
@@ -346,39 +331,80 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Search Dishes */}
+          {/* Real Search Dishes Input */}
           <View style={styles.searchBarBox}>
             <Ionicons name="search-outline" size={18} color={AppColors.textTertiary} style={styles.searchIcon} />
-            <Text style={styles.searchPlaceholder}>Search dishes...</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search dishes or categories..."
+              placeholderTextColor={AppColors.textHint}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={18} color={AppColors.textTertiary} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Category Pills */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesRow}
-          >
-            {MENU_CATEGORIES.map((cat, idx) => {
-              const isSelected = idx === selectedCategoryIndex;
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={[styles.categoryPill, isSelected ? styles.categoryPillActive : null]}
-                  onPress={() => setSelectedCategoryIndex(idx)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[styles.categoryText, isSelected ? styles.categoryTextActive : null]}
+          {/* Loading / Error States */}
+          {isLoadingMenu && (
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+              <ActivityIndicator size="small" color={AppColors.primary} />
+              <Text style={{ ...styles.dishDesc, marginTop: 8, color: AppColors.textSecondary }}>
+                Loading fresh menu...
+              </Text>
+            </View>
+          )}
+
+          {loadError && !isLoadingMenu && (
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32, paddingHorizontal: 20 }}>
+              <Ionicons name="alert-circle-outline" size={40} color={AppColors.error} />
+              <Text style={{ ...styles.dishName, color: AppColors.error, marginTop: 8, textAlign: 'center' }}>
+                {loadError}
+              </Text>
+              <TouchableOpacity
+                style={[styles.addButton, { marginTop: 14, width: 120 }]}
+                onPress={loadRestaurantData}
+              >
+                <Text style={styles.addButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Category Pills - Connected to backend menuCategories */}
+          {!isLoadingMenu && !loadError && menuCategories.length > 1 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesRow}
+            >
+              {menuCategories.map((cat, idx) => {
+                const isSelected = idx === selectedCategoryIndex;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[styles.categoryPill, isSelected ? styles.categoryPillActive : null]}
+                    onPress={() => setSelectedCategoryIndex(idx)}
+                    activeOpacity={0.8}
                   >
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <Text
+                      style={[styles.categoryText, isSelected ? styles.categoryTextActive : null]}
+                    >
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
 
           {/* Dishes List */}
-          {filteredItems.map((item) => (
+          {!isLoadingMenu && !loadError && filteredItems.map((item) => (
             <View key={item.id} style={styles.dishCard}>
               {/* Left Details */}
               <View style={styles.dishDetails}>
@@ -387,6 +413,11 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
                   {item.isBestseller && (
                     <View style={styles.bestsellerTag}>
                       <Text style={styles.bestsellerText}>BESTSELLER</Text>
+                    </View>
+                  )}
+                  {item.isAvailable === false && (
+                    <View style={[styles.bestsellerTag, { backgroundColor: AppColors.surfaceLight, borderWidth: 1, borderColor: AppColors.error }]}>
+                      <Text style={[styles.bestsellerText, { color: AppColors.error }]}>SOLD OUT</Text>
                     </View>
                   )}
                 </View>
@@ -405,6 +436,13 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
               <View style={styles.dishActionCol}>
                 <Image source={{ uri: resolveDishImage(item.image) }} style={styles.dishImage} />
                 {(() => {
+                  if (item.isAvailable === false) {
+                    return (
+                      <View style={[styles.addButton, { backgroundColor: AppColors.surfaceLight, borderColor: AppColors.border }]}>
+                        <Text style={[styles.addButtonText, { color: AppColors.textTertiary }]}>OUT</Text>
+                      </View>
+                    );
+                  }
                   const qty = getItemQuantity(item.id);
                   if (qty > 0) {
                     return (
@@ -446,20 +484,20 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
                     </TouchableOpacity>
                   );
                 })()}
-                {item.isCustomizable && (
+                {item.isCustomizable && item.isAvailable !== false && (
                   <Text style={styles.customizableLabel}>CUSTOMISABLE</Text>
                 )}
               </View>
             </View>
           ))}
-          {filteredItems.length === 0 && (
+          {!isLoadingMenu && !loadError && filteredItems.length === 0 && (
             <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
               <Ionicons name="fast-food-outline" size={48} color={AppColors.textTertiary} />
               <Text style={{ ...styles.dishName, marginTop: 12, color: AppColors.textSecondary, textAlign: 'center' }}>
-                No menu items available in this category
+                No dishes found
               </Text>
               <Text style={{ fontSize: 13, color: AppColors.textTertiary, marginTop: 4, textAlign: 'center' }}>
-                Please select another category or check back later.
+                {searchQuery ? `No results matching "${searchQuery}"` : 'Please select another category or check back later.'}
               </Text>
             </View>
           )}
@@ -508,6 +546,8 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
           visible={Boolean(activeItemForCustomization)}
           itemName={activeItemForCustomization.name}
           basePrice={activeItemForCustomization.price}
+          variants={activeItemForCustomization.variants}
+          addons={activeItemForCustomization.addons}
           onClose={() => setActiveItemForCustomization(null)}
           onAddToCart={handleCustomizationComplete}
         />
@@ -519,6 +559,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         onClose={() => setIsCartVisible(false)}
         restaurantName={restaurantName}
         cartItems={cartItems}
+        deliveryFee={restaurantDeliveryFee}
         onClear={clearCart}
         isSubmitting={isPlacingOrder}
         onOrderPlaced={handlePlaceOrder}
@@ -579,6 +620,13 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    color: AppColors.textPrimary,
+    fontSize: 14,
+    paddingVertical: 0,
   },
   searchPlaceholder: {
     color: AppColors.textHint,

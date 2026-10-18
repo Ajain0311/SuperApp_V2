@@ -12,13 +12,17 @@ import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { AppConstants } from '../../constants/app';
 
+import { FoodItemVariant, FoodItemAddon } from '../../models/food';
+
 interface PortionOption {
+  id?: number;
   name: string;
   price: number;
   label: string;
 }
 
 interface AddonOption {
+  id?: number;
   name: string;
   price: number;
   selected: boolean;
@@ -29,12 +33,16 @@ interface ItemCustomizationSheetProps {
   onClose: () => void;
   itemName: string;
   basePrice: number;
+  variants?: FoodItemVariant[];
+  addons?: FoodItemAddon[];
   onAddToCart: (
     quantity: number,
     portionName: string,
     portionPrice: number,
     addons: string[],
-    grandTotal: number
+    grandTotal: number,
+    variantId?: number | null,
+    selectedAddonIds?: number[]
   ) => void;
 }
 
@@ -43,20 +51,45 @@ export const ItemCustomizationSheet: React.FC<ItemCustomizationSheetProps> = ({
   onClose,
   itemName,
   basePrice,
+  variants,
+  addons: rawAddons,
   onAddToCart,
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [selectedPortionIndex, setSelectedPortionIndex] = useState(0);
 
-  const [portions] = useState<PortionOption[]>([
-    { name: 'Regular Portion', price: 0, label: 'Included' },
-    { name: 'Jumbo Pack (Serves 3)', price: 210, label: '+₹210' },
-  ]);
+  // Initialize portions from backend variants if present
+  const portions: PortionOption[] = React.useMemo(() => {
+    if (variants && variants.length > 0) {
+      return variants.map((v) => ({
+        id: v.id,
+        name: v.name,
+        price: v.additionalPrice,
+        label: v.additionalPrice > 0 ? `+₹${v.additionalPrice}` : 'Included',
+      }));
+    }
+    return [
+      { name: 'Regular Portion', price: 0, label: 'Included' },
+    ];
+  }, [variants]);
 
-  const [addons, setAddons] = useState<AddonOption[]>([
-    { name: 'Boondi Raita Bowl', price: 35, selected: false },
-    { name: 'Extra Mirchi Ka Salan', price: 45, selected: false },
-  ]);
+  // Initialize addons from backend addons if present
+  const [addons, setAddons] = useState<AddonOption[]>([]);
+
+  React.useEffect(() => {
+    if (rawAddons && rawAddons.length > 0) {
+      setAddons(
+        rawAddons.map((a) => ({
+          id: a.id,
+          name: a.name,
+          price: a.price,
+          selected: Boolean(a.isDefault || a.selected),
+        }))
+      );
+    } else {
+      setAddons([]);
+    }
+  }, [rawAddons]);
 
   const portionPrice = portions[selectedPortionIndex]?.price || 0;
   const addonsTotal = addons
@@ -72,13 +105,19 @@ export const ItemCustomizationSheet: React.FC<ItemCustomizationSheetProps> = ({
   };
 
   const handleConfirm = () => {
-    const selectedAddons = addons.filter((a) => a.selected).map((a) => a.name);
+    const selectedAddonObjects = addons.filter((a) => a.selected);
+    const selectedAddonNames = selectedAddonObjects.map((a) => a.name);
+    const selectedAddonIds = selectedAddonObjects.map((a) => a.id).filter(Boolean) as number[];
+    const chosenVariant = portions[selectedPortionIndex];
+
     onAddToCart(
       quantity,
-      portions[selectedPortionIndex].name,
-      portions[selectedPortionIndex].price,
-      selectedAddons,
-      grandTotal
+      chosenVariant ? chosenVariant.name : 'Regular',
+      chosenVariant ? chosenVariant.price : 0,
+      selectedAddonNames,
+      grandTotal,
+      chosenVariant?.id ?? null,
+      selectedAddonIds
     );
     onClose();
   };
