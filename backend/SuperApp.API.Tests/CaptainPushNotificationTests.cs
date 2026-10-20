@@ -635,4 +635,101 @@ public class CaptainPushNotificationTests
         Assert.Contains("Unauthorized", ex.Message);
     }
 
+
+    [Fact]
+    public async Task CancelOrder_WhenOrderAlreadyPaid_MarksOrderRefunded()
+    {
+        var db = CreateDb();
+        var customer = new User { Id = 901, MobileNumber = "9876500901", FullName = "Customer 901" };
+        var restaurant = new Restaurant { Id = 901, Name = "Cafe 901", IsActive = true };
+        db.Users.Add(customer);
+        db.Restaurants.Add(restaurant);
+
+        var order = new FoodOrder
+        {
+            Id = 9901,
+            OrderNumber = "FO-REFUND-01",
+            UserId = customer.Id,
+            RestaurantId = restaurant.Id,
+            PaymentMethod = "ONLINE",
+            PaymentStatus = "PAID",
+            Status = OrderStatus.Pending,
+            GrandTotal = 350.00m
+        };
+        db.FoodOrders.Add(order);
+
+        var payment = new Payment
+        {
+            Id = 9901,
+            UserId = customer.Id,
+            Module = "FOOD",
+            OrderId = order.Id,
+            Amount = 350.00m,
+            PaymentMethod = "UPI",
+            TransactionId = "txn-refund-9901",
+            Status = "PAID"
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        var mockPaymentService = new MockPaymentService(db);
+        var hubMock = new Mock<IHubContext<OrderStatusHub>>();
+        var controller = new FoodOrdersController(db, hubMock.Object, mockPaymentService);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var result = await controller.CancelOrder(order.Id);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        var updatedOrder = await db.FoodOrders.FindAsync(order.Id);
+        Assert.NotNull(updatedOrder);
+        Assert.Equal(OrderStatus.Cancelled, updatedOrder.Status);
+        Assert.Equal("REFUNDED", updatedOrder.PaymentStatus);
+    }
+
+    [Fact]
+    public async Task FoodPaymentSync_LatePaidCallbackOnCancelledOrder_SetsRefundDue()
+    {
+        var db = CreateDb();
+        var order = new FoodOrder
+        {
+            Id = 9902,
+            OrderNumber = "FO-LATE-02",
+            UserId = 902,
+            RestaurantId = 902,
+            PaymentMethod = "ONLINE",
+            PaymentStatus = "CANCELLED",
+            Status = OrderStatus.Cancelled,
+            GrandTotal = 200.00m
+        };
+        db.FoodOrders.Add(order);
+
+        var payment = new Payment
+        {
+            Id = 9902,
+            UserId = 902,
+            Module = "FOOD",
+            OrderId = order.Id,
+            Amount = 200.00m,
+            PaymentMethod = "UPI",
+            TransactionId = "txn-late-9902",
+            Status = "PAID"
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        await FoodPaymentSync.ApplyAsync(db, payment.TransactionId, true);
+
+        var updatedOrder = await db.FoodOrders.FindAsync(order.Id);
+        Assert.NotNull(updatedOrder);
+        Assert.Equal(OrderStatus.Cancelled, updatedOrder.Status);
+        Assert.Equal("REFUND_DUE", updatedOrder.PaymentStatus);
+    }
 }

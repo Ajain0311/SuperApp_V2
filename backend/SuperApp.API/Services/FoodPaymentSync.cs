@@ -28,7 +28,15 @@ public static class FoodPaymentSync
 
         if (verified && string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
-            order.PaymentStatus = "PAID";
+            if (string.Equals(order.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+        {
+            order.PaymentStatus = "REFUND_DUE";
+            order.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return;
+        }
+
+        order.PaymentStatus = "PAID";
             order.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return;

@@ -346,6 +346,36 @@ public class FoodOrdersController : ControllerBase
         if (order.Status != OrderStatus.Pending && order.Status != OrderStatus.Accepted)
             return BadRequest(ApiResponse.Fail("Order cannot be cancelled once it is being prepared or delivered"));
 
+        // If an online payment is already settled, initiate refund and mark order accordingly
+        if (string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+        {
+            var paidPayment = await _db.Payments
+                .Where(p => p.OrderId == order.Id && p.Module == "FOOD" && p.Status == "PAID")
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (paidPayment != null && !string.IsNullOrWhiteSpace(paidPayment.TransactionId) && _payments != null)
+            {
+                var refundResult = await _payments.RefundPaymentAsync(paidPayment.TransactionId, order.GrandTotal, "Order cancelled by customer");
+                if (refundResult.Success)
+                {
+                    order.PaymentStatus = "REFUNDED";
+                }
+                else
+                {
+                    order.PaymentStatus = "REFUND_PENDING";
+                }
+            }
+            else
+            {
+                order.PaymentStatus = "REFUND_PENDING";
+            }
+        }
+        else
+        {
+            order.PaymentStatus = "CANCELLED";
+        }
+
         order.Status = OrderStatus.Cancelled;
         order.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
