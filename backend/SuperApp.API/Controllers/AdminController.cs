@@ -519,6 +519,37 @@ public class AdminController : ControllerBase
                 };
                 _db.Restaurants.Add(newRest);
                 await _db.SaveChangesAsync();
+
+                if (!string.IsNullOrWhiteSpace(newRest.Phone))
+                {
+                    var cleanPhone = PunjabGovSmsService.NormalizeMobileNumber(newRest.Phone);
+                    var matchedUser = await _db.Users
+                        .Include(u => u.UserRoles)
+                        .FirstOrDefaultAsync(u => u.MobileNumber == newRest.Phone || u.MobileNumber == cleanPhone);
+
+                    if (matchedUser != null)
+                    {
+                        var ownerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.RestaurantOwner);
+                        if (ownerRole != null && !matchedUser.UserRoles.Any(ur => ur.RoleId == ownerRole.Id))
+                        {
+                            _db.UserRoles.Add(new UserRole { UserId = matchedUser.Id, RoleId = ownerRole.Id, CreatedAt = DateTime.UtcNow });
+                        }
+
+                        var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == matchedUser.Id && ru.RestaurantId == newRest.Id);
+                        if (restMapping == null)
+                        {
+                            _db.RestaurantUsers.Add(new RestaurantUser
+                            {
+                                UserId = matchedUser.Id,
+                                RestaurantId = newRest.Id,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                        await _db.SaveChangesAsync();
+                    }
+                }
+
                 return Ok(ApiResponse<Restaurant>.Ok(newRest, "Restaurant added successfully"));
 
             case "EDIT":

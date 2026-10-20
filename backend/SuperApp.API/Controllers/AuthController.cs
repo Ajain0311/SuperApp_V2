@@ -129,6 +129,37 @@ public class AuthController : ControllerBase
             await _db.SaveChangesAsync();
         }
 
+        // If user's mobile number matches a registered restaurant, automatically assign RESTAURANT_OWNER role & mapping
+        var matchedRestaurant = await _db.Restaurants.FirstOrDefaultAsync(r => r.IsActive && r.Phone != null &&
+            (r.Phone == user.MobileNumber || r.Phone == cleanMobile || r.Phone.EndsWith(cleanMobile)));
+        if (matchedRestaurant != null)
+        {
+            var ownerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.RestaurantOwner);
+            if (ownerRole != null && !user.UserRoles.Any(ur => ur.RoleId == ownerRole.Id))
+            {
+                _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = ownerRole.Id, CreatedAt = DateTime.UtcNow });
+                await _db.SaveChangesAsync();
+            }
+
+            var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id && ru.RestaurantId == matchedRestaurant.Id);
+            if (restMapping == null)
+            {
+                _db.RestaurantUsers.Add(new RestaurantUser
+                {
+                    UserId = user.Id,
+                    RestaurantId = matchedRestaurant.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _db.SaveChangesAsync();
+            }
+
+            user = await _db.Users
+                .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+                .FirstAsync(u => u.Id == user.Id);
+        }
+
         var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
         var token = _tokenService.GenerateToken(user, roles);
 
