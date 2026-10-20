@@ -805,4 +805,94 @@ public class CaptainPushNotificationTests
         Assert.NotNull(freshMapping);
         Assert.False(freshMapping.IsActive);
     }
+
+    [Fact]
+    public async Task Test_14_StartRide_WithInvalidOtp_ReturnsBadRequest()
+    {
+        var db = CreateDb();
+        var captainUser = new User { Id = 1101, MobileNumber = "9876501101", FullName = "Captain 1101" };
+        var passenger = new User { Id = 1102, MobileNumber = "9876501102", FullName = "Passenger 1102" };
+        var driver = new Driver { Id = 1101, UserId = captainUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(captainUser, passenger);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 7101,
+            RideNumber = "RD-OTP-01",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            Status = RideStatus.Accepted,
+            OtpCode = "4567",
+            PickupAddress = "Point A",
+            DropoffAddress = "Point B"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var fakeHub = new FakeHubContext();
+        var controller = new DriverController(db, fakeHub);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, captainUser.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Driver)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var wrongResult = await controller.StartRide(ride.Id, new VerifyRideOtpRequest { OtpCode = "0000" });
+        Assert.IsType<BadRequestObjectResult>(wrongResult.Result);
+
+        var correctResult = await controller.StartRide(ride.Id, new VerifyRideOtpRequest { OtpCode = "4567" });
+        Assert.IsType<OkObjectResult>(correctResult.Result);
+
+        var updatedRide = await db.Rides.FindAsync(ride.Id);
+        Assert.NotNull(updatedRide);
+        Assert.Equal(RideStatus.Started, updatedRide.Status);
+    }
+
+    [Fact]
+    public async Task Test_15_CompleteRide_BeforeStarted_IsRejected()
+    {
+        var db = CreateDb();
+        var captainUser = new User { Id = 1103, MobileNumber = "9876501103", FullName = "Captain 1103" };
+        var passenger = new User { Id = 1104, MobileNumber = "9876501104", FullName = "Passenger 1104" };
+        var driver = new Driver { Id = 1103, UserId = captainUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(captainUser, passenger);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 7102,
+            RideNumber = "RD-COMPL-02",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            Status = RideStatus.Accepted,
+            EstimatedFare = 150.00m,
+            PickupAddress = "Point X",
+            DropoffAddress = "Point Y"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var fakeHub = new FakeHubContext();
+        var controller = new DriverController(db, fakeHub);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, captainUser.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Driver)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var res = await controller.CompleteRide(ride.Id);
+        var badReq = Assert.IsType<BadRequestObjectResult>(res.Result);
+        var apiResp = Assert.IsType<ApiResponse>(badReq.Value);
+        Assert.False(apiResp.Success);
+        Assert.Contains("must be STARTED", apiResp.Message);
+    }
 }
