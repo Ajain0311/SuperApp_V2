@@ -21,6 +21,8 @@ import { spacing } from '../../theme/spacing';
 import { apiClient, ApiError } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
+import { locationService } from '../../services/locationService';
+import { mapboxService } from '../../services/mapboxService';
 import { SelectedMapPlace } from '../../services/mapboxService';
 
 type SavedAddress = {
@@ -55,6 +57,7 @@ export const SavedAddressesScreen: React.FC = () => {
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -104,6 +107,39 @@ export const SavedAddressesScreen: React.FC = () => {
       longitude: lng != null && Number.isFinite(lng) ? lng : undefined,
     });
     setModalOpen(true);
+  };
+
+  const handleUseCurrentLocation = async () => {
+    if (locating) return;
+    setLocating(true);
+    try {
+      const loc = await locationService.getCurrentLocation({ timeoutMs: 10000, throwOnError: true });
+      if (loc && !loc.isFallback) {
+        let selectedPlace: SelectedMapPlace | null = null;
+        try {
+          selectedPlace = await mapboxService.reverseGeocode(loc.latitude, loc.longitude);
+        } catch {
+          selectedPlace = null;
+        }
+
+        setForm((f) => ({
+          ...f,
+          addressLine1: selectedPlace?.address || loc.formattedAddress || f.addressLine1,
+          city: selectedPlace?.city || f.city,
+          state: selectedPlace?.state || f.state,
+          pinCode: selectedPlace?.pinCode && /^\d{6}$/.test(selectedPlace.pinCode) ? selectedPlace.pinCode : f.pinCode,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+        }));
+      } else {
+        Alert.alert('GPS Notice', 'Could not detect exact location coordinates. Please pick on map or enter manually.');
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Could not retrieve GPS location';
+      Alert.alert('Location Error', msg);
+    } finally {
+      setLocating(false);
+    }
   };
 
   const handlePlaceSelect = (place: SelectedMapPlace) => {
@@ -296,6 +332,21 @@ export const SavedAddressesScreen: React.FC = () => {
                   </TouchableOpacity>
                 ))}
               </View>
+                            <TouchableOpacity
+                style={styles.currentLocationBtn}
+                onPress={() => void handleUseCurrentLocation()}
+                disabled={locating}
+                activeOpacity={0.8}
+              >
+                {locating ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <MaterialIcons name="my-location" size={20} color={colors.primary} />
+                )}
+                <Text style={styles.currentLocationText}>
+                  {locating ? 'Detecting current location...' : 'Use current location (GPS)'}
+                </Text>
+              </TouchableOpacity>
               <LocationMapPicker
                 label="Search on Mapbox"
                 initialCoordinate={
@@ -441,6 +492,23 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.textSecondary, fontWeight: '600' },
   chipTextOn: { color: '#fff' },
+  currentLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(25, 118, 210, 0.12)',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  currentLocationText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
+  },
   input: {
     backgroundColor: colors.surfaceLight,
     borderRadius: 12,
