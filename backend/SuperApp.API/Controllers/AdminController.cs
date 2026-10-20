@@ -164,7 +164,7 @@ public class AdminController : ControllerBase
     [HttpPost("users")]
     public async Task<ActionResult<ApiResponse>> ManageUser([FromBody] AdminUserActionRequest request)
     {
-        var currentAdminIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var currentAdminIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         long.TryParse(currentAdminIdClaim, out var currentAdminId);
 
         if (currentAdminId > 0 && request.UserId == currentAdminId)
