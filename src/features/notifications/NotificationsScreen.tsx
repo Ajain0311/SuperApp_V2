@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -81,42 +81,54 @@ export const NotificationsScreen: React.FC = () => {
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await apiClient.get<any>(ApiEndpoints.common.notifications);
+      const data = res.data?.data || res.data;
+      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      if (items.length > 0) {
+        const mapped: NotificationItem[] = items.map((n: any) => ({
+          id: String(n.id),
+          title: n.title,
+          body: n.body || n.message || '',
+          time: n.createdAt
+            ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Just now',
+          icon: (n.iconName as any) || (n.type === 'RIDE' ? 'directions-car' : n.type === 'FOOD_ORDER' ? 'restaurant' : n.type === 'SYSTEM' ? 'campaign' : 'notifications'),
+          color:
+            n.type === 'SYSTEM' || n.category === 'SYSTEM'
+              ? '#EC4899'
+              : n.category === 'OFFER' || n.type === 'FOOD_ORDER'
+              ? colors.primary
+              : n.category === 'RIDE' || n.type === 'RIDE'
+              ? colors.blue
+              : colors.secondary,
+          isUnread: n.isRead != null ? !n.isRead : !n.IsRead,
+        }));
+        setNotifications(mapped);
+      } else {
+        setNotifications([]);
+      }
+    } catch {
+      setNotifications([]);
+    }
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
+
   useEffect(() => {
     notificationService.getExpoPushToken().then((token) => {
       setPushToken(token);
     });
 
-    apiClient
-      .get<any>(ApiEndpoints.common.notifications)
-      .then((res) => {
-        const data = res.data?.data || res.data;
-        const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
-        if (items.length > 0) {
-          const mapped: NotificationItem[] = items.map((n: any) => ({
-            id: String(n.id),
-            title: n.title,
-            body: n.body || n.message || '',
-            time: n.createdAt
-              ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : 'Just now',
-            icon: (n.iconName as any) || 'notifications',
-            color:
-              n.category === 'OFFER'
-                ? colors.primary
-                : n.category === 'RIDE'
-                ? colors.blue
-                : colors.secondary,
-            isUnread: !n.IsRead,
-          }));
-          setNotifications(mapped);
-        } else {
-          setNotifications([]);
-        }
-      })
-      .catch(() => {
-        setNotifications([]);
-      });
-  }, []);
+    void fetchNotifications();
+  }, [fetchNotifications]);
 
   const handleTestOrderNotification = async () => {
     setTestStatus('Firing Food Order notification...');
@@ -339,6 +351,8 @@ export const NotificationsScreen: React.FC = () => {
 
       <FlatList
         data={notifications}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderDevTester}
         ListEmptyComponent={

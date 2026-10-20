@@ -82,6 +82,8 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   const getItemQuantity = useCartStore((state) => state.getItemQuantity);
   const clearCart = useCartStore((state) => state.clearCart);
   const getItemTotal = useCartStore((state) => state.getItemTotal);
+  const cartRestaurantId = useCartStore((state) => state.restaurantId);
+  const cartRestaurantName = useCartStore((state) => state.restaurantName);
 
   const loadRestaurantData = () => {
     setIsLoadingMenu(true);
@@ -243,6 +245,30 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
     }
   };
 
+  const confirmAndAddItem = (cartItem: CartItem) => {
+    if (cartRestaurantId !== null && cartRestaurantId !== restaurantNumericId && cartItems.length > 0) {
+      Alert.alert(
+        'Replace Cart?',
+        `Your cart already contains items from "${cartRestaurantName || 'another restaurant'}". Would you like to clear your cart and start a new order from "${restaurantName}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Yes, Start Fresh',
+            style: 'destructive',
+            onPress: () => {
+              clearCart();
+              addItemToCart(restaurantNumericId, restaurantName, cartItem);
+              Alert.alert('Cart Updated', `${cartItem.name} added to your cart.`);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    addItemToCart(restaurantNumericId, restaurantName, cartItem);
+  };
+
   const handleAddItem = (item: FoodItemRow) => {
     if (item.isAvailable === false) {
       Alert.alert('Item Sold Out', `${item.name} is currently out of stock.`);
@@ -262,7 +288,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         addons: [],
         totalPrice: item.price,
       };
-      addItemToCart(restaurantNumericId, restaurantName, cartItem);
+      confirmAndAddItem(cartItem);
     }
   };
 
@@ -289,7 +315,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       selectedAddonIds: selectedAddonIds || [],
       totalPrice: grandTotal,
     };
-    addItemToCart(restaurantNumericId, restaurantName, cartItem);
+    confirmAndAddItem(cartItem);
     setActiveItemForCustomization(null);
   };
 
