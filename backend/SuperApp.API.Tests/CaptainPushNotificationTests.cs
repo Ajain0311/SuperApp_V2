@@ -575,4 +575,64 @@ public class CaptainPushNotificationTests
             Assert.Equal(RideStatus.Requested, freshRide!.Status);
         }
     }
+
+    [Fact]
+    public async Task Test_12_OrderStatusHub_JoinOrder_Throws_WhenCallerNotAuthorized()
+    {
+        var db = CreateDb();
+        var customer = new User { Id = 801, MobileNumber = "9876500801", FullName = "Customer 801" };
+        var intruder = new User { Id = 802, MobileNumber = "9876500802", FullName = "Intruder 802" };
+        var restaurant = new Restaurant { Id = 801, Name = "Bazaar Kitchen", IsActive = true };
+        db.Users.AddRange(customer, intruder);
+        db.Restaurants.Add(restaurant);
+
+        var order = new FoodOrder
+        {
+            Id = 8801,
+            OrderNumber = "FO-TEST-HUB-AUTH-01",
+            UserId = customer.Id,
+            RestaurantId = restaurant.Id,
+            Status = OrderStatus.Pending
+        };
+        db.FoodOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var hub = new OrderStatusHub(db);
+        var hubCallerContextMock = new Mock<HubCallerContext>();
+        hubCallerContextMock.Setup(c => c.ConnectionId).Returns("conn-intruder");
+        hubCallerContextMock.Setup(c => c.User).Returns(new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, intruder.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth")));
+        hub.Context = hubCallerContextMock.Object;
+
+        var ex = await Assert.ThrowsAsync<HubException>(() => hub.JoinOrder(order.Id));
+        Assert.Contains("Unauthorized", ex.Message);
+    }
+
+    [Fact]
+    public async Task Test_13_OrderStatusHub_JoinRestaurantKitchen_Throws_WhenCallerNotMappedStaff()
+    {
+        var db = CreateDb();
+        var outsider = new User { Id = 803, MobileNumber = "9876500803", FullName = "Outsider 803" };
+        var restaurant = new Restaurant { Id = 802, Name = "Dosa Corner", IsActive = true };
+        db.Users.Add(outsider);
+        db.Restaurants.Add(restaurant);
+        await db.SaveChangesAsync();
+
+        var hub = new OrderStatusHub(db);
+        var hubCallerContextMock = new Mock<HubCallerContext>();
+        hubCallerContextMock.Setup(c => c.ConnectionId).Returns("conn-outsider");
+        hubCallerContextMock.Setup(c => c.User).Returns(new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, outsider.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth")));
+        hub.Context = hubCallerContextMock.Object;
+
+        var ex = await Assert.ThrowsAsync<HubException>(() => hub.JoinRestaurantKitchen(restaurant.Id));
+        Assert.Contains("Unauthorized", ex.Message);
+    }
+
 }

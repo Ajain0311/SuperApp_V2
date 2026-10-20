@@ -250,8 +250,15 @@ public class FoodOrdersController : ControllerBase
 
         var orderDto = MapToOrderDto(order, restaurant, validatedAddress);
 
-        // Real-time notification to all active restaurant kitchen staff
-        await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
+        // Real-time notification to all active restaurant kitchen staff (resilient: order is already saved)
+        try
+        {
+            await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
+        }
+        catch
+        {
+            // Non-critical notification failure must not rollback or fail a confirmed order
+        }
 
         return Ok(ApiResponse<FoodOrderDto>.Ok(orderDto));
     }
