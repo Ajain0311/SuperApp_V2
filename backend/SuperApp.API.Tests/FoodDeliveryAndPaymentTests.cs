@@ -785,4 +785,95 @@ public class FoodDeliveryAndPaymentTests
         Assert.Equal(390, apiResp.Data.SubTotal);
     }
 
+    [Fact]
+    public async Task PlaceOrder_Rejects_OtherCustomers_SavedAddress()
+    {
+        using var db = NewDb();
+        var customer1 = new User { Id = 11, MobileNumber = "9999900011", FullName = "Customer 11" };
+        var customer2 = new User { Id = 12, MobileNumber = "9999900012", FullName = "Customer 12" };
+        var restaurant = new Restaurant { Id = 102, Name = "Pizza Point", IsActive = true, DeliveryFee = 30 };
+        db.Users.AddRange(customer1, customer2);
+        db.Restaurants.Add(restaurant);
+
+        // Address owned by customer 2
+        var addressCust2 = new Address
+        {
+            Id = 888,
+            UserId = customer2.Id,
+            AddressLine1 = "Flat 402, Sunshine Towers",
+            City = "Indore",
+            State = "Madhya Pradesh",
+            PinCode = "452001",
+            IsActive = true
+        };
+        db.Addresses.Add(addressCust2);
+
+        var foodItem = new FoodItem
+        {
+            Id = 502,
+            RestaurantId = 102,
+            Name = "Margherita Pizza",
+            BasePrice = 200,
+            DiscountedPrice = 180,
+            IsActive = true,
+            IsAvailable = true
+        };
+        db.FoodItems.Add(foodItem);
+        await db.SaveChangesAsync();
+
+        var controller = new FoodOrdersController(db, new FakeHubContext());
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer1.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // Act: Customer 1 tries to place an order specifying AddressId 888 (which belongs to Customer 2)
+        var result = await controller.PlaceOrder(new PlaceFoodOrderRequest
+        {
+            RestaurantId = 102,
+            AddressId = 888,
+            Items = new List<OrderItemRequest>
+            {
+                new OrderItemRequest { FoodItemId = 502, Quantity = 1 }
+            }
+        });
+
+        // Assert: Must return 403 Forbidden
+        var statusResult = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(403, statusResult.StatusCode);
+
+        // Now place order with own address -> must succeed
+        var addressCust1 = new Address
+        {
+            Id = 889,
+            UserId = customer1.Id,
+            AddressLine1 = "Plot 12, Civil Lines",
+            City = "Indore",
+            State = "Madhya Pradesh",
+            PinCode = "452001",
+            IsActive = true
+        };
+        db.Addresses.Add(addressCust1);
+        await db.SaveChangesAsync();
+
+        var successResult = await controller.PlaceOrder(new PlaceFoodOrderRequest
+        {
+            RestaurantId = 102,
+            AddressId = 889,
+            Items = new List<OrderItemRequest>
+            {
+                new OrderItemRequest { FoodItemId = 502, Quantity = 1 }
+            }
+        });
+        var okResult = Assert.IsType<OkObjectResult>(successResult.Result);
+        var apiResp = Assert.IsType<ApiResponse<FoodOrderDto>>(okResult.Value);
+        Assert.NotNull(apiResp.Data);
+        Assert.Equal(889, addressCust1.Id);
+    }
+
 }

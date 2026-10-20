@@ -70,6 +70,31 @@ public class FoodOrdersController : ControllerBase
             return BadRequest(ApiResponse<FoodOrderDto>.Fail("Invalid payment method. Supported methods: COD, ONLINE"));
         }
 
+        Address? validatedAddress = null;
+        if (request.AddressId.HasValue)
+        {
+            validatedAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
+            if (validatedAddress == null)
+            {
+                return NotFound(ApiResponse<FoodOrderDto>.Fail("Specified delivery address not found"));
+            }
+
+            if (!validatedAddress.IsActive)
+            {
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail("Specified delivery address is inactive"));
+            }
+
+            if (validatedAddress.UserId != userId.Value)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<FoodOrderDto>.Fail("Unauthorized: Delivery address belongs to another customer"));
+            }
+
+            if (string.IsNullOrWhiteSpace(validatedAddress.AddressLine1) || string.IsNullOrWhiteSpace(validatedAddress.City))
+            {
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail("Delivery address is incomplete (missing street line or city)"));
+            }
+        }
+
         var initialPaymentStatus = paymentMethod == "ONLINE" ? "PENDING_PAYMENT" : "PENDING";
         var orderItems = new List<FoodOrderItem>();
         decimal subTotal = 0;
@@ -223,13 +248,7 @@ public class FoodOrdersController : ControllerBase
         }
         catch { }
 
-        Address? deliveryAddress = null;
-        if (request.AddressId.HasValue)
-        {
-            deliveryAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
-        }
-
-        var orderDto = MapToOrderDto(order, restaurant, deliveryAddress);
+        var orderDto = MapToOrderDto(order, restaurant, validatedAddress);
 
         // Real-time notification to all active restaurant kitchen staff
         await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
