@@ -74,8 +74,23 @@ public class FoodOrdersController : ControllerBase
         var orderItems = new List<FoodOrderItem>();
         decimal subTotal = 0;
 
+        // Enforce sensible limits on cart size
+        if (request.Items.Count > 50)
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Cart size exceeds maximum limit of 50 items"));
+
+        int totalQuantity = 0;
         foreach (var itemReq in request.Items)
         {
+            if (itemReq.Quantity <= 0)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Quantity for item #{itemReq.FoodItemId} must be at least 1"));
+
+            if (itemReq.Quantity > 30)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Quantity for item #{itemReq.FoodItemId} exceeds maximum limit of 30 per line item"));
+
+            totalQuantity += itemReq.Quantity;
+            if (totalQuantity > 100)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail("Total order item quantity exceeds maximum limit of 100"));
+
             var foodItem = await _db.FoodItems
                 .Include(f => f.Variants)
                 .Include(f => f.Addons)
@@ -94,18 +109,27 @@ public class FoodOrdersController : ControllerBase
             if (itemReq.VariantId.HasValue)
             {
                 var variant = foodItem.Variants.FirstOrDefault(v => v.Id == itemReq.VariantId.Value && v.IsActive);
-                if (variant != null)
+                if (variant == null)
                 {
-                    variantName = variant.Name;
-                    variantPrice = variant.AdditionalPrice;
+                    return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Variant #{itemReq.VariantId.Value} is invalid or inactive for item '{foodItem.Name}'"));
                 }
+                variantName = variant.Name;
+                variantPrice = variant.AdditionalPrice;
             }
 
             var selectedAddonNames = new List<string>();
             decimal addonsTotal = 0;
             if (itemReq.SelectedAddonIds != null && itemReq.SelectedAddonIds.Any())
             {
-                var addons = foodItem.Addons.Where(a => itemReq.SelectedAddonIds.Contains(a.Id) && a.IsActive).ToList();
+                // De-duplicate add-on IDs to prevent duplicate billing
+                var distinctAddonIds = itemReq.SelectedAddonIds.Distinct().ToList();
+                var addons = foodItem.Addons.Where(a => distinctAddonIds.Contains(a.Id) && a.IsActive).ToList();
+
+                if (addons.Count != distinctAddonIds.Count)
+                {
+                    return BadRequest(ApiResponse<FoodOrderDto>.Fail($"One or more selected add-ons are invalid or inactive for item '{foodItem.Name}'"));
+                }
+
                 foreach (var addon in addons)
                 {
                     selectedAddonNames.Add($"{addon.Name} (+₹{addon.Price:F0})");
@@ -113,7 +137,11 @@ public class FoodOrdersController : ControllerBase
                 }
             }
 
-            var lineItemPrice = ((unitPrice + variantPrice + addonsTotal) * itemReq.Quantity);
+            var itemCostPerUnit = unitPrice + variantPrice + addonsTotal;
+            if (itemCostPerUnit < 0)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Invalid unit cost for item '{foodItem.Name}'"));
+
+            var lineItemPrice = (itemCostPerUnit * itemReq.Quantity);
             subTotal += lineItemPrice;
 
             orderItems.Add(new FoodOrderItem

@@ -665,4 +665,124 @@ public class FoodDeliveryAndPaymentTests
         Assert.Equal("FAILED", result.Status);
         Assert.Contains("not found", result.Message, StringComparison.OrdinalIgnoreCase);
     }
+    [Fact]
+    public async Task PlaceOrder_Rejects_InvalidQuantity_And_InvalidVariants_And_DuplicateAddons()
+    {
+        using var db = NewDb();
+        var customer = new User { Id = 10, MobileNumber = "9999900010", FullName = "Customer 10" };
+        var restaurant = new Restaurant { Id = 101, Name = "Burger Hub", IsActive = true, DeliveryFee = 40 };
+        db.Users.Add(customer);
+        db.Restaurants.Add(restaurant);
+
+        var foodItem = new FoodItem
+        {
+            Id = 501,
+            RestaurantId = 101,
+            Name = "Cheese Burger",
+            BasePrice = 150,
+            DiscountedPrice = 120,
+            IsActive = true,
+            IsAvailable = true
+        };
+        db.FoodItems.Add(foodItem);
+
+        var variant = new FoodItemVariant
+        {
+            Id = 601,
+            FoodItemId = 501,
+            Name = "Double Patty",
+            AdditionalPrice = 50,
+            IsActive = true
+        };
+        db.FoodItemVariants.Add(variant);
+
+        var addon1 = new FoodItemAddon
+        {
+            Id = 701,
+            FoodItemId = 501,
+            Name = "Extra Cheese",
+            Price = 25,
+            IsActive = true
+        };
+        db.FoodItemAddons.Add(addon1);
+        await db.SaveChangesAsync();
+
+        var controller = new FoodOrdersController(db, new FakeHubContext());
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // 1. Zero quantity rejected
+        var res1 = await controller.PlaceOrder(new PlaceFoodOrderRequest
+        {
+            RestaurantId = 101,
+            Items = new List<OrderItemRequest>
+            {
+                new OrderItemRequest { FoodItemId = 501, Quantity = 0 }
+            }
+        });
+        Assert.IsType<BadRequestObjectResult>(res1.Result);
+
+        // 2. Excessive quantity (>30) rejected
+        var res2 = await controller.PlaceOrder(new PlaceFoodOrderRequest
+        {
+            RestaurantId = 101,
+            Items = new List<OrderItemRequest>
+            {
+                new OrderItemRequest { FoodItemId = 501, Quantity = 50 }
+            }
+        });
+        Assert.IsType<BadRequestObjectResult>(res2.Result);
+
+        // 3. Invalid variant rejected
+        var res3 = await controller.PlaceOrder(new PlaceFoodOrderRequest
+        {
+            RestaurantId = 101,
+            Items = new List<OrderItemRequest>
+            {
+                new OrderItemRequest { FoodItemId = 501, Quantity = 1, VariantId = 99999 }
+            }
+        });
+        Assert.IsType<BadRequestObjectResult>(res3.Result);
+
+        // 4. Invalid addon rejected
+        var res4 = await controller.PlaceOrder(new PlaceFoodOrderRequest
+        {
+            RestaurantId = 101,
+            Items = new List<OrderItemRequest>
+            {
+                new OrderItemRequest { FoodItemId = 501, Quantity = 1, SelectedAddonIds = new List<long> { 99999 } }
+            }
+        });
+        Assert.IsType<BadRequestObjectResult>(res4.Result);
+
+        // 5. Valid order with duplicate add-on IDs: add-on is deduplicated and priced correctly
+        var res5 = await controller.PlaceOrder(new PlaceFoodOrderRequest
+        {
+            RestaurantId = 101,
+            Items = new List<OrderItemRequest>
+            {
+                new OrderItemRequest
+                {
+                    FoodItemId = 501,
+                    Quantity = 2,
+                    VariantId = 601,
+                    SelectedAddonIds = new List<long> { 701, 701 } // duplicate 701
+                }
+            }
+        });
+        var okRes = Assert.IsType<OkObjectResult>(res5.Result);
+        var apiResp = Assert.IsType<ApiResponse<FoodOrderDto>>(okRes.Value);
+        Assert.NotNull(apiResp.Data);
+        // Unit cost: 120 (discounted) + 50 (variant) + 25 (deduplicated addon) = 195
+        // Subtotal for qty 2 = 195 * 2 = 390
+        Assert.Equal(390, apiResp.Data.SubTotal);
+    }
+
 }
