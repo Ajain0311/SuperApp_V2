@@ -22,6 +22,7 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { absoluteImageUrl } from '../../services/documentService';
 
 const CATEGORIES: MarketplaceCategory[] = [
   { id: 0, name: 'All' },
@@ -158,7 +159,11 @@ export const MarketplaceHomeScreen: React.FC = () => {
       >
         <View style={styles.imageWrapper}>
           <Image
-            source={{ uri: item.primaryImageUrl?.replace('/image', '/thumb') || undefined }}
+            source={{
+              uri:
+                absoluteImageUrl(item.primaryImageUrl || '') ||
+                'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400',
+            }}
             style={styles.productImage}
             resizeMode="cover"
           />

@@ -14,12 +14,13 @@ namespace SuperApp.API.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly INotificationService? _notificationService;
 
-    public AdminController(AppDbContext db)
+    public AdminController(AppDbContext db, INotificationService? notificationService = null)
     {
         _db = db;
+        _notificationService = notificationService;
     }
-
     /// <summary>
     /// Global Platform Overview KPIs and real-time statistics
     /// </summary>
@@ -163,6 +164,25 @@ public class AdminController : ControllerBase
     [HttpPost("users")]
     public async Task<ActionResult<ApiResponse>> ManageUser([FromBody] AdminUserActionRequest request)
     {
+        var currentAdminIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        long.TryParse(currentAdminIdClaim, out var currentAdminId);
+
+        if (currentAdminId > 0 && request.UserId == currentAdminId)
+        {
+            if (string.Equals(request.Action, "ROLE", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(request.RoleName?.Trim(), RoleNames.Admin, StringComparison.OrdinalIgnoreCase))
+            {
+                // Verify if caller still genuinely has active Admin role in DB
+                var callerAdminRole = await _db.UserRoles
+                    .Include(ur => ur.Role)
+                    .AnyAsync(ur => ur.UserId == currentAdminId && ur.Role.Name == RoleNames.Admin);
+
+                if (!callerAdminRole)
+                {
+                    return Forbid();
+                }
+            }
+        }
         var user = await _db.Users.Include(u => u.UserRoles).FirstOrDefaultAsync(u => u.Id == request.UserId);
         if (user == null)
             return NotFound(ApiResponse.Fail("User not found"));
@@ -1228,6 +1248,20 @@ public class AdminController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        if (_notificationService != null)
+        {
+            try
+            {
+                var role = request.TargetRole?.Trim().ToUpperInvariant();
+                var module = !string.IsNullOrWhiteSpace(role) ? role : "SYSTEM";
+                await _notificationService.SendBroadcastNotificationAsync(request.Title.Trim(), request.Message.Trim(), module);
+            }
+            catch
+            {
+                // Non-blocking
+            }
+        }
 
         return Ok(ApiResponse.Ok($"Notification broadcasted to {targetUsers.Count} recipient(s)"));
     }
