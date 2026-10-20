@@ -182,7 +182,7 @@ var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER")
 // 2 = 2Factor.in SMS Provider (new)
 var smsProviderConfig = Environment.GetEnvironmentVariable("SMS_PROVIDER") 
     ?? builder.Configuration["Providers:SmsProvider"] 
-    ?? "2"; // Default to 2 (2Factor.in)
+    ?? "1"; // Default to 1 (PunjabGov)
 
 builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
 {
