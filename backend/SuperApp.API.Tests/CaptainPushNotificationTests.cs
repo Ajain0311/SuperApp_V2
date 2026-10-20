@@ -672,7 +672,7 @@ public class CaptainPushNotificationTests
         db.Payments.Add(payment);
         await db.SaveChangesAsync();
 
-        var mockPaymentService = new MockPaymentService(db);
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER"); Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Mock"); var mockPaymentService = new MockPaymentService(db); Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
         var hubMock = new Mock<IHubContext<OrderStatusHub>>();
         var controller = new FoodOrdersController(db, hubMock.Object, mockPaymentService);
         var identity = new ClaimsIdentity(new[]
@@ -731,5 +731,78 @@ public class CaptainPushNotificationTests
         Assert.NotNull(updatedOrder);
         Assert.Equal(OrderStatus.Cancelled, updatedOrder.Status);
         Assert.Equal("REFUND_DUE", updatedOrder.PaymentStatus);
+    }
+
+    [Fact]
+    public async Task ManageUser_AssignRestaurantOwner_RequiresValidExplicitRestaurantId()
+    {
+        var db = CreateDb();
+        var admin = new User { Id = 1001, MobileNumber = "9876501001", FullName = "Admin 1001" };
+        var citizen = new User { Id = 1002, MobileNumber = "9876501002", FullName = "Citizen 1002" };
+        var roleOwner = new Role { Id = 101, Name = RoleNames.RestaurantOwner };
+        db.Users.AddRange(admin, citizen);
+        db.Roles.Add(roleOwner);
+        await db.SaveChangesAsync();
+
+        var controller = new AdminController(db);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, admin.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Admin)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // 1. Omitted RestaurantId -> BadRequest
+        var res1 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "ROLE",
+            RoleName = RoleNames.RestaurantOwner
+        });
+        Assert.IsType<BadRequestObjectResult>(res1.Result);
+
+        // 2. Inactive or nonexistent RestaurantId -> BadRequest
+        var res2 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "ROLE",
+            RoleName = RoleNames.RestaurantOwner,
+            RestaurantId = 99999
+        });
+        Assert.IsType<BadRequestObjectResult>(res2.Result);
+
+        // 3. Active valid restaurant -> Success & provisions RestaurantUsers mapping
+        var rest = new Restaurant { Id = 501, Name = "Spicy Delight", IsActive = true };
+        db.Restaurants.Add(rest);
+        await db.SaveChangesAsync();
+
+        var res3 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "ROLE",
+            RoleName = RoleNames.RestaurantOwner,
+            RestaurantId = rest.Id
+        });
+        Assert.IsType<OkObjectResult>(res3.Result);
+
+        var mapping = await db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == citizen.Id && ru.RestaurantId == rest.Id);
+        Assert.NotNull(mapping);
+        Assert.True(mapping.IsActive);
+
+        // 4. REMOVE_ROLE -> Deactivates RestaurantUsers mappings consistently
+        var res4 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "REMOVE_ROLE",
+            RoleName = RoleNames.RestaurantOwner
+        });
+        Assert.IsType<OkObjectResult>(res4.Result);
+
+        var freshMapping = await db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == citizen.Id && ru.RestaurantId == rest.Id);
+        Assert.NotNull(freshMapping);
+        Assert.False(freshMapping.IsActive);
     }
 }
