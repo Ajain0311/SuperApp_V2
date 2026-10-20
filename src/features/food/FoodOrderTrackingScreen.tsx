@@ -401,23 +401,25 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
               <View style={styles.phoneRow}>
                 <Ionicons name="call-outline" size={14} color={AppColors.secondary} />
                 <Text style={styles.phoneHighlightText}>
-                  Owner Phone: {restaurantPhone || '+91 98450 12345'}
+                  Owner Phone: {restaurantPhone ? restaurantPhone : 'Not Available'}
                 </Text>
               </View>
             </View>
           </View>
 
           {/* Dedicated Call Restaurant Owner Button */}
-          <TouchableOpacity
-            style={styles.callOwnerButton}
-            onPress={handleCallOwner}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="call" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.callOwnerButtonText}>
-              Call Restaurant Owner ({restaurantPhone || '+91 98450 12345'})
-            </Text>
-          </TouchableOpacity>
+          {restaurantPhone ? (
+            <TouchableOpacity
+              style={styles.callOwnerButton}
+              onPress={handleCallOwner}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="call" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.callOwnerButtonText}>
+                Call Restaurant Owner ({restaurantPhone})
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Real-time Order Stepper */}

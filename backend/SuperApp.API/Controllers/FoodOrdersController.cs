@@ -337,10 +337,10 @@ public class FoodOrdersController : ControllerBase
     {
         var restPhone = !string.IsNullOrWhiteSpace(restaurant?.Phone) 
             ? restaurant.Phone 
-            : "+91 98450 12345";
+            : null;
         var restAddr = !string.IsNullOrWhiteSpace(restaurant?.AddressLine) 
-            ? $"{restaurant.AddressLine}, {restaurant.City}" 
-            : restaurant?.City ?? "Central Delhi";
+            ? (!string.IsNullOrWhiteSpace(restaurant?.City) ? $"{restaurant.AddressLine}, {restaurant.City}" : restaurant.AddressLine)
+            : (!string.IsNullOrWhiteSpace(restaurant?.City) ? restaurant.City : null);
         var deliveryAddr = address != null 
             ? $"{address.AddressLine1}, {address.City} ({address.PinCode})" 
             : null;
