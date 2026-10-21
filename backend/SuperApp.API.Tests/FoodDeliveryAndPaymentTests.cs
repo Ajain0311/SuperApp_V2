@@ -48,8 +48,8 @@ public class FoodDeliveryAndPaymentTests
         var restaurant = new Restaurant { Id = 10, Name = "Test Kitchen", IsActive = true, City = "Indore" };
         db.Users.AddRange(customer, userA, userB, owner);
         db.Restaurants.Add(restaurant);
-        var a = new Driver { Id = 21, UserId = 2, IsActive = true, IsOnline = true, LicenseNumber = "A" };
-        var b = new Driver { Id = 22, UserId = 3, IsActive = true, IsOnline = true, LicenseNumber = "B" };
+        var a = new Driver { Id = 21, UserId = 2, IsActive = true, IsOnline = true, IsVerified = true, LicenseNumber = "A" };
+        var b = new Driver { Id = 22, UserId = 3, IsActive = true, IsOnline = true, IsVerified = true, LicenseNumber = "B" };
         db.Drivers.AddRange(a, b);
         var order = new FoodOrder
         {

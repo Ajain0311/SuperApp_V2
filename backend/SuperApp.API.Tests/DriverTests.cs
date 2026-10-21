@@ -58,6 +58,10 @@ public class DriverTests
         var (db, hub) = CreateContext();
         var user = new User { Id = 20, MobileNumber = "9876500001", FullName = "Suresh Driver" };
         db.Users.Add(user);
+        var driver = new Driver { Id = 200, UserId = 20, IsActive = true, IsVerified = true, IsOnline = true, LicenseNumber = "DL-200" };
+        var vehicle = new Vehicle { Id = 500, DriverId = 200, Type = VehicleTypes.Bike, Make = "Hero", Model = "Splendor Plus", RegistrationNumber = "DL 01 AB 1234", Color = "Black", Year = 2024, IsActive = true };
+        db.Drivers.Add(driver);
+        db.Vehicles.Add(vehicle);
         await db.SaveChangesAsync();
 
         var controller = CreateController(db, hub, 20, RoleNames.Driver);
@@ -73,11 +77,38 @@ public class DriverTests
     }
 
     [Fact]
+    public async Task Driver_UnverifiedOrUnprovisioned_ReturnsForbid()
+    {
+        var (db, hub) = CreateContext();
+        var user = new User { Id = 29, MobileNumber = "9876500099", FullName = "Unverified Driver" };
+        db.Users.Add(user);
+        // Driver exists but not verified yet
+        var unverifiedDriver = new Driver { Id = 290, UserId = 29, IsActive = true, IsVerified = false, LicenseNumber = "DL-UNVERIFIED" };
+        db.Drivers.Add(unverifiedDriver);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, 29, RoleNames.Driver);
+        var result = await controller.GetProfile();
+        Assert.IsType<ForbidResult>(result.Result);
+
+        // Driver does not exist at all
+        var userNoRecord = new User { Id = 30, MobileNumber = "9876500030", FullName = "No Driver Row" };
+        db.Users.Add(userNoRecord);
+        await db.SaveChangesAsync();
+
+        var controllerNoRecord = CreateController(db, hub, 30, RoleNames.Driver);
+        var resultNoRecord = await controllerNoRecord.GetProfile();
+        Assert.IsType<ForbidResult>(resultNoRecord.Result);
+    }
+
+    [Fact]
     public async Task Driver_ToggleOnline_UpdatesDutyStatus()
     {
         var (db, hub) = CreateContext();
         var user = new User { Id = 21, MobileNumber = "9876500002", FullName = "Ramesh Driver" };
         db.Users.Add(user);
+        var driver = new Driver { Id = 210, UserId = 21, IsActive = true, IsVerified = true, IsOnline = true, LicenseNumber = "DL-210" };
+        db.Drivers.Add(driver);
         await db.SaveChangesAsync();
 
         var controller = CreateController(db, hub, 21, RoleNames.Driver);
@@ -102,6 +133,8 @@ public class DriverTests
         var user = new User { Id = 22, MobileNumber = "9876500003", FullName = "Vikram Driver" };
         var passenger = new User { Id = 50, MobileNumber = "9876599999", FullName = "Pooja Passenger" };
         db.Users.AddRange(user, passenger);
+        var driver = new Driver { Id = 220, UserId = 22, IsActive = true, IsVerified = true, IsOnline = true, LicenseNumber = "DL-220" };
+        db.Drivers.Add(driver);
 
         var ride = new Ride
         {
@@ -140,7 +173,7 @@ public class DriverTests
         var passenger = new User { Id = 51, MobileNumber = "9876588888", FullName = "Rahul Passenger" };
         db.Users.AddRange(user, passenger);
 
-        var driver = new Driver { Id = 99, UserId = user.Id, IsActive = true, TotalRides = 10 };
+        var driver = new Driver { Id = 99, UserId = user.Id, IsActive = true, IsVerified = true, TotalRides = 10, LicenseNumber = "DL-99" };
         db.Drivers.Add(driver);
 
         var ride = new Ride
@@ -195,6 +228,8 @@ public class DriverTests
         var (db, hub) = CreateContext();
         var user = new User { Id = 24, MobileNumber = "9876500005", FullName = "Deepak Driver" };
         db.Users.Add(user);
+        var driver = new Driver { Id = 240, UserId = 24, IsActive = true, IsVerified = true, LicenseNumber = "DL-240" };
+        db.Drivers.Add(driver);
         await db.SaveChangesAsync();
 
         var controller = CreateController(db, hub, 24, RoleNames.Driver);
@@ -209,10 +244,10 @@ public class DriverTests
 
         Assert.IsType<OkObjectResult>(res.Result);
 
-        var driver = await db.Drivers.FirstOrDefaultAsync(d => d.UserId == 24);
-        Assert.NotNull(driver);
-        Assert.Equal(28.7041m, driver!.CurrentLatitude);
-        Assert.Equal(77.1025m, driver.CurrentLongitude);
+        var savedDriver = await db.Drivers.FirstOrDefaultAsync(d => d.UserId == 24);
+        Assert.NotNull(savedDriver);
+        Assert.Equal(28.7041m, savedDriver!.CurrentLatitude);
+        Assert.Equal(77.1025m, savedDriver.CurrentLongitude);
     }
 
     [Fact]
@@ -221,6 +256,8 @@ public class DriverTests
         var (db, hub) = CreateContext();
         var user = new User { Id = 25, MobileNumber = "9876500006", FullName = "Invalid Coord Driver" };
         db.Users.Add(user);
+        var driver = new Driver { Id = 250, UserId = 25, IsActive = true, IsVerified = true, LicenseNumber = "DL-250" };
+        db.Drivers.Add(driver);
         await db.SaveChangesAsync();
 
         var controller = CreateController(db, hub, 25, RoleNames.Driver);
@@ -258,6 +295,9 @@ public class DriverTests
         var driverUser2 = new User { Id = 32, MobileNumber = "9876500032", FullName = "Driver Two" };
         var passenger = new User { Id = 60, MobileNumber = "9876500060", FullName = "Passenger User" };
         db.Users.AddRange(driverUser1, driverUser2, passenger);
+        var driver1 = new Driver { Id = 310, UserId = 31, IsActive = true, IsVerified = true, IsOnline = true, LicenseNumber = "DL-310" };
+        var driver2 = new Driver { Id = 320, UserId = 32, IsActive = true, IsVerified = true, IsOnline = true, LicenseNumber = "DL-320" };
+        db.Drivers.AddRange(driver1, driver2);
 
         var ride = new Ride
         {

@@ -263,8 +263,8 @@ public class CaptainPushNotificationTests
         var passenger = new User { Id = 222, MobileNumber = "9876500222", FullName = "Passenger" };
         db.Users.AddRange(driverUser1, driverUser2, passenger);
 
-        var driver1 = new Driver { Id = 11, UserId = driverUser1.Id, IsOnline = true, IsActive = true };
-        var driver2 = new Driver { Id = 12, UserId = driverUser2.Id, IsOnline = true, IsActive = true };
+        var driver1 = new Driver { Id = 11, UserId = driverUser1.Id, IsOnline = true, IsActive = true, IsVerified = true };
+        var driver2 = new Driver { Id = 12, UserId = driverUser2.Id, IsOnline = true, IsActive = true, IsVerified = true };
         db.Drivers.AddRange(driver1, driver2);
 
         var ride = new Ride
@@ -403,7 +403,7 @@ public class CaptainPushNotificationTests
         var customerUser = new User { Id = 502, FullName = "Customer One" };
         db.Users.AddRange(driverUser, customerUser);
 
-        var driver = new Driver { Id = 51, UserId = driverUser.Id, IsOnline = true, IsActive = true };
+        var driver = new Driver { Id = 51, UserId = driverUser.Id, IsOnline = true, IsActive = true, IsVerified = true };
         db.Drivers.Add(driver);
 
         var ride = new Ride
@@ -460,7 +460,7 @@ public class CaptainPushNotificationTests
         var customerUser = new User { Id = 602, FullName = "Customer Two" };
         db.Users.AddRange(driverUser, customerUser);
 
-        var driver = new Driver { Id = 61, UserId = driverUser.Id, IsOnline = true, IsActive = true };
+        var driver = new Driver { Id = 61, UserId = driverUser.Id, IsOnline = true, IsActive = true, IsVerified = true };
         db.Drivers.Add(driver);
 
         var ride = new Ride

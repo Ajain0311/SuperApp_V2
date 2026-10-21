@@ -53,49 +53,7 @@ public class DriverController : ControllerBase
         var driver = await _db.Drivers
             .Include(d => d.Vehicles)
             .Include(d => d.User)
-            .FirstOrDefaultAsync(d => d.UserId == userId && d.IsActive);
-
-        // If user has driver or admin role but no driver record exists yet, auto-provision
-        if (driver == null && (isDriver || isAdmin))
-        {
-            var user = await _db.Users.FindAsync(userId);
-            if (user != null)
-            {
-                driver = new Driver
-                {
-                    UserId = user.Id,
-                    LicenseNumber = "DL-TEST-" + user.MobileNumber.Substring(Math.Max(0, user.MobileNumber.Length - 4)),
-                    IsVerified = true,
-                    IsOnline = true,
-                    Rating = 4.85m,
-                    TotalRides = 15,
-                    IsActive = true,
-                    CurrentLatitude = 28.6315m,
-                    CurrentLongitude = 77.2167m,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.Drivers.Add(driver);
-                await _db.SaveChangesAsync();
-
-                // Add default vehicle
-                var vehicle = new Vehicle
-                {
-                    DriverId = driver.Id,
-                    Type = VehicleTypes.Bike,
-                    Make = "Hero",
-                    Model = "Splendor Plus",
-                    RegistrationNumber = "DL 04 AB " + new Random().Next(1000, 9999),
-                    Color = "Black",
-                    Year = 2024,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.Vehicles.Add(vehicle);
-                await _db.SaveChangesAsync();
-
-                driver.Vehicles.Add(vehicle);
-            }
-        }
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.IsActive && d.IsVerified);
 
         return driver;
     }
