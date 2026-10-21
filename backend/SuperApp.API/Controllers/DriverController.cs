@@ -484,10 +484,46 @@ public class DriverController : ControllerBase
         if (ride.OtpCode != request.OtpCode)
             return BadRequest(ApiResponse.Fail("Invalid ride OTP code"));
 
-        ride.Status = RideStatus.Started;
-        ride.StartedAt = DateTime.UtcNow;
-        ride.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        if (ride.Status == RideStatus.Cancelled)
+            return Conflict(ApiResponse.Fail("Cannot start a cancelled ride"));
+
+        if (ride.Status == RideStatus.Completed)
+            return Conflict(ApiResponse.Fail("Ride has already been completed"));
+
+        if (ride.Status == RideStatus.Expired)
+            return Conflict(ApiResponse.Fail("Cannot start an expired ride"));
+
+        if (ride.Status != RideStatus.Accepted && ride.Status != RideStatus.Arriving)
+            return Conflict(ApiResponse.Fail($"Cannot start ride with status '{ride.Status}'. Must be ACCEPTED or ARRIVING."));
+
+        var now = DateTime.UtcNow;
+        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            ride.Status = RideStatus.Started;
+            ride.StartedAt = now;
+            ride.UpdatedAt = now;
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            var updatedRows = await _db.Rides
+                .Where(r => r.Id == ride.Id && r.DriverId == driver.Id && (r.Status == RideStatus.Accepted || r.Status == RideStatus.Arriving))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.Status, RideStatus.Started)
+                    .SetProperty(r => r.StartedAt, now)
+                    .SetProperty(r => r.UpdatedAt, now));
+
+            if (updatedRows == 0)
+            {
+                var refreshed = await _db.Rides.Where(r => r.Id == ride.Id).Select(r => r.Status).FirstOrDefaultAsync();
+                return Conflict(ApiResponse.Fail($"Cannot start ride. Current state is '{refreshed ?? "UNKNOWN"}'."));
+            }
+
+            ride.Status = RideStatus.Started;
+            ride.StartedAt = now;
+            ride.UpdatedAt = now;
+            _db.Entry(ride).Property(r => r.Status).IsModified = false;
+        }
 
         await _hub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
         {

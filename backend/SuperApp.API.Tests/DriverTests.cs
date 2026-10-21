@@ -503,7 +503,47 @@ public class DriverTests
         Assert.Equal(888L, availableRide.Id);
         Assert.Null(availableRide.OtpCode);
     }
+
+    [Theory]
+    [InlineData(RideStatus.Cancelled)]
+    [InlineData(RideStatus.Completed)]
+    [InlineData(RideStatus.Expired)]
+    [InlineData(RideStatus.Requested)]
+    public async Task StartRide_FromInvalidStatus_ReturnsConflict(string initialStatus)
+    {
+        var (db, hub) = CreateContext();
+        var passenger = new User { Id = 501, MobileNumber = "9876543220", FullName = "Passenger 501" };
+        var driverUser = new User { Id = 502, MobileNumber = "9876543221", FullName = "Driver 502" };
+        var driver = new Driver { Id = 77, UserId = driverUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(passenger, driverUser);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 999,
+            RideNumber = "RD-999",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Origin",
+            DropoffAddress = "Destination",
+            EstimatedFare = 100,
+            Status = initialStatus,
+            OtpCode = "1234",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, driverUser.Id, RoleNames.Driver);
+        var res = await controller.StartRide(999, new VerifyRideOtpRequest { OtpCode = "1234" });
+
+        var conflict = Assert.IsType<ConflictObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse>(conflict.Value);
+        Assert.False(apiRes.Success);
+    }
 }
+
 
 
 public class FakeHubContext : IHubContext<RideTrackingHub>
