@@ -144,4 +144,57 @@ describe('CartStore - Order Price Calculation & Multi-Restaurant Logic', () => {
     expect(state.getTaxesAndPackaging()).toBe(46); // 5% GST
     expect(state.getGrandTotal()).toBe(966);
   });
+
+  it('should update and query exact cart line items without interfering with other variants/add-ons of same foodItemId', () => {
+    const regularItem: CartItem = {
+      id: 10,
+      foodItemId: 101,
+      name: 'Special Biryani',
+      basePrice: 340,
+      quantity: 1,
+      variantId: 1,
+      portionName: 'Regular',
+      portionPrice: 0,
+      selectedAddonIds: [],
+      addons: [],
+      totalPrice: 340,
+    };
+
+    const jumboItem: CartItem = {
+      id: 11,
+      foodItemId: 101,
+      name: 'Special Biryani',
+      basePrice: 340,
+      quantity: 1,
+      variantId: 2,
+      portionName: 'Jumbo Pack',
+      portionPrice: 200,
+      selectedAddonIds: [5],
+      addons: ['Extra Gravy (+₹40)'],
+      totalPrice: 580,
+    };
+
+    useCartStore.getState().addItem(1, 'Meghana Foods', regularItem);
+    useCartStore.getState().addItem(1, 'Meghana Foods', jumboItem);
+
+    const items = useCartStore.getState().items;
+    expect(items).toHaveLength(2);
+
+    const regularKey = items[0].cartLineKey!;
+    const jumboKey = items[1].cartLineKey!;
+    expect(regularKey).not.toEqual(jumboKey);
+
+    // Increment ONLY the jumbo variant by line key
+    useCartStore.getState().updateQuantity(jumboKey, 1);
+    expect(useCartStore.getState().getLineQuantity(jumboKey)).toBe(2);
+    expect(useCartStore.getState().getLineQuantity(regularKey)).toBe(1);
+    expect(useCartStore.getState().getItemQuantity(101)).toBe(3);
+
+    // Decrement regular variant to 0 -> should remove regular without touching jumbo
+    useCartStore.getState().updateQuantity(regularKey, -1);
+    expect(useCartStore.getState().getLineQuantity(regularKey)).toBe(0);
+    expect(useCartStore.getState().getLineQuantity(jumboKey)).toBe(2);
+    expect(useCartStore.getState().items).toHaveLength(1);
+    expect(useCartStore.getState().items[0].cartLineKey).toBe(jumboKey);
+  });
 });

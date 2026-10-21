@@ -123,7 +123,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
                     <View style={styles.cartStepperBox}>
                       <TouchableOpacity
                         style={styles.cartStepperBtn}
-                        onPress={() => updateQuantity(item.foodItemId, -1)}
+                        onPress={() => updateQuantity(item.cartLineKey || item.foodItemId, -1)}
                         activeOpacity={0.7}
                       >
                         <Ionicons name="remove" size={14} color={AppColors.primary} />
@@ -131,7 +131,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
                       <Text style={styles.cartStepperQty}>{item.quantity}</Text>
                       <TouchableOpacity
                         style={styles.cartStepperBtn}
-                        onPress={() => updateQuantity(item.foodItemId, 1)}
+                        onPress={() => updateQuantity(item.cartLineKey || item.foodItemId, 1)}
                         activeOpacity={0.7}
                       >
                         <Ionicons name="add" size={14} color={AppColors.primary} />
