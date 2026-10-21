@@ -895,4 +895,54 @@ public class CaptainPushNotificationTests
         Assert.False(apiResp.Success);
         Assert.Contains("must be STARTED", apiResp.Message);
     }
+
+    [Fact]
+    public async Task RideTrackingHub_UpdateRideStatus_RejectsArbitraryStatusAndMismatch()
+    {
+        var db = CreateDb();
+        var hub = new RideTrackingHub(db);
+
+        var passenger = new User { Id = 801, MobileNumber = "9876543201", FullName = "Passenger 801" };
+        var driverUser = new User { Id = 802, MobileNumber = "9876543202", FullName = "Driver 802" };
+        var driver = new Driver { Id = 44, UserId = driverUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(passenger, driverUser);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 888,
+            RideNumber = "RD-888",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Origin",
+            DropoffAddress = "Destination",
+            EstimatedFare = 150,
+            Status = RideStatus.Accepted,
+            OtpCode = "4321",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, passenger.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth"));
+
+        var hubCallerContextMock = new Mock<HubCallerContext>();
+        hubCallerContextMock.Setup(c => c.User).Returns(httpContext.User);
+        hubCallerContextMock.Setup(c => c.ConnectionId).Returns("conn-888");
+        hub.Context = hubCallerContextMock.Object;
+
+        // 1. Arbitrary string rejected
+        var ex1 = await Assert.ThrowsAsync<HubException>(() => hub.UpdateRideStatus(888, "HACKED_CUSTOM_STATUS"));
+        Assert.Contains("Only authoritative RideStatus values are permitted", ex1.Message);
+
+        // 2. Mismatch with actual DB status rejected (calling STARTED when DB is ACCEPTED)
+        var ex2 = await Assert.ThrowsAsync<HubException>(() => hub.UpdateRideStatus(888, RideStatus.Started));
+        Assert.Contains("State transition mismatch", ex2.Message);
+    }
 }
