@@ -70,29 +70,30 @@ public class FoodOrdersController : ControllerBase
             return BadRequest(ApiResponse<FoodOrderDto>.Fail("Invalid payment method. Supported methods: COD, ONLINE"));
         }
 
-        Address? validatedAddress = null;
-        if (request.AddressId.HasValue)
+        if (!request.AddressId.HasValue || request.AddressId.Value <= 0)
         {
-            validatedAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
-            if (validatedAddress == null)
-            {
-                return NotFound(ApiResponse<FoodOrderDto>.Fail("Specified delivery address not found"));
-            }
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Delivery address is required for placing a food order"));
+        }
 
-            if (!validatedAddress.IsActive)
-            {
-                return BadRequest(ApiResponse<FoodOrderDto>.Fail("Specified delivery address is inactive"));
-            }
+        var validatedAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
+        if (validatedAddress == null)
+        {
+            return NotFound(ApiResponse<FoodOrderDto>.Fail("Specified delivery address not found"));
+        }
 
-            if (validatedAddress.UserId != userId.Value)
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<FoodOrderDto>.Fail("Unauthorized: Delivery address belongs to another customer"));
-            }
+        if (!validatedAddress.IsActive)
+        {
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Specified delivery address is inactive"));
+        }
 
-            if (string.IsNullOrWhiteSpace(validatedAddress.AddressLine1) || string.IsNullOrWhiteSpace(validatedAddress.City))
-            {
-                return BadRequest(ApiResponse<FoodOrderDto>.Fail("Delivery address is incomplete (missing street line or city)"));
-            }
+        if (validatedAddress.UserId != userId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<FoodOrderDto>.Fail("Unauthorized: Delivery address belongs to another customer"));
+        }
+
+        if (string.IsNullOrWhiteSpace(validatedAddress.AddressLine1) || string.IsNullOrWhiteSpace(validatedAddress.City))
+        {
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Delivery address is incomplete (missing street line or city)"));
         }
 
         var initialPaymentStatus = paymentMethod == "ONLINE" ? "PENDING_PAYMENT" : "PENDING";
@@ -250,14 +251,18 @@ public class FoodOrdersController : ControllerBase
 
         var orderDto = MapToOrderDto(order, restaurant, validatedAddress);
 
-        // Real-time notification to all active restaurant kitchen staff (resilient: order is already saved)
-        try
+        // Real-time notification to all active restaurant kitchen staff:
+        // Only dispatch immediately if COD or already PAID. Unpaid online orders await verified payment callback.
+        if (order.PaymentMethod == "COD" || order.PaymentStatus == "PAID")
         {
-            await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
-        }
-        catch
-        {
-            // Non-critical notification failure must not rollback or fail a confirmed order
+            try
+            {
+                await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
+            }
+            catch
+            {
+                // Non-critical notification failure must not rollback or fail a confirmed order
+            }
         }
 
         return Ok(ApiResponse<FoodOrderDto>.Ok(orderDto));
@@ -417,7 +422,7 @@ public class FoodOrdersController : ControllerBase
         return Ok(ApiResponse<PaymentOrderResult>.Ok(result, "Complete payment in Easebuzz. The order is paid only after verification."));
     }
 
-    private static FoodOrderDto MapToOrderDto(FoodOrder o, Restaurant restaurant, Address? address = null, User? user = null)
+    public static FoodOrderDto MapToOrderDto(FoodOrder o, Restaurant restaurant, Address? address = null, User? user = null)
     {
         var restPhone = !string.IsNullOrWhiteSpace(restaurant?.Phone) 
             ? restaurant.Phone 

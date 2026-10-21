@@ -1,3 +1,5 @@
+using Moq;
+using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -664,5 +666,118 @@ public class FoodDeliveryAndPaymentTests
         Assert.False(result.IsVerified);
         Assert.Equal("FAILED", result.Status);
         Assert.Contains("not found", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FoodOrders_OnlineUnpaidOrder_DoesNotBroadcastToKitchen_UntilPaymentVerified()
+    {
+        var db = NewDb();
+        var hubMock = new Mock<IHubContext<OrderStatusHub>>();
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+
+        hubMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+
+        var restaurant = new Restaurant { Id = 77, Name = "Burger Place", IsActive = true, Latitude = 26.9m, Longitude = 75.8m };
+        var customer = new User { Id = 88, FullName = "Hungry User", MobileNumber = "9998887776", IsActive = true };
+        var item = new FoodItem { Id = 10, RestaurantId = 77, Name = "Cheeseburger", BasePrice = 150m, IsActive = true };
+        var address = new Address { Id = 22, UserId = 88, AddressLine1 = "Street 1", City = "Jaipur", PinCode = "302001", IsActive = true };
+
+        db.Restaurants.Add(restaurant);
+        db.Users.Add(customer);
+        db.FoodItems.Add(item);
+        db.Addresses.Add(address);
+        await db.SaveChangesAsync();
+
+        var ordersController = new FoodOrdersController(db, hubMock.Object);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        ordersController.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // 1. Placing online order: paymentStatus is PENDING_PAYMENT
+        var onlineReq = new PlaceFoodOrderRequest
+        {
+            RestaurantId = 77,
+            AddressId = 22,
+            PaymentMethod = "ONLINE",
+            Items = new List<OrderItemRequest> { new() { FoodItemId = 10, Quantity = 1 } }
+        };
+
+        var placeRes = await ordersController.PlaceOrder(onlineReq);
+        var okResult = Assert.IsType<OkObjectResult>(placeRes.Result);
+        var orderDto = Assert.IsType<ApiResponse<FoodOrderDto>>(okResult.Value).Data!;
+        Assert.Equal("PENDING_PAYMENT", orderDto.PaymentStatus);
+
+        // Verify kitchen did NOT receive broadcast while payment is unpaid
+        clientsMock.Verify(c => c.Group("restaurant-77"), Times.Never());
+
+        // 2. Complete payment via FoodPaymentSync with orderHub
+        var payment = new Payment
+        {
+            Id = 555,
+            UserId = customer.Id,
+            Module = "FOOD",
+            OrderId = orderDto.Id,
+            Amount = orderDto.GrandTotal,
+            TransactionId = "txn-online-77",
+            Status = "PAID",
+            PaymentMethod = "UPI",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        await FoodPaymentSync.ApplyAsync(db, "txn-online-77", true, hubMock.Object);
+
+        // Verify kitchen DID receive broadcast after payment is verified as PAID
+        clientsMock.Verify(c => c.Group("restaurant-77"), Times.Once());
+    }
+
+    [Fact]
+    public async Task FoodOrders_MissingOrInvalidAddress_ReturnsBadRequest()
+    {
+        var db = NewDb();
+        var hubMock = new Mock<IHubContext<OrderStatusHub>>();
+        var restaurant = new Restaurant { Id = 78, Name = "Pizza Place", IsActive = true };
+        var customer = new User { Id = 89, FullName = "Customer", MobileNumber = "9998887775", IsActive = true };
+        var item = new FoodItem { Id = 11, RestaurantId = 78, Name = "Pizza", BasePrice = 200m, IsActive = true };
+
+        db.Restaurants.Add(restaurant);
+        db.Users.Add(customer);
+        db.FoodItems.Add(item);
+        await db.SaveChangesAsync();
+
+        var ordersController = new FoodOrdersController(db, hubMock.Object);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        ordersController.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // Missing address ID
+        var req = new PlaceFoodOrderRequest
+        {
+            RestaurantId = 78,
+            AddressId = null,
+            PaymentMethod = "COD",
+            Items = new List<OrderItemRequest> { new() { FoodItemId = 11, Quantity = 1 } }
+        };
+
+        var res = await ordersController.PlaceOrder(req);
+        var badReq = Assert.IsType<BadRequestObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse<FoodOrderDto>>(badReq.Value);
+        Assert.False(apiRes.Success);
+        Assert.Contains("Delivery address is required", apiRes.Message);
     }
 }

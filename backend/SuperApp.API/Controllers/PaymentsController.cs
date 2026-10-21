@@ -17,11 +17,18 @@ public class PaymentsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
 
-    public PaymentsController(IPaymentService paymentService, AppDbContext db, IConfiguration configuration)
+    private readonly Microsoft.AspNetCore.SignalR.IHubContext<SuperApp.API.Hubs.OrderStatusHub>? _orderHub;
+
+    public PaymentsController(
+        IPaymentService paymentService,
+        AppDbContext db,
+        IConfiguration configuration,
+        Microsoft.AspNetCore.SignalR.IHubContext<SuperApp.API.Hubs.OrderStatusHub>? orderHub = null)
     {
         _paymentService = paymentService;
         _db = db;
         _configuration = configuration;
+        _orderHub = orderHub;
     }
 
     private long? GetCurrentUserId()
@@ -160,9 +167,9 @@ public class PaymentsController : ControllerBase
             request.PaymentSignature);
 
         if (result.IsVerified)
-            await FoodPaymentSync.ApplyAsync(_db, result.TransactionId, true);
+            await FoodPaymentSync.ApplyAsync(_db, result.TransactionId, true, _orderHub);
         else
-            await FoodPaymentSync.ApplyAsync(_db, request.TransactionId, false);
+            await FoodPaymentSync.ApplyAsync(_db, request.TransactionId, false, _orderHub);
 
         return Ok(ApiResponse<PaymentVerificationResult>.Ok(result));
     }
@@ -208,7 +215,7 @@ public class PaymentsController : ControllerBase
 
         if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
-            await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, true);
+            await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, true, _orderHub);
             return Ok(ApiResponse<PaymentVerificationResult>.Ok(new PaymentVerificationResult
             {
                 IsVerified = true,
@@ -221,7 +228,7 @@ public class PaymentsController : ControllerBase
         payment.Status = request.Success ? "PAID" : "FAILED";
         payment.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, request.Success);
+        await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, request.Success, _orderHub);
 
         var result = new PaymentVerificationResult
         {
@@ -323,7 +330,7 @@ setTimeout(function(){{ window.close(); }}, 1200);
             return;
         if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
-            await FoodPaymentSync.ApplyAsync(_db, txnid, true);
+            await FoodPaymentSync.ApplyAsync(_db, txnid, true, _orderHub);
             return;
         }
 
@@ -363,7 +370,7 @@ setTimeout(function(){{ window.close(); }}, 1200);
 
         payment.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        await FoodPaymentSync.ApplyAsync(_db, txnid, payment.Status == "PAID");
+        await FoodPaymentSync.ApplyAsync(_db, txnid, payment.Status == "PAID", _orderHub);
     }
 
     [Authorize]

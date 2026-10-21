@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using SuperApp.API.Controllers;
 using SuperApp.API.Data;
+using SuperApp.API.Hubs;
 using SuperApp.API.Models;
 
 namespace SuperApp.API.Services;
@@ -10,7 +13,7 @@ namespace SuperApp.API.Services;
 /// </summary>
 public static class FoodPaymentSync
 {
-    public static async Task ApplyAsync(AppDbContext db, string? transactionId, bool verified)
+    public static async Task ApplyAsync(AppDbContext db, string? transactionId, bool verified, IHubContext<OrderStatusHub>? orderHub = null)
     {
         if (string.IsNullOrWhiteSpace(transactionId))
             return;
@@ -29,16 +32,39 @@ public static class FoodPaymentSync
         if (verified && string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(order.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
-        {
-            order.PaymentStatus = "REFUND_DUE";
-            order.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync();
-            return;
-        }
+            {
+                order.PaymentStatus = "REFUND_DUE";
+                order.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+                return;
+            }
 
-        order.PaymentStatus = "PAID";
+            order.PaymentStatus = "PAID";
             order.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+
+            if (orderHub != null)
+            {
+                try
+                {
+                    var fullOrder = await db.FoodOrders
+                        .Include(o => o.Items)
+                        .Include(o => o.Restaurant)
+                        .Include(o => o.Address)
+                        .Include(o => o.User)
+                        .FirstOrDefaultAsync(o => o.Id == order.Id);
+
+                    if (fullOrder != null && fullOrder.Restaurant != null)
+                    {
+                        var dto = FoodOrdersController.MapToOrderDto(fullOrder, fullOrder.Restaurant, fullOrder.Address, fullOrder.User);
+                        await orderHub.Clients.Group($"restaurant-{fullOrder.RestaurantId}").SendAsync("NewIncomingOrder", dto);
+                    }
+                }
+                catch
+                {
+                    // Non-critical notification failure must not rollback payment sync
+                }
+            }
             return;
         }
 
