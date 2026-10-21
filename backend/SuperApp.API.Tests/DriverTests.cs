@@ -542,7 +542,49 @@ public class DriverTests
         var apiRes = Assert.IsType<ApiResponse>(conflict.Value);
         Assert.False(apiRes.Success);
     }
+
+    [Theory]
+    [InlineData(RideStatus.Requested)]
+    [InlineData(RideStatus.Searching)]
+    public async Task GetAvailableRides_SweepsStaleUnacceptedRides_ToExpired(string status)
+    {
+        var (db, hub) = CreateContext();
+        var passenger = new User { Id = 601, MobileNumber = "9876543290", FullName = "Passenger 601" };
+        var driverUser = new User { Id = 602, MobileNumber = "9876543291", FullName = "Driver 602" };
+        var driver = new Driver { Id = 88, UserId = driverUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(passenger, driverUser);
+        db.Drivers.Add(driver);
+
+        var staleRide = new Ride
+        {
+            Id = 1001,
+            RideNumber = "RD-STALE-1",
+            UserId = passenger.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Origin",
+            DropoffAddress = "Destination",
+            EstimatedFare = 100,
+            Status = status,
+            OtpCode = "1111",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-6) // Over 5 mins ago
+        };
+        db.Rides.Add(staleRide);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, driverUser.Id, RoleNames.Driver);
+        var res = await controller.GetAvailableRides();
+
+        var ok = Assert.IsType<OkObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse<List<DriverRideSummaryDto>>>(ok.Value);
+        Assert.NotNull(apiRes.Data);
+        Assert.DoesNotContain(apiRes.Data!, r => r.Id == 1001);
+
+        var refreshedRide = await db.Rides.FindAsync(1001L);
+        Assert.NotNull(refreshedRide);
+        Assert.Equal(RideStatus.Expired, refreshedRide!.Status);
+    }
 }
+
 
 
 

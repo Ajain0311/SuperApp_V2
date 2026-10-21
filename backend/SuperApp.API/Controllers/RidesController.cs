@@ -347,8 +347,8 @@ public class RidesController : ControllerBase
             return Forbid();
         }
 
-        // Automatic 5-minute expiry enforcement
-        if (ride.Status == RideStatus.Requested && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5))
+        // Automatic 5-minute expiry enforcement covering REQUESTED and SEARCHING
+        if (ride.DriverId == null && (ride.Status == RideStatus.Requested || ride.Status == RideStatus.Searching) && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5))
         {
             ride.Status = RideStatus.Expired;
             ride.UpdatedAt = DateTime.UtcNow;

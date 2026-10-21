@@ -168,7 +168,43 @@ public class DriverController : ControllerBase
         if (!driver.IsOnline)
             return Ok(ApiResponse<List<DriverRideSummaryDto>>.Ok(new List<DriverRideSummaryDto>(), "Go online to see available rides"));
 
-        var cutoff = DateTime.UtcNow.AddMinutes(-5);
+        var now = DateTime.UtcNow;
+        var cutoff = now.AddMinutes(-5);
+
+        // Transition any stale unaccepted rides (Requested or Searching) to Expired
+        var staleRides = await _db.Rides
+            .Where(r => (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching)
+                     && r.DriverId == null
+                     && r.CreatedAt < cutoff)
+            .Take(50)
+            .ToListAsync();
+
+        if (staleRides.Any())
+        {
+            foreach (var stale in staleRides)
+            {
+                stale.Status = RideStatus.Expired;
+                stale.UpdatedAt = now;
+            }
+            await _db.SaveChangesAsync();
+
+            foreach (var stale in staleRides)
+            {
+                await _hub.Clients.Group($"ride-{stale.Id}").SendAsync("RideStatusChanged", new
+                {
+                    rideId = stale.Id,
+                    status = RideStatus.Expired,
+                    reason = "No driver accepted within 5 minutes.",
+                    updatedAt = now
+                });
+                await _hub.Clients.Group("drivers-pool").SendAsync("RideExpired", new
+                {
+                    rideId = stale.Id,
+                    status = RideStatus.Expired
+                });
+            }
+        }
+
         var rides = await _db.Rides
             .Include(r => r.User)
             .Where(r => (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching) 
@@ -281,7 +317,7 @@ public class DriverController : ControllerBase
                 return Conflict(ApiResponse<RideDto>.Fail("This ride has been cancelled by the customer."));
             }
 
-            if (ride.Status == RideStatus.Expired || (ride.Status == RideStatus.Requested && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5)))
+            if (ride.Status == RideStatus.Expired || ((ride.Status == RideStatus.Requested || ride.Status == RideStatus.Searching) && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5)))
             {
                 if (ride.Status != RideStatus.Expired)
                 {
