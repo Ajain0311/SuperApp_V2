@@ -187,7 +187,7 @@ public class DriverController : ControllerBase
                 CreatedAt = r.CreatedAt,
                 CustomerName = r.User.FullName ?? "Passenger",
                 CustomerPhone = r.User.MobileNumber,
-                OtpCode = r.OtpCode,
+                OtpCode = null, // Protected: Passenger only until pickup
                 PickupLatitude = r.PickupLatitude,
                 PickupLongitude = r.PickupLongitude,
                 DropoffLatitude = r.DropoffLatitude,
@@ -235,7 +235,7 @@ public class DriverController : ControllerBase
             EstimatedFare = ride.EstimatedFare,
             ActualFare = ride.ActualFare,
             Status = ride.Status,
-            OtpCode = ride.OtpCode,
+            OtpCode = null, // OTP remains passenger-confidential until passenger provides it
             PaymentMethod = ride.PaymentMethod,
             PaymentStatus = ride.PaymentStatus,
             CreatedAt = ride.CreatedAt,
@@ -414,7 +414,7 @@ public class DriverController : ControllerBase
             DistanceKm = ride.DistanceKm,
             EstimatedFare = ride.EstimatedFare,
             Status = ride.Status,
-            OtpCode = ride.OtpCode,
+            OtpCode = null, // OTP remains passenger-confidential until passenger provides it
             PaymentMethod = ride.PaymentMethod,
             PaymentStatus = ride.PaymentStatus,
             CreatedAt = ride.CreatedAt,
@@ -845,7 +845,7 @@ public class DriverController : ControllerBase
                 CreatedAt = r.CreatedAt,
                 CustomerName = r.User.FullName ?? "Passenger",
                 CustomerPhone = r.User.MobileNumber,
-                OtpCode = r.OtpCode
+                OtpCode = null // OTP is single-use and not retained in trip history summaries
             })
             .ToListAsync();
 

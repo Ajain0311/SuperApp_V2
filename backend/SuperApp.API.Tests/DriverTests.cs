@@ -466,7 +466,45 @@ public class DriverTests
         Assert.Equal(28.6315m, apiRes.Data!.DropoffLatitude);
         Assert.Equal(77.2167m, apiRes.Data!.DropoffLongitude);
     }
+
+    [Fact]
+    public async Task GetAvailableRides_DoesNotExposeOtpCode_ToDriverPool()
+    {
+        var (db, hub) = CreateContext();
+        var passenger = new User { Id = 301, MobileNumber = "9876543210", FullName = "Passenger" };
+        var driverUser = new User { Id = 302, MobileNumber = "9876543211", FullName = "Driver" };
+        var driver = new Driver { Id = 55, UserId = driverUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(passenger, driverUser);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 888,
+            RideNumber = "RD-888",
+            UserId = passenger.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Origin",
+            DropoffAddress = "Destination",
+            EstimatedFare = 100,
+            Status = RideStatus.Requested,
+            OtpCode = "9988",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, driverUser.Id, RoleNames.Driver);
+        var res = await controller.GetAvailableRides();
+
+        var ok = Assert.IsType<OkObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse<List<DriverRideSummaryDto>>>(ok.Value);
+        Assert.NotNull(apiRes.Data);
+        var availableRide = Assert.Single(apiRes.Data!);
+        Assert.Equal(888L, availableRide.Id);
+        Assert.Null(availableRide.OtpCode);
+    }
 }
+
 
 public class FakeHubContext : IHubContext<RideTrackingHub>
 {
