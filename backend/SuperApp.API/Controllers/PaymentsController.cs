@@ -103,6 +103,14 @@ public class PaymentsController : ControllerBase
             {
                 return Forbid();
             }
+            if (string.Equals(foodOrder.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Cancelled food orders cannot be paid"));
+            }
+            if (string.Equals(foodOrder.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(ApiResponse<PaymentOrderResult>.Fail("Food order is already paid"));
+            }
             authoritativeAmount = foodOrder.GrandTotal;
         }
         else if (string.Equals(request.Module, "RIDE", StringComparison.OrdinalIgnoreCase) && long.TryParse(request.ReceiptId, out var rideId))
@@ -115,6 +123,14 @@ public class PaymentsController : ControllerBase
             if (ride.UserId != userId && !User.IsInRole(RoleNames.Admin))
             {
                 return Forbid();
+            }
+            if (string.Equals(ride.Status, RideStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Cancelled rides cannot be paid"));
+            }
+            if (string.Equals(ride.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(ApiResponse<PaymentOrderResult>.Fail("Ride is already paid"));
             }
             authoritativeAmount = ride.ActualFare ?? ride.EstimatedFare;
         }

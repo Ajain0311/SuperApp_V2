@@ -58,12 +58,29 @@ public class RideTrackingHub : Hub
 
     public async Task JoinDriversPool()
     {
+        var userId = GetUserId();
+        if (!userId.HasValue)
+        {
+            throw new HubException("Authentication required to join drivers pool");
+        }
+
         var isDriver = Context.User?.IsInRole(RoleNames.Driver) ?? false;
         var isAdmin = Context.User?.IsInRole(RoleNames.Admin) ?? false;
 
         if (!isDriver && !isAdmin)
         {
             throw new HubException("Unauthorized: Only registered captains can join the drivers pool");
+        }
+
+        if (!isAdmin)
+        {
+            var isVerifiedActiveDriver = await _db.Drivers
+                .AnyAsync(d => d.UserId == userId.Value && d.IsActive && d.IsVerified);
+
+            if (!isVerifiedActiveDriver)
+            {
+                throw new HubException("Unauthorized: Driver record must be active and verified by admin to join drivers pool");
+            }
         }
 
         await Groups.AddToGroupAsync(Context.ConnectionId, "drivers-pool");

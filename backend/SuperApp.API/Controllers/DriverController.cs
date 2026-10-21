@@ -261,6 +261,11 @@ public class DriverController : ControllerBase
         if (driver == null)
             return Forbid();
 
+        if (!driver.IsOnline)
+        {
+            return BadRequest(ApiResponse<RideDto>.Fail("You must be ONLINE to accept a ride."));
+        }
+
         var gate = RideAcceptLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync();
         try
@@ -710,6 +715,16 @@ public class DriverController : ControllerBase
 
         if (request.RideId.HasValue)
         {
+            var activeRide = await _db.Rides.FirstOrDefaultAsync(r =>
+                r.Id == request.RideId.Value &&
+                r.DriverId == driver.Id &&
+                (r.Status == RideStatus.Accepted || r.Status == RideStatus.Arriving || r.Status == RideStatus.Started));
+
+            if (activeRide == null)
+            {
+                return BadRequest(ApiResponse.Fail("Specified ride does not belong to the authenticated driver or is not in an active state."));
+            }
+
             await _hub.Clients.Group($"ride-{request.RideId.Value}").SendAsync("DriverLocationUpdated", new
             {
                 rideId = request.RideId.Value,

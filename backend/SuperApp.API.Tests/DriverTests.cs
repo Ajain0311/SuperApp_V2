@@ -623,6 +623,55 @@ public class DriverTests
         Assert.NotNull(refreshedRide);
         Assert.Equal(RideStatus.Expired, refreshedRide!.Status);
     }
+
+    [Fact]
+    public async Task AcceptRide_OfflineDriver_ReturnsBadRequest()
+    {
+        var (db, hub) = CreateContext();
+        var driverUser = new User { Id = 701, MobileNumber = "9876543201", FullName = "Offline Driver" };
+        var driver = new Driver { Id = 71, UserId = driverUser.Id, IsOnline = false, IsVerified = true };
+        var passenger = new User { Id = 702, MobileNumber = "9876543202", FullName = "Passenger 702" };
+        var ride = new Ride { Id = 2001, RideNumber = "RD-2001", UserId = passenger.Id, VehicleType = "BIKE", PickupAddress = "A", DropoffAddress = "B", Status = RideStatus.Requested, CreatedAt = DateTime.UtcNow };
+        db.Users.AddRange(driverUser, passenger);
+        db.Drivers.Add(driver);
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, driverUser.Id, RoleNames.Driver);
+        var res = await controller.AcceptRide(2001);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse<RideDto>>(badRequest.Value);
+        Assert.False(apiRes.Success);
+        Assert.Contains("ONLINE", apiRes.Message);
+    }
+
+    [Fact]
+    public async Task UpdateLocation_WithInvalidOrForeignRideId_ReturnsBadRequest()
+    {
+        var (db, hub) = CreateContext();
+        var driverUser = new User { Id = 801, MobileNumber = "9876543211", FullName = "Driver 801" };
+        var driver = new Driver { Id = 81, UserId = driverUser.Id, IsOnline = true, IsVerified = true };
+        var passenger = new User { Id = 802, MobileNumber = "9876543212", FullName = "Passenger 802" };
+        var ride = new Ride { Id = 3001, RideNumber = "RD-3001", UserId = passenger.Id, VehicleType = "BIKE", PickupAddress = "A", DropoffAddress = "B", Status = RideStatus.Requested, CreatedAt = DateTime.UtcNow };
+        db.Users.AddRange(driverUser, passenger);
+        db.Drivers.Add(driver);
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, hub, driverUser.Id, RoleNames.Driver);
+        var req = new UpdateDriverLocationRequest
+        {
+            Latitude = 28.5m,
+            Longitude = 77.2m,
+            RideId = 3001 // Not assigned to driver 81 and not active
+        };
+        var res = await controller.UpdateLocation(req);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse>(badRequest.Value);
+        Assert.False(apiRes.Success);
+    }
 }
 
 

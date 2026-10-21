@@ -89,10 +89,18 @@ public class OrderStatusHub : Hub
             throw new HubException("Unauthorized: Only authorized kitchen staff, assigned delivery partners or admins can update order status");
         }
 
+        var normalized = (status ?? "").Trim().ToUpperInvariant();
+        // Order status is server-owned and transitions must be executed via authoritative REST endpoints.
+        // We enforce that the broadcast status must match the current persisted DB status (unless Admin sync).
+        if (!isAdmin && !string.Equals(order.Status, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new HubException($"State transition mismatch. Order status is server-owned (current DB status: '{order.Status}'). Use dedicated order endpoints to update order status.");
+        }
+
         await Clients.Group($"order-{orderId}").SendAsync("OrderStatusUpdated", new
         {
             orderId,
-            status,
+            status = order.Status,
             message,
             estimatedMinutes,
             updatedAt = DateTime.UtcNow
