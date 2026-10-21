@@ -340,17 +340,24 @@ setTimeout(function(){{ window.close(); }}, 1200);
             if (!hashVerified)
                 return;
 
-            // Enforce amount parity if gateway provides amount
-            if (fields != null && (fields.TryGetValue("amount", out var amtStr) || fields.TryGetValue("net_amount_debit", out amtStr)))
+            // Enforce required amount and parity on live success callback
+            if (fields == null)
+                return;
+
+            if (!fields.TryGetValue("amount", out var amtStr) && !fields.TryGetValue("net_amount_debit", out amtStr))
+                return; // Amount is mandatory on success callbacks
+
+            if (string.IsNullOrWhiteSpace(amtStr) || !decimal.TryParse(amtStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var callbackAmount))
+                return; // Malformed amount
+
+            if (Math.Abs(callbackAmount - payment.Amount) > 0.01m)
+                return; // Amount mismatch! Fail closed to prevent underpayment spoofing
+
+            // Enforce currency is INR if currency field is present
+            if (fields.TryGetValue("currency", out var currStr) && !string.IsNullOrWhiteSpace(currStr))
             {
-                if (decimal.TryParse(amtStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var callbackAmount))
-                {
-                    if (Math.Abs(callbackAmount - payment.Amount) > 0.01m)
-                    {
-                        // Amount mismatch! Fail closed to prevent underpayment spoofing.
-                        return;
-                    }
-                }
+                if (!string.Equals(currStr.Trim(), "INR", StringComparison.OrdinalIgnoreCase))
+                    return; // Currency mismatch
             }
 
             payment.Status = "PAID";

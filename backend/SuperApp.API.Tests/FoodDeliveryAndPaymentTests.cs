@@ -780,4 +780,135 @@ public class FoodDeliveryAndPaymentTests
         Assert.False(apiRes.Success);
         Assert.Contains("Delivery address is required", apiRes.Message);
     }
+
+    [Fact]
+    public async Task EasebuzzWebhook_AmountMismatch_OrMissingAmount_FailsClosed()
+    {
+        var db = NewDb();
+        var key = "TESTKEY123";
+        var salt = "TESTSALT456";
+
+        var origKey = Environment.GetEnvironmentVariable("PAYMENT_KEY");
+        var origSalt = Environment.GetEnvironmentVariable("PAYMENT_SECRET");
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", key);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", salt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Easebuzz");
+
+            var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+            var httpClient = new HttpClient();
+            var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EasebuzzPaymentService>.Instance;
+            var easebuzzService = new EasebuzzPaymentService(httpClient, db, config, logger);
+            var controller = new SuperApp.API.Controllers.PaymentsController(easebuzzService, db, config);
+
+            var user = new User { Id = 92, FullName = "Tamper Tester", MobileNumber = "9876543212", Email = "tamper@test.com" };
+            db.Users.Add(user);
+            var payment = new Payment
+            {
+                UserId = 92,
+                Module = "FOOD",
+                OrderId = 921,
+                Amount = 500.00m,
+                PaymentMethod = "EASEBUZZ",
+                TransactionId = "txn-tamper-921",
+                Status = "PENDING",
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Payments.Add(payment);
+            await db.SaveChangesAsync();
+
+            // 1. Underpayment: stored is 500, callback tries 100
+            var underpayHash = EasebuzzHash.Reverse(
+                salt, "success", "", "", "", "", "", "", "", "", "", "",
+                "tamper@test.com", "Tamper Tester", "FOOD", "100.00", "txn-tamper-921", key);
+
+            var underpayDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-tamper-921",
+                ["status"] = "success",
+                ["amount"] = "100.00",
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "Tamper Tester",
+                ["email"] = "tamper@test.com",
+                ["key"] = key,
+                ["hash"] = underpayHash
+            };
+
+            var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(underpayDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext };
+
+            var underpayRes = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(underpayRes);
+
+            var paymentAfterUnderpay = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == "txn-tamper-921");
+            Assert.Equal("PENDING", paymentAfterUnderpay.Status); // Must NOT be PAID!
+
+            // 2. Missing amount
+            var missingAmtHash = EasebuzzHash.Reverse(
+                salt, "success", "", "", "", "", "", "", "", "", "", "",
+                "tamper@test.com", "Tamper Tester", "FOOD", "", "txn-tamper-921", key);
+
+            var missingAmtDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-tamper-921",
+                ["status"] = "success",
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "Tamper Tester",
+                ["email"] = "tamper@test.com",
+                ["key"] = key,
+                ["hash"] = missingAmtHash
+            };
+
+            var httpContext2 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext2.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext2.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(missingAmtDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext2 };
+
+            var missingAmtRes = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(missingAmtRes);
+
+            var paymentAfterMissing = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == "txn-tamper-921");
+            Assert.Equal("PENDING", paymentAfterMissing.Status); // Must NOT be PAID!
+
+            // 3. Foreign Currency != INR
+            var foreignCurrHash = EasebuzzHash.Reverse(
+                salt, "success", "", "", "", "", "", "", "", "", "", "",
+                "tamper@test.com", "Tamper Tester", "FOOD", "500.00", "txn-tamper-921", key);
+
+            var foreignCurrDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-tamper-921",
+                ["status"] = "success",
+                ["amount"] = "500.00",
+                ["currency"] = "USD",
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "Tamper Tester",
+                ["email"] = "tamper@test.com",
+                ["key"] = key,
+                ["hash"] = foreignCurrHash
+            };
+
+            var httpContext3 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext3.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext3.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(foreignCurrDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext3 };
+
+            var foreignCurrRes = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(foreignCurrRes);
+
+            var paymentAfterForeign = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == "txn-tamper-921");
+            Assert.Equal("PENDING", paymentAfterForeign.Status); // Must NOT be PAID!
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", origKey);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", origSalt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
+        }
+    }
 }
