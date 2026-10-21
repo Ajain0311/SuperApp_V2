@@ -61,7 +61,8 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   route,
   navigation,
 }) => {
-  const restaurantNumericId = Number(route.params?.restaurantId) || 1;
+  const parsedParamId = Number(route.params?.restaurantId);
+  const restaurantNumericId = Number.isInteger(parsedParamId) && parsedParamId > 0 ? parsedParamId : null;
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeItemForCustomization, setActiveItemForCustomization] = useState<FoodItemRow | null>(null);
@@ -86,6 +87,11 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   const cartRestaurantName = useCartStore((state) => state.restaurantName);
 
   const loadRestaurantData = () => {
+    if (!restaurantNumericId) {
+      setIsLoadingMenu(false);
+      setLoadError('Invalid restaurant specified.');
+      return;
+    }
     setIsLoadingMenu(true);
     setLoadError(null);
     apiClient
@@ -167,6 +173,14 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
 
   const handlePlaceOrder = async (couponCode?: string, paymentMethod: 'COD' | 'ONLINE' = 'COD') => {
     if (isPlacingOrder) return;
+    if (!restaurantNumericId) {
+      Alert.alert('Invalid Restaurant', 'Cannot place order for an invalid restaurant.');
+      return;
+    }
+    if (cartRestaurantId !== null && cartRestaurantId !== restaurantNumericId) {
+      Alert.alert('Restaurant Mismatch', 'Your cart contains items from a different restaurant. Please clear your cart or switch back to continue.');
+      return;
+    }
     if (cartItems.length === 0) {
       Alert.alert('Empty Cart', 'Please add items to your cart before proceeding to checkout.');
       return;
@@ -209,14 +223,21 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         try {
           const payRes = await apiClient.post<any>(ApiEndpoints.food.payOrder(orderNumericId), {});
           pay = payRes.data?.data || payRes.data;
-        } catch {
-          const created = await apiClient.post<any>(ApiEndpoints.common.paymentsCreate, {
-            amount: Number(data.grandTotal) || 1,
-            currency: 'INR',
-            receiptId: String(orderNumericId),
-            module: 'FOOD',
-          });
-          pay = created.data?.data || created.data;
+        } catch (payErr: any) {
+          // Only fallback if the dedicated endpoint is completely unavailable (404 / 501).
+          // Business rejections (400, 403, 409) must fail immediately without blindly retrying.
+          const status = payErr?.response?.status;
+          if (status === 404 || status === 501) {
+            const created = await apiClient.post<any>(ApiEndpoints.common.paymentsCreate, {
+              amount: Number(data.grandTotal) || 1,
+              currency: 'INR',
+              receiptId: String(orderNumericId),
+              module: 'FOOD',
+            });
+            pay = created.data?.data || created.data;
+          } else {
+            throw payErr;
+          }
         }
         if (!pay?.accessKey || !pay?.keyId) {
           throw new Error(pay?.errorMessage || pay?.message || 'Online payment could not be started. Check Easebuzz keys on the server.');
@@ -246,6 +267,10 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   };
 
   const confirmAndAddItem = (cartItem: CartItem) => {
+    if (!restaurantNumericId) {
+      Alert.alert('Invalid Restaurant', 'Cannot add items from an invalid restaurant.');
+      return;
+    }
     if (cartRestaurantId !== null && cartRestaurantId !== restaurantNumericId && cartItems.length > 0) {
       Alert.alert(
         'Replace Cart?',
@@ -345,11 +370,11 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
             {restaurantName}
           </Text>
           <Text style={styles.headerSubtitle} numberOfLines={1}>
-            Biryani • Hyderabadi • Andhra • Kebabs • ₹500 for two • 22m
+            {restaurantCuisines || 'Fresh & Delicious'}
           </Text>
         </View>
 
-        <RatingBadge rating={4.6} />
+        <RatingBadge rating={restaurantRating || 4.5} />
       </View>
 
       <View style={styles.contentContainer}>
@@ -487,6 +512,10 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
                             if (item.isCustomizable) {
                               setActiveItemForCustomization(item);
                             } else {
+                              if (qty >= 30) {
+                                Alert.alert('Limit Reached', 'Maximum quantity of 30 items reached for this dish.');
+                                return;
+                              }
                               updateQuantity(item.id, 1);
                             }
                           }}
