@@ -166,6 +166,22 @@ class SignalRService {
     return () => this.rideHubConnection?.off('FoodDeliveryAvailable', callback);
   }
 
+  onFoodDeliveryAccepted(callback: (data: any) => void): () => void {
+    if (!this.rideHubConnection) {
+      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+    }
+    this.rideHubConnection.on('FoodDeliveryAccepted', callback);
+    return () => this.rideHubConnection?.off('FoodDeliveryAccepted', callback);
+  }
+
+  onFoodDeliveryStatusChanged(callback: (data: any) => void): () => void {
+    if (!this.rideHubConnection) {
+      this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);
+    }
+    this.rideHubConnection.on('FoodDeliveryStatusChanged', callback);
+    return () => this.rideHubConnection?.off('FoodDeliveryStatusChanged', callback);
+  }
+
   onRideAcceptedByOther(callback: (data: any) => void): () => void {
     if (!this.rideHubConnection) {
       this.rideHubConnection = this.createConnection(AppEnvironment.rideHubUrl);

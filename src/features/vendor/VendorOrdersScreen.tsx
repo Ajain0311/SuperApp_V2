@@ -194,7 +194,14 @@ export const VendorOrdersScreen: React.FC = () => {
           )}
 
           {status === 'READY' && (
-            <Text style={[styles.btnText, { color: '#8B5CF6' }]}>Waiting for captain pickup</Text>
+            <Text style={[styles.btnText, { color: '#8B5CF6' }]}>
+              {item.driverId || item.driverName
+                ? `Captain assigned${item.driverName ? `: ${item.driverName}` : ''} — awaiting pickup`
+                : 'Waiting for captain pickup'}
+            </Text>
+          )}
+          {status === 'PICKED_UP' && (
+            <Text style={[styles.btnText, { color: '#10B981' }]}>Out for delivery</Text>
           )}
         </View>
       </View>

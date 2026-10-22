@@ -24,6 +24,8 @@ export interface VendorOrderSummary {
   grandTotal: number;
   paymentMethod?: string;
   paymentStatus?: string;
+  driverId?: number | null;
+  driverName?: string | null;
   notes?: string;
   estimatedDeliveryMinutes?: number;
   createdAt: string;

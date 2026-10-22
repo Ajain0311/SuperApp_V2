@@ -57,7 +57,7 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
     if (s === 'PENDING' || s === 'CONFIRMED') return 0;
     if (s === 'ACCEPTED' || s === 'PREPARING') return 1;
     if (s === 'READY' || s === 'READYFORPICKUP') return 2;
-    if (s === 'OUT_FOR_DELIVERY' || s === 'PICKEDUP' || s === 'ONTHEWAY') return 3;
+    if (s === 'OUT_FOR_DELIVERY' || s === 'PICKED_UP' || s === 'PICKEDUP' || s === 'ONTHEWAY') return 3;
     if (s === 'DELIVERED' || s === 'COMPLETED') return 4;
     return 0;
   };
@@ -68,7 +68,7 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
     if (s === 'ACCEPTED') return 'Restaurant Confirmed Your Order';
     if (s === 'PREPARING') return 'Chef is Cooking Your Fresh Meal';
     if (s === 'READY') return 'Order Packed & Ready for Pickup';
-    if (s === 'OUT_FOR_DELIVERY') return 'Driver Out for Delivery to Your Door';
+    if (s === 'OUT_FOR_DELIVERY' || s === 'PICKED_UP' || s === 'PICKEDUP') return 'Driver Out for Delivery to Your Door';
     if (s === 'DELIVERED') return 'Order Delivered! Enjoy Your Food';
     if (s === 'CANCELLED') return 'Order Cancelled';
     return 'Processing Your Order';

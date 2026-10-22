@@ -217,6 +217,7 @@ public class VendorController : ControllerBase
             .Include(o => o.Items)
             .Include(o => o.Restaurant)
             .Include(o => o.Address)
+            .Include(o => o.Driver).ThenInclude(d => d!.User)
             .Where(o => targetIds.Contains(o.RestaurantId))
             .AsQueryable();
 
@@ -245,6 +246,8 @@ public class VendorController : ControllerBase
                 GrandTotal = o.GrandTotal,
                 PaymentMethod = o.PaymentMethod,
                 PaymentStatus = o.PaymentStatus,
+                DriverId = o.DriverId,
+                DriverName = o.Driver != null && o.Driver.User != null ? o.Driver.User.FullName : null,
                 Notes = o.Notes,
                 EstimatedDeliveryMinutes = o.EstimatedDeliveryMinutes,
                 CreatedAt = o.CreatedAt,
