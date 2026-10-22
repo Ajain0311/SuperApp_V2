@@ -13,8 +13,11 @@ var currentDir = Directory.GetCurrentDirectory();
 var envCandidates = new[]
 {
     Path.Combine(currentDir, ".env"),
+    // Production publish layout: WorkingDirectory=/opt/SuperApp_V2/dist, .env lives one level up.
+    Path.Combine(currentDir, "..", ".env"),
     Path.Combine(currentDir, "..", "..", ".env"),
     Path.Combine(AppContext.BaseDirectory, ".env"),
+    Path.Combine(AppContext.BaseDirectory, "..", ".env"),
     Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".env")
 };
 foreach (var envPath in envCandidates)
