@@ -38,6 +38,7 @@ if (canUseNativeMap) {
 }
 import { spacing } from '../../theme/spacing';
 import { MainTabParamList } from '../../navigation/types';
+import { shadowStyle } from '../../utils/platformStyles';
 
 export const DriverHomeScreen: React.FC = () => {
 
@@ -1653,11 +1654,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
+    ...shadowStyle({ offsetY: 2, opacity: 0.3, radius: 3, elevation: 4 }),
   },
   pinTriangle: {
     width: 0,
@@ -1692,11 +1689,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
+    ...shadowStyle({ offsetY: 2, opacity: 0.4, radius: 4, elevation: 5 }),
   },
   captainMarkerAura: {
     position: 'absolute',

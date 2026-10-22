@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { useAuthStore } from '../../store/authStore';
+import { shadowStyle } from '../../utils/platformStyles';
 
 interface PhoneEntryScreenProps {
   navigation: any;
@@ -278,11 +279,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FF6B35',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
+    ...shadowStyle({
+      color: '#FF6B35',
+      offsetY: 8,
+      opacity: 0.35,
+      radius: 16,
+      elevation: 8,
+    }),
     marginBottom: 14,
   },
   appPill: {
@@ -356,11 +359,13 @@ const styles = StyleSheet.create({
     padding: 22,
     borderWidth: 1,
     borderColor: '#2A2D3E',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 6,
+    ...shadowStyle({
+      color: '#000000',
+      offsetY: 10,
+      opacity: 0.3,
+      radius: 20,
+      elevation: 6,
+    }),
     marginBottom: 24,
   },
   cardTitle: {

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
 import { useAuthStore } from '../../store/authStore';
+import { shadowStyle, USE_NATIVE_DRIVER } from '../../utils/platformStyles';
 
 interface SplashScreenProps {
   navigation: any;
@@ -20,13 +21,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 1200,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         friction: 5,
         tension: 40,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
 
@@ -88,11 +89,13 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 12,
+    ...shadowStyle({
+      color: AppColors.primary,
+      offsetY: 10,
+      opacity: 0.4,
+      radius: 20,
+      elevation: 12,
+    }),
     marginBottom: 24,
   },
   appName: {

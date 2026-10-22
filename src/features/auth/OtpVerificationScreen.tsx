@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppConstants } from '../../constants/app';
 import { useAuthStore } from '../../store/authStore';
+import { shadowStyle, USE_NATIVE_DRIVER } from '../../utils/platformStyles';
 
 interface OtpVerificationScreenProps {
   route: {
@@ -77,12 +78,12 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 400,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 400,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
   }, [fadeAnim, slideAnim]);
@@ -519,7 +520,13 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: '#141829', borderRadius: 24, padding: 22,
     borderWidth: 1, borderColor: '#2A2D3E',
-    shadowColor: '#000000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 6,
+    ...shadowStyle({
+      color: '#000000',
+      offsetY: 10,
+      opacity: 0.3,
+      radius: 20,
+      elevation: 6,
+    }),
   },
   inputCard: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#0A0E21',
@@ -549,7 +556,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   otpBoxFilled: { borderColor: '#FF6B35', backgroundColor: '#120f1e' },
-  otpBoxFocused: { borderColor: '#FF6B35', shadowColor: '#FF6B35', shadowOpacity: 0.3, shadowRadius: 4, elevation: 2 },
+  otpBoxFocused: {
+    borderColor: '#FF6B35',
+    ...shadowStyle({ color: '#FF6B35', opacity: 0.3, radius: 4, elevation: 2 }),
+  },
   otpBoxError: { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.1)' },
   otpBoxText: {
     color: '#94A3B8',
