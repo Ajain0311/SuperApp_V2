@@ -47,14 +47,18 @@ export const DriverHomeScreen: React.FC = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [activeRide, setActiveRide] = useState<any | null>(null);
   const [availableRides, setAvailableRides] = useState<DriverRideItem[]>([]);
+  const [activeFoodOrder, setActiveFoodOrder] = useState<any | null>(null);
+  const [availableFoodOrders, setAvailableFoodOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isTogglingDuty, setIsTogglingDuty] = useState(false);
   const [startOtpInput, setStartOtpInput] = useState('');
   const [isStartingRide, setIsStartingRide] = useState(false);
+  const [isFoodActionLoading, setIsFoodActionLoading] = useState(false);
   const [captainCoords, setCaptainCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const locationWatcherRef = useRef<(() => void) | null>(null);
   const alertedRideIdsRef = useRef<Set<number>>(new Set());
+  const alertedFoodOrderIdsRef = useRef<Set<number>>(new Set());
   const cameraRef = useRef<any>(null);
 
   const tokenReady = mapboxService.isConfigured();
@@ -79,13 +83,17 @@ export const DriverHomeScreen: React.FC = () => {
       setProfile(p);
       setIsOnline(p.isOnline);
 
-      const [active, available] = await Promise.all([
+      const [active, available, activeFood, availableFood] = await Promise.all([
         driverService.getActiveRide(),
         p.isOnline ? driverService.getAvailableRides() : Promise.resolve([]),
+        driverService.getActiveFoodOrder().catch(() => null),
+        p.isOnline ? driverService.getAvailableFoodOrders().catch(() => []) : Promise.resolve([]),
       ]);
 
       setActiveRide(active);
       setAvailableRides(available);
+      setActiveFoodOrder(activeFood);
+      setAvailableFoodOrders(Array.isArray(availableFood) ? availableFood : []);
     } catch (e: any) {
       console.warn('[DriverHome] Error loading driver data:', e.message);
     } finally {
@@ -279,13 +287,16 @@ export const DriverHomeScreen: React.FC = () => {
   }, [route.params?.focusRideId]);
 
 
-  // Real-time SignalR driver pool and active ride tracking
+  // Real-time SignalR driver pool and active ride/food tracking
   useEffect(() => {
     let unregisterStatus: (() => void) | null = null;
     let unregisterRequested: (() => void) | null = null;
     let unregisterAcceptedByOther: (() => void) | null = null;
     let unregisterCancelled: (() => void) | null = null;
     let unregisterExpired: (() => void) | null = null;
+    let unregisterFoodAvailable: (() => void) | null = null;
+    let unregisterFoodAccepted: (() => void) | null = null;
+    let unregisterFoodStatus: (() => void) | null = null;
 
     const setupSignalR = async () => {
       try {
@@ -337,7 +348,7 @@ export const DriverHomeScreen: React.FC = () => {
               return [mapped, ...prev];
             });
 
-            if (isOnline && !activeRide) {
+            if (isOnline && !activeRide && !activeFoodOrder) {
               Alert.alert(
                 '🔔 New Ride Request Available!',
                 `Ride #${incoming.rideNumber}\nPickup: ${incoming.pickupAddress}\nEstimated Fare: ₹${incoming.fare || incoming.estimatedFare}`,
@@ -382,6 +393,57 @@ export const DriverHomeScreen: React.FC = () => {
               }
             }
           });
+
+          unregisterFoodAvailable = signalRService.onFoodDeliveryAvailable((incoming: any) => {
+            if (!incoming?.orderId) return;
+            const orderId = Number(incoming.orderId);
+            if (!Number.isFinite(orderId)) return;
+
+            setAvailableFoodOrders((prev) => {
+              if (prev.some((o) => o.id === orderId)) return prev;
+              return [
+                {
+                  id: orderId,
+                  orderNumber: incoming.orderNumber,
+                  restaurantId: incoming.restaurantId,
+                  restaurantName: incoming.restaurantName || 'Restaurant',
+                  grandTotal: incoming.grandTotal,
+                  status: incoming.status || 'READY',
+                },
+                ...prev,
+              ];
+            });
+
+            if (isOnline && !activeRide && !activeFoodOrder && !alertedFoodOrderIdsRef.current.has(orderId)) {
+              alertedFoodOrderIdsRef.current.add(orderId);
+              Alert.alert(
+                '🍔 Food ready for pickup',
+                `Order #${incoming.orderNumber || orderId}\n${incoming.restaurantName || 'Restaurant'}\n₹${incoming.grandTotal ?? ''}`,
+                [
+                  { text: 'Ignore', style: 'cancel' },
+                  { text: 'Accept Delivery', onPress: () => handleAcceptFoodOrder(orderId) },
+                ]
+              );
+            }
+          });
+
+          unregisterFoodAccepted = signalRService.onFoodDeliveryAccepted((data: any) => {
+            if (!data?.orderId) return;
+            const orderId = Number(data.orderId);
+            alertedFoodOrderIdsRef.current.add(orderId);
+            setAvailableFoodOrders((prev) => prev.filter((o) => o.id !== orderId));
+          });
+
+          unregisterFoodStatus = signalRService.onFoodDeliveryStatusChanged((data: any) => {
+            if (!data?.orderId || !activeFoodOrder) return;
+            if (Number(data.orderId) !== Number(activeFoodOrder.id)) return;
+            if (data.status === 'DELIVERED' || data.status === 'CANCELLED') {
+              setActiveFoodOrder(null);
+              loadDriverData();
+              return;
+            }
+            setActiveFoodOrder((prev: any) => (prev ? { ...prev, status: data.status } : prev));
+          });
         }
       } catch (err) {
         console.warn('[DriverHome] SignalR setup warning:', err);
@@ -396,8 +458,11 @@ export const DriverHomeScreen: React.FC = () => {
       if (unregisterAcceptedByOther) unregisterAcceptedByOther();
       if (unregisterCancelled) unregisterCancelled();
       if (unregisterExpired) unregisterExpired();
+      if (unregisterFoodAvailable) unregisterFoodAvailable();
+      if (unregisterFoodAccepted) unregisterFoodAccepted();
+      if (unregisterFoodStatus) unregisterFoodStatus();
     };
-  }, [activeRide?.id, isOnline, loadDriverData]);
+  }, [activeRide?.id, activeFoodOrder?.id, isOnline, loadDriverData]);
 
   // Foreground GPS tracking only when Online and has an active trip
   useEffect(() => {
@@ -460,10 +525,15 @@ export const DriverHomeScreen: React.FC = () => {
       const updatedStatus = await driverService.toggleOnline(val);
       setIsOnline(updatedStatus);
       if (updatedStatus) {
-        const available = await driverService.getAvailableRides();
+        const [available, availableFood] = await Promise.all([
+          driverService.getAvailableRides(),
+          driverService.getAvailableFoodOrders().catch(() => []),
+        ]);
         setAvailableRides(available);
+        setAvailableFoodOrders(Array.isArray(availableFood) ? availableFood : []);
       } else {
         setAvailableRides([]);
+        setAvailableFoodOrders([]);
       }
     } catch (e: any) {
       Alert.alert('Duty Toggle Failed', e.message || 'Could not update online status');
@@ -474,6 +544,10 @@ export const DriverHomeScreen: React.FC = () => {
   };
 
   const handleAcceptRide = async (rideId: number) => {
+    if (activeFoodOrder) {
+      Alert.alert('Food delivery in progress', 'Finish the current food delivery before accepting a ride.');
+      return;
+    }
     try {
       const updatedRide = await driverService.acceptRide(rideId);
       setActiveRide(updatedRide);
@@ -486,6 +560,61 @@ export const DriverHomeScreen: React.FC = () => {
         e.message || 'This ride has already been accepted by another driver.'
       );
       loadDriverData();
+    }
+  };
+
+  const handleAcceptFoodOrder = async (orderId: number) => {
+    if (activeRide) {
+      Alert.alert('Ride in progress', 'Finish the current ride before accepting a food delivery.');
+      return;
+    }
+    if (activeFoodOrder) {
+      Alert.alert('Food delivery in progress', 'Finish the current food delivery before accepting another.');
+      return;
+    }
+    setIsFoodActionLoading(true);
+    try {
+      const accepted = await driverService.acceptFoodOrder(orderId);
+      setActiveFoodOrder(accepted);
+      setAvailableFoodOrders((prev) => prev.filter((o) => o.id !== orderId));
+      Alert.alert('Food delivery accepted', `Order #${accepted?.orderNumber || orderId} assigned to you. Go pick up from restaurant.`);
+    } catch (e: any) {
+      setAvailableFoodOrders((prev) => prev.filter((o) => o.id !== orderId));
+      Alert.alert('Food Unavailable', e.message || 'This food delivery was already taken by another captain.');
+      loadDriverData();
+    } finally {
+      setIsFoodActionLoading(false);
+    }
+  };
+
+  const handlePickupFoodOrder = async () => {
+    if (!activeFoodOrder?.id) return;
+    setIsFoodActionLoading(true);
+    try {
+      await driverService.pickupFoodOrder(activeFoodOrder.id);
+      setActiveFoodOrder({ ...activeFoodOrder, status: 'PICKED_UP' });
+      Alert.alert('Picked up', 'Head to the customer delivery address.');
+    } catch (e: any) {
+      Alert.alert('Pickup failed', e.message || 'Could not mark order as picked up.');
+      loadDriverData();
+    } finally {
+      setIsFoodActionLoading(false);
+    }
+  };
+
+  const handleDeliverFoodOrder = async () => {
+    if (!activeFoodOrder?.id) return;
+    setIsFoodActionLoading(true);
+    try {
+      await driverService.deliverFoodOrder(activeFoodOrder.id);
+      Alert.alert('Delivered', `Order #${activeFoodOrder.orderNumber || activeFoodOrder.id} completed.`);
+      setActiveFoodOrder(null);
+      loadDriverData();
+    } catch (e: any) {
+      Alert.alert('Delivery failed', e.message || 'Could not mark order as delivered.');
+      loadDriverData();
+    } finally {
+      setIsFoodActionLoading(false);
     }
   };
 
@@ -884,13 +1013,116 @@ export const DriverHomeScreen: React.FC = () => {
             <Ionicons name="cloud-offline-outline" size={22} color="#F59E0B" />
             <View style={styles.offlineBannerText}>
               <Text style={styles.offlineTitle}>You are currently OFFLINE</Text>
-              <Text style={styles.offlineSubtitle}>Switch duty to Online above to receive incoming passenger trip requests.</Text>
+              <Text style={styles.offlineSubtitle}>Switch duty to Online above to receive ride and food delivery requests.</Text>
             </View>
           </View>
         )}
 
+        {/* Active food delivery (accepted / picked up) */}
+        {activeFoodOrder && (
+          <View style={styles.activeFoodCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Active Food Delivery</Text>
+              <View style={[styles.countBadge, { backgroundColor: '#F97316' }]}>
+                <Text style={styles.countBadgeText}>{activeFoodOrder.status || 'READY'}</Text>
+              </View>
+            </View>
+            <Text style={styles.foodOrderNumber}>#{activeFoodOrder.orderNumber || activeFoodOrder.id}</Text>
+            <Text style={styles.foodRestaurant}>{activeFoodOrder.restaurantName || 'Restaurant'}</Text>
+            {!!activeFoodOrder.restaurantAddress && (
+              <Text style={styles.foodMeta} numberOfLines={2}>Pickup: {activeFoodOrder.restaurantAddress}</Text>
+            )}
+            {!!activeFoodOrder.deliveryAddress && (
+              <Text style={styles.foodMeta} numberOfLines={2}>Drop: {activeFoodOrder.deliveryAddress}</Text>
+            )}
+            <Text style={styles.foodFare}>₹{activeFoodOrder.grandTotal ?? activeFoodOrder.subTotal ?? '—'}</Text>
+
+            {(activeFoodOrder.status === 'READY' || !activeFoodOrder.status) && (
+              <TouchableOpacity
+                style={[styles.acceptBtn, styles.foodPickupBtn]}
+                activeOpacity={0.8}
+                disabled={isFoodActionLoading}
+                onPress={handlePickupFoodOrder}
+              >
+                {isFoodActionLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="bag-check" size={18} color="#FFFFFF" />
+                    <Text style={styles.acceptBtnText}>MARK PICKED UP</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {activeFoodOrder.status === 'PICKED_UP' && (
+              <TouchableOpacity
+                style={[styles.acceptBtn, styles.foodDeliverBtn]}
+                activeOpacity={0.8}
+                disabled={isFoodActionLoading}
+                onPress={handleDeliverFoodOrder}
+              >
+                {isFoodActionLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+                    <Text style={styles.acceptBtnText}>MARK DELIVERED</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Available food deliveries waiting for captain */}
+        {isOnline && !activeRide && !activeFoodOrder && (
+          <View style={styles.availableSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Food Ready for Pickup</Text>
+              <View style={[styles.countBadge, { backgroundColor: '#F97316' }]}>
+                <Text style={styles.countBadgeText}>{availableFoodOrders.length}</Text>
+              </View>
+            </View>
+
+            {availableFoodOrders.length === 0 ? (
+              <View style={styles.emptyRequestsCard}>
+                <Text style={styles.emptyRequestsTitle}>No food pickups waiting</Text>
+                <Text style={styles.emptyRequestsSubtitle}>
+                  When a restaurant marks an order READY, it will appear here for captain accept.
+                </Text>
+              </View>
+            ) : (
+              availableFoodOrders.map((order) => (
+                <View key={order.id} style={styles.requestCard}>
+                  <View style={styles.requestCardHeader}>
+                    <View style={styles.passengerRow}>
+                      <Ionicons name="restaurant" size={22} color="#F97316" />
+                      <Text style={styles.passengerName}>{order.restaurantName || 'Restaurant'}</Text>
+                    </View>
+                    <Text style={styles.fareTag}>₹{order.grandTotal ?? '—'}</Text>
+                  </View>
+                  <Text style={styles.foodMeta}>Order #{order.orderNumber || order.id}</Text>
+                  {!!order.deliveryAddress && (
+                    <Text style={styles.routeAddress} numberOfLines={2}>{order.deliveryAddress}</Text>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.acceptBtn, styles.foodAcceptBtn]}
+                    activeOpacity={0.8}
+                    disabled={isFoodActionLoading}
+                    onPress={() => handleAcceptFoodOrder(order.id)}
+                  >
+                    <Ionicons name="bicycle" size={18} color="#FFFFFF" />
+                    <Text style={styles.acceptBtnText}>ACCEPT FOOD DELIVERY</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
         {/* Live Available Trip Requests */}
-        {isOnline && !activeRide && (
+        {isOnline && !activeRide && !activeFoodOrder && (
           <View style={styles.availableSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Available Trips Near You</Text>
@@ -1507,5 +1739,46 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 6,
     marginTop: spacing.sm,
+  },
+  activeFoodCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F9731640',
+  },
+  foodOrderNumber: {
+    ...typography.h4,
+    color: colors.textPrimary,
+    marginTop: spacing.xs,
+  },
+  foodRestaurant: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  foodMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  foodFare: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#F97316',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  foodAcceptBtn: {
+    backgroundColor: '#F97316',
+    marginTop: spacing.sm,
+  },
+  foodPickupBtn: {
+    backgroundColor: '#EA580C',
+  },
+  foodDeliverBtn: {
+    backgroundColor: '#16A34A',
   },
 });
