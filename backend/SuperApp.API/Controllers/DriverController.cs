@@ -53,49 +53,7 @@ public class DriverController : ControllerBase
         var driver = await _db.Drivers
             .Include(d => d.Vehicles)
             .Include(d => d.User)
-            .FirstOrDefaultAsync(d => d.UserId == userId && d.IsActive);
-
-        // If user has driver or admin role but no driver record exists yet, auto-provision
-        if (driver == null && (isDriver || isAdmin))
-        {
-            var user = await _db.Users.FindAsync(userId);
-            if (user != null)
-            {
-                driver = new Driver
-                {
-                    UserId = user.Id,
-                    LicenseNumber = "DL-TEST-" + user.MobileNumber.Substring(Math.Max(0, user.MobileNumber.Length - 4)),
-                    IsVerified = true,
-                    IsOnline = true,
-                    Rating = 4.85m,
-                    TotalRides = 15,
-                    IsActive = true,
-                    CurrentLatitude = 28.6315m,
-                    CurrentLongitude = 77.2167m,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.Drivers.Add(driver);
-                await _db.SaveChangesAsync();
-
-                // Add default vehicle
-                var vehicle = new Vehicle
-                {
-                    DriverId = driver.Id,
-                    Type = VehicleTypes.Bike,
-                    Make = "Hero",
-                    Model = "Splendor Plus",
-                    RegistrationNumber = "DL 04 AB " + new Random().Next(1000, 9999),
-                    Color = "Black",
-                    Year = 2024,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                };
-                _db.Vehicles.Add(vehicle);
-                await _db.SaveChangesAsync();
-
-                driver.Vehicles.Add(vehicle);
-            }
-        }
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.IsActive && d.IsVerified);
 
         return driver;
     }
@@ -168,7 +126,43 @@ public class DriverController : ControllerBase
         if (!driver.IsOnline)
             return Ok(ApiResponse<List<DriverRideSummaryDto>>.Ok(new List<DriverRideSummaryDto>(), "Go online to see available rides"));
 
-        var cutoff = DateTime.UtcNow.AddMinutes(-5);
+        var now = DateTime.UtcNow;
+        var cutoff = now.AddMinutes(-5);
+
+        // Transition any stale unaccepted rides (Requested or Searching) to Expired
+        var staleRides = await _db.Rides
+            .Where(r => (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching)
+                     && r.DriverId == null
+                     && r.CreatedAt < cutoff)
+            .Take(50)
+            .ToListAsync();
+
+        if (staleRides.Any())
+        {
+            foreach (var stale in staleRides)
+            {
+                stale.Status = RideStatus.Expired;
+                stale.UpdatedAt = now;
+            }
+            await _db.SaveChangesAsync();
+
+            foreach (var stale in staleRides)
+            {
+                await _hub.Clients.Group($"ride-{stale.Id}").SendAsync("RideStatusChanged", new
+                {
+                    rideId = stale.Id,
+                    status = RideStatus.Expired,
+                    reason = "No driver accepted within 5 minutes.",
+                    updatedAt = now
+                });
+                await _hub.Clients.Group("drivers-pool").SendAsync("RideExpired", new
+                {
+                    rideId = stale.Id,
+                    status = RideStatus.Expired
+                });
+            }
+        }
+
         var rides = await _db.Rides
             .Include(r => r.User)
             .Where(r => (r.Status == RideStatus.Requested || r.Status == RideStatus.Searching) 
@@ -187,7 +181,7 @@ public class DriverController : ControllerBase
                 CreatedAt = r.CreatedAt,
                 CustomerName = r.User.FullName ?? "Passenger",
                 CustomerPhone = r.User.MobileNumber,
-                OtpCode = r.OtpCode,
+                OtpCode = null, // Protected: Passenger only until pickup
                 PickupLatitude = r.PickupLatitude,
                 PickupLongitude = r.PickupLongitude,
                 DropoffLatitude = r.DropoffLatitude,
@@ -235,7 +229,7 @@ public class DriverController : ControllerBase
             EstimatedFare = ride.EstimatedFare,
             ActualFare = ride.ActualFare,
             Status = ride.Status,
-            OtpCode = ride.OtpCode,
+            OtpCode = null, // OTP remains passenger-confidential until passenger provides it
             PaymentMethod = ride.PaymentMethod,
             PaymentStatus = ride.PaymentStatus,
             CreatedAt = ride.CreatedAt,
@@ -267,6 +261,11 @@ public class DriverController : ControllerBase
         if (driver == null)
             return Forbid();
 
+        if (!driver.IsOnline)
+        {
+            return BadRequest(ApiResponse<RideDto>.Fail("You must be ONLINE to accept a ride."));
+        }
+
         var gate = RideAcceptLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync();
         try
@@ -281,7 +280,7 @@ public class DriverController : ControllerBase
                 return Conflict(ApiResponse<RideDto>.Fail("This ride has been cancelled by the customer."));
             }
 
-            if (ride.Status == RideStatus.Expired || (ride.Status == RideStatus.Requested && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5)))
+            if (ride.Status == RideStatus.Expired || ((ride.Status == RideStatus.Requested || ride.Status == RideStatus.Searching) && ride.CreatedAt < DateTime.UtcNow.AddMinutes(-5)))
             {
                 if (ride.Status != RideStatus.Expired)
                 {
@@ -414,7 +413,7 @@ public class DriverController : ControllerBase
             DistanceKm = ride.DistanceKm,
             EstimatedFare = ride.EstimatedFare,
             Status = ride.Status,
-            OtpCode = ride.OtpCode,
+            OtpCode = null, // OTP remains passenger-confidential until passenger provides it
             PaymentMethod = ride.PaymentMethod,
             PaymentStatus = ride.PaymentStatus,
             CreatedAt = ride.CreatedAt,
@@ -484,10 +483,46 @@ public class DriverController : ControllerBase
         if (ride.OtpCode != request.OtpCode)
             return BadRequest(ApiResponse.Fail("Invalid ride OTP code"));
 
-        ride.Status = RideStatus.Started;
-        ride.StartedAt = DateTime.UtcNow;
-        ride.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        if (ride.Status == RideStatus.Cancelled)
+            return Conflict(ApiResponse.Fail("Cannot start a cancelled ride"));
+
+        if (ride.Status == RideStatus.Completed)
+            return Conflict(ApiResponse.Fail("Ride has already been completed"));
+
+        if (ride.Status == RideStatus.Expired)
+            return Conflict(ApiResponse.Fail("Cannot start an expired ride"));
+
+        if (ride.Status != RideStatus.Accepted && ride.Status != RideStatus.Arriving)
+            return Conflict(ApiResponse.Fail($"Cannot start ride with status '{ride.Status}'. Must be ACCEPTED or ARRIVING."));
+
+        var now = DateTime.UtcNow;
+        if (_db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            ride.Status = RideStatus.Started;
+            ride.StartedAt = now;
+            ride.UpdatedAt = now;
+            await _db.SaveChangesAsync();
+        }
+        else
+        {
+            var updatedRows = await _db.Rides
+                .Where(r => r.Id == ride.Id && r.DriverId == driver.Id && (r.Status == RideStatus.Accepted || r.Status == RideStatus.Arriving))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.Status, RideStatus.Started)
+                    .SetProperty(r => r.StartedAt, now)
+                    .SetProperty(r => r.UpdatedAt, now));
+
+            if (updatedRows == 0)
+            {
+                var refreshed = await _db.Rides.Where(r => r.Id == ride.Id).Select(r => r.Status).FirstOrDefaultAsync();
+                return Conflict(ApiResponse.Fail($"Cannot start ride. Current state is '{refreshed ?? "UNKNOWN"}'."));
+            }
+
+            ride.Status = RideStatus.Started;
+            ride.StartedAt = now;
+            ride.UpdatedAt = now;
+            _db.Entry(ride).Property(r => r.Status).IsModified = false;
+        }
 
         await _hub.Clients.Group($"ride-{ride.Id}").SendAsync("RideStatusChanged", new
         {
@@ -680,6 +715,16 @@ public class DriverController : ControllerBase
 
         if (request.RideId.HasValue)
         {
+            var activeRide = await _db.Rides.FirstOrDefaultAsync(r =>
+                r.Id == request.RideId.Value &&
+                r.DriverId == driver.Id &&
+                (r.Status == RideStatus.Accepted || r.Status == RideStatus.Arriving || r.Status == RideStatus.Started));
+
+            if (activeRide == null)
+            {
+                return BadRequest(ApiResponse.Fail("Specified ride does not belong to the authenticated driver or is not in an active state."));
+            }
+
             await _hub.Clients.Group($"ride-{request.RideId.Value}").SendAsync("DriverLocationUpdated", new
             {
                 rideId = request.RideId.Value,
@@ -845,7 +890,7 @@ public class DriverController : ControllerBase
                 CreatedAt = r.CreatedAt,
                 CustomerName = r.User.FullName ?? "Passenger",
                 CustomerPhone = r.User.MobileNumber,
-                OtpCode = r.OtpCode
+                OtpCode = null // OTP is single-use and not retained in trip history summaries
             })
             .ToListAsync();
 

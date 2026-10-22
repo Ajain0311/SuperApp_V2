@@ -70,12 +70,53 @@ public class FoodOrdersController : ControllerBase
             return BadRequest(ApiResponse<FoodOrderDto>.Fail("Invalid payment method. Supported methods: COD, ONLINE"));
         }
 
+        if (!request.AddressId.HasValue || request.AddressId.Value <= 0)
+        {
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Delivery address is required for placing a food order"));
+        }
+
+        var validatedAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
+        if (validatedAddress == null)
+        {
+            return NotFound(ApiResponse<FoodOrderDto>.Fail("Specified delivery address not found"));
+        }
+
+        if (!validatedAddress.IsActive)
+        {
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Specified delivery address is inactive"));
+        }
+
+        if (validatedAddress.UserId != userId.Value)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<FoodOrderDto>.Fail("Unauthorized: Delivery address belongs to another customer"));
+        }
+
+        if (string.IsNullOrWhiteSpace(validatedAddress.AddressLine1) || string.IsNullOrWhiteSpace(validatedAddress.City))
+        {
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Delivery address is incomplete (missing street line or city)"));
+        }
+
         var initialPaymentStatus = paymentMethod == "ONLINE" ? "PENDING_PAYMENT" : "PENDING";
         var orderItems = new List<FoodOrderItem>();
         decimal subTotal = 0;
 
+        // Enforce sensible limits on cart size
+        if (request.Items.Count > 50)
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Cart size exceeds maximum limit of 50 items"));
+
+        int totalQuantity = 0;
         foreach (var itemReq in request.Items)
         {
+            if (itemReq.Quantity <= 0)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Quantity for item #{itemReq.FoodItemId} must be at least 1"));
+
+            if (itemReq.Quantity > 30)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Quantity for item #{itemReq.FoodItemId} exceeds maximum limit of 30 per line item"));
+
+            totalQuantity += itemReq.Quantity;
+            if (totalQuantity > 100)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail("Total order item quantity exceeds maximum limit of 100"));
+
             var foodItem = await _db.FoodItems
                 .Include(f => f.Variants)
                 .Include(f => f.Addons)
@@ -94,18 +135,27 @@ public class FoodOrdersController : ControllerBase
             if (itemReq.VariantId.HasValue)
             {
                 var variant = foodItem.Variants.FirstOrDefault(v => v.Id == itemReq.VariantId.Value && v.IsActive);
-                if (variant != null)
+                if (variant == null)
                 {
-                    variantName = variant.Name;
-                    variantPrice = variant.AdditionalPrice;
+                    return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Variant #{itemReq.VariantId.Value} is invalid or inactive for item '{foodItem.Name}'"));
                 }
+                variantName = variant.Name;
+                variantPrice = variant.AdditionalPrice;
             }
 
             var selectedAddonNames = new List<string>();
             decimal addonsTotal = 0;
             if (itemReq.SelectedAddonIds != null && itemReq.SelectedAddonIds.Any())
             {
-                var addons = foodItem.Addons.Where(a => itemReq.SelectedAddonIds.Contains(a.Id) && a.IsActive).ToList();
+                // De-duplicate add-on IDs to prevent duplicate billing
+                var distinctAddonIds = itemReq.SelectedAddonIds.Distinct().ToList();
+                var addons = foodItem.Addons.Where(a => distinctAddonIds.Contains(a.Id) && a.IsActive).ToList();
+
+                if (addons.Count != distinctAddonIds.Count)
+                {
+                    return BadRequest(ApiResponse<FoodOrderDto>.Fail($"One or more selected add-ons are invalid or inactive for item '{foodItem.Name}'"));
+                }
+
                 foreach (var addon in addons)
                 {
                     selectedAddonNames.Add($"{addon.Name} (+₹{addon.Price:F0})");
@@ -113,7 +163,11 @@ public class FoodOrdersController : ControllerBase
                 }
             }
 
-            var lineItemPrice = ((unitPrice + variantPrice + addonsTotal) * itemReq.Quantity);
+            var itemCostPerUnit = unitPrice + variantPrice + addonsTotal;
+            if (itemCostPerUnit < 0)
+                return BadRequest(ApiResponse<FoodOrderDto>.Fail($"Invalid unit cost for item '{foodItem.Name}'"));
+
+            var lineItemPrice = (itemCostPerUnit * itemReq.Quantity);
             subTotal += lineItemPrice;
 
             orderItems.Add(new FoodOrderItem
@@ -195,16 +249,21 @@ public class FoodOrdersController : ControllerBase
         }
         catch { }
 
-        Address? deliveryAddress = null;
-        if (request.AddressId.HasValue)
+        var orderDto = MapToOrderDto(order, restaurant, validatedAddress);
+
+        // Real-time notification to all active restaurant kitchen staff:
+        // Only dispatch immediately if COD or already PAID. Unpaid online orders await verified payment callback.
+        if (order.PaymentMethod == "COD" || order.PaymentStatus == "PAID")
         {
-            deliveryAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
+            try
+            {
+                await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
+            }
+            catch
+            {
+                // Non-critical notification failure must not rollback or fail a confirmed order
+            }
         }
-
-        var orderDto = MapToOrderDto(order, restaurant, deliveryAddress);
-
-        // Real-time notification to all active restaurant kitchen staff
-        await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", orderDto);
 
         return Ok(ApiResponse<FoodOrderDto>.Ok(orderDto));
     }
@@ -292,6 +351,36 @@ public class FoodOrdersController : ControllerBase
         if (order.Status != OrderStatus.Pending && order.Status != OrderStatus.Accepted)
             return BadRequest(ApiResponse.Fail("Order cannot be cancelled once it is being prepared or delivered"));
 
+        // If an online payment is already settled, initiate refund and mark order accordingly
+        if (string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+        {
+            var paidPayment = await _db.Payments
+                .Where(p => p.OrderId == order.Id && p.Module == "FOOD" && p.Status == "PAID")
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (paidPayment != null && !string.IsNullOrWhiteSpace(paidPayment.TransactionId) && _payments != null)
+            {
+                var refundResult = await _payments.RefundPaymentAsync(paidPayment.TransactionId, order.GrandTotal, "Order cancelled by customer");
+                if (refundResult.Success)
+                {
+                    order.PaymentStatus = "REFUNDED";
+                }
+                else
+                {
+                    order.PaymentStatus = "REFUND_PENDING";
+                }
+            }
+            else
+            {
+                order.PaymentStatus = "REFUND_PENDING";
+            }
+        }
+        else
+        {
+            order.PaymentStatus = "CANCELLED";
+        }
+
         order.Status = OrderStatus.Cancelled;
         order.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -333,14 +422,14 @@ public class FoodOrdersController : ControllerBase
         return Ok(ApiResponse<PaymentOrderResult>.Ok(result, "Complete payment in Easebuzz. The order is paid only after verification."));
     }
 
-    private static FoodOrderDto MapToOrderDto(FoodOrder o, Restaurant restaurant, Address? address = null, User? user = null)
+    public static FoodOrderDto MapToOrderDto(FoodOrder o, Restaurant restaurant, Address? address = null, User? user = null)
     {
         var restPhone = !string.IsNullOrWhiteSpace(restaurant?.Phone) 
             ? restaurant.Phone 
-            : "+91 98450 12345";
+            : null;
         var restAddr = !string.IsNullOrWhiteSpace(restaurant?.AddressLine) 
-            ? $"{restaurant.AddressLine}, {restaurant.City}" 
-            : restaurant?.City ?? "Central Delhi";
+            ? (!string.IsNullOrWhiteSpace(restaurant?.City) ? $"{restaurant.AddressLine}, {restaurant.City}" : restaurant.AddressLine)
+            : (!string.IsNullOrWhiteSpace(restaurant?.City) ? restaurant.City : null);
         var deliveryAddr = address != null 
             ? $"{address.AddressLine1}, {address.City} ({address.PinCode})" 
             : null;

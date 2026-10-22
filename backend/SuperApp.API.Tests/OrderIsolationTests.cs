@@ -282,6 +282,8 @@ public class OrderIsolationTests
         db.Users.Add(customer);
         db.Restaurants.Add(restaurant);
         db.FoodItems.Add(item);
+        var addr = new Address { Id = 501, UserId = customer.Id, AddressLine1 = "Flat 101, Test Street", City = "Jaipur", PinCode = "302001", IsActive = true };
+        db.Addresses.Add(addr);
         // Map staff / owner
         db.RestaurantUsers.Add(new RestaurantUser { UserId = 51, RestaurantId = 5, IsActive = true });
         await db.SaveChangesAsync();
@@ -293,7 +295,7 @@ public class OrderIsolationTests
         var invalidReq = new PlaceFoodOrderRequest
         {
             RestaurantId = 5,
-            DeliveryAddress = "Flat 101, Test Street",
+            AddressId = 501, DeliveryAddress = "Flat 101, Test Street",
             PaymentMethod = "CRYPTO",
             Items = new List<OrderItemRequest> { new() { FoodItemId = 5, Quantity = 1 } }
         };
@@ -304,7 +306,7 @@ public class OrderIsolationTests
         var codReq = new PlaceFoodOrderRequest
         {
             RestaurantId = 5,
-            DeliveryAddress = "Flat 101, Test Street",
+            AddressId = 501, DeliveryAddress = "Flat 101, Test Street",
             PaymentMethod = "COD",
             Items = new List<OrderItemRequest> { new() { FoodItemId = 5, Quantity = 1 } }
         };
@@ -318,7 +320,7 @@ public class OrderIsolationTests
         var onlineReq = new PlaceFoodOrderRequest
         {
             RestaurantId = 5,
-            DeliveryAddress = "Flat 101, Test Street",
+            AddressId = 501, DeliveryAddress = "Flat 101, Test Street",
             PaymentMethod = "ONLINE",
             Items = new List<OrderItemRequest> { new() { FoodItemId = 5, Quantity = 1 } }
         };

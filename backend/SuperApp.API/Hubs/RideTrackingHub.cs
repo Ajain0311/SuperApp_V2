@@ -58,12 +58,29 @@ public class RideTrackingHub : Hub
 
     public async Task JoinDriversPool()
     {
+        var userId = GetUserId();
+        if (!userId.HasValue)
+        {
+            throw new HubException("Authentication required to join drivers pool");
+        }
+
         var isDriver = Context.User?.IsInRole(RoleNames.Driver) ?? false;
         var isAdmin = Context.User?.IsInRole(RoleNames.Admin) ?? false;
 
         if (!isDriver && !isAdmin)
         {
             throw new HubException("Unauthorized: Only registered captains can join the drivers pool");
+        }
+
+        if (!isAdmin)
+        {
+            var isVerifiedActiveDriver = await _db.Drivers
+                .AnyAsync(d => d.UserId == userId.Value && d.IsActive && d.IsVerified);
+
+            if (!isVerifiedActiveDriver)
+            {
+                throw new HubException("Unauthorized: Driver record must be active and verified by admin to join drivers pool");
+            }
         }
 
         await Groups.AddToGroupAsync(Context.ConnectionId, "drivers-pool");
@@ -117,18 +134,45 @@ public class RideTrackingHub : Hub
             .Include(r => r.Driver)
             .FirstOrDefaultAsync(r => r.Id == rideId);
 
-        var isAdmin = Context.User?.IsInRole(RoleNames.Admin) ?? false;
-
-        // Allow update if caller is assigned driver or ride passenger or Admin
-        if (ride == null || (ride.UserId != userId.Value && ride.Driver?.UserId != userId.Value && !isAdmin))
+        if (ride == null)
         {
-            throw new HubException("Unauthorized to change status for this ride");
+            throw new HubException("Ride not found");
+        }
+
+        var isAdmin = Context.User?.IsInRole(RoleNames.Admin) ?? false;
+        var isPassenger = ride.UserId == userId.Value;
+        var isAssignedDriver = ride.Driver != null && ride.Driver.UserId == userId.Value;
+
+        if (!isAdmin && !isPassenger && !isAssignedDriver)
+        {
+            throw new HubException("Unauthorized: Only authorized participants or admins can modify ride tracking status");
+        }
+
+        var normalized = (status ?? "").Trim().ToUpperInvariant();
+        if (normalized != RideStatus.Requested &&
+            normalized != RideStatus.Searching &&
+            normalized != RideStatus.Assigned &&
+            normalized != RideStatus.Accepted &&
+            normalized != RideStatus.Arriving &&
+            normalized != RideStatus.Started &&
+            normalized != RideStatus.Completed &&
+            normalized != RideStatus.Cancelled &&
+            normalized != RideStatus.Expired)
+        {
+            throw new HubException($"Invalid ride status '{status}'. Only authoritative RideStatus values are permitted.");
+        }
+
+        // Only allow broadcast if status matches the authoritative persisted ride status in DB
+        // or caller is Admin executing an authorized administrative state sync
+        if (!isAdmin && !string.Equals(ride.Status, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new HubException($"State transition mismatch. Ride status is server-owned (current DB status: '{ride.Status}'). Use dedicated REST endpoints to transition ride states.");
         }
 
         await Clients.Group($"ride-{rideId}").SendAsync("RideStatusChanged", new
         {
             rideId,
-            status,
+            status = ride.Status,
             updatedAt = DateTime.UtcNow
         });
     }

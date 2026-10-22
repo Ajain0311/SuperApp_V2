@@ -45,7 +45,7 @@ public class CancellationStateTests
         var db = Db();
         var user = new User { Id = 1, MobileNumber = "9000000001", FullName = "Rider" };
         var driverUser = new User { Id = 2, MobileNumber = "9000000002", FullName = "Driver" };
-        var driver = new Driver { Id = 1, UserId = 2, CurrentLatitude = 0, CurrentLongitude = 0 };
+        var driver = new Driver { Id = 1, UserId = 2, IsActive = true, IsVerified = true, CurrentLatitude = 0, CurrentLongitude = 0 };
         db.Users.AddRange(user, driverUser);
         db.Drivers.Add(driver);
 
@@ -80,7 +80,7 @@ public class CancellationStateTests
         var db = Db();
         var user = new User { Id = 1, MobileNumber = "9000000001", FullName = "Customer" };
         var captainUser = new User { Id = 2, MobileNumber = "9000000002", FullName = "Captain" };
-        var driver = new Driver { Id = 1, UserId = 2, CurrentLatitude = 0, CurrentLongitude = 0 };
+        var driver = new Driver { Id = 1, UserId = 2, IsActive = true, IsVerified = true, CurrentLatitude = 0, CurrentLongitude = 0 };
         db.Users.AddRange(user, captainUser);
         db.Drivers.Add(driver);
 

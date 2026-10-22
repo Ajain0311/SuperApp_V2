@@ -1,3 +1,5 @@
+using Moq;
+using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -46,8 +48,8 @@ public class FoodDeliveryAndPaymentTests
         var restaurant = new Restaurant { Id = 10, Name = "Test Kitchen", IsActive = true, City = "Indore" };
         db.Users.AddRange(customer, userA, userB, owner);
         db.Restaurants.Add(restaurant);
-        var a = new Driver { Id = 21, UserId = 2, IsActive = true, IsOnline = true, LicenseNumber = "A" };
-        var b = new Driver { Id = 22, UserId = 3, IsActive = true, IsOnline = true, LicenseNumber = "B" };
+        var a = new Driver { Id = 21, UserId = 2, IsActive = true, IsOnline = true, IsVerified = true, LicenseNumber = "A" };
+        var b = new Driver { Id = 22, UserId = 3, IsActive = true, IsOnline = true, IsVerified = true, LicenseNumber = "B" };
         db.Drivers.AddRange(a, b);
         var order = new FoodOrder
         {
@@ -664,5 +666,249 @@ public class FoodDeliveryAndPaymentTests
         Assert.False(result.IsVerified);
         Assert.Equal("FAILED", result.Status);
         Assert.Contains("not found", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FoodOrders_OnlineUnpaidOrder_DoesNotBroadcastToKitchen_UntilPaymentVerified()
+    {
+        var db = NewDb();
+        var hubMock = new Mock<IHubContext<OrderStatusHub>>();
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+
+        hubMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+
+        var restaurant = new Restaurant { Id = 77, Name = "Burger Place", IsActive = true, Latitude = 26.9m, Longitude = 75.8m };
+        var customer = new User { Id = 88, FullName = "Hungry User", MobileNumber = "9998887776", IsActive = true };
+        var item = new FoodItem { Id = 10, RestaurantId = 77, Name = "Cheeseburger", BasePrice = 150m, IsActive = true };
+        var address = new Address { Id = 22, UserId = 88, AddressLine1 = "Street 1", City = "Jaipur", PinCode = "302001", IsActive = true };
+
+        db.Restaurants.Add(restaurant);
+        db.Users.Add(customer);
+        db.FoodItems.Add(item);
+        db.Addresses.Add(address);
+        await db.SaveChangesAsync();
+
+        var ordersController = new FoodOrdersController(db, hubMock.Object);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        ordersController.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // 1. Placing online order: paymentStatus is PENDING_PAYMENT
+        var onlineReq = new PlaceFoodOrderRequest
+        {
+            RestaurantId = 77,
+            AddressId = 22,
+            PaymentMethod = "ONLINE",
+            Items = new List<OrderItemRequest> { new() { FoodItemId = 10, Quantity = 1 } }
+        };
+
+        var placeRes = await ordersController.PlaceOrder(onlineReq);
+        var okResult = Assert.IsType<OkObjectResult>(placeRes.Result);
+        var orderDto = Assert.IsType<ApiResponse<FoodOrderDto>>(okResult.Value).Data!;
+        Assert.Equal("PENDING_PAYMENT", orderDto.PaymentStatus);
+
+        // Verify kitchen did NOT receive broadcast while payment is unpaid
+        clientsMock.Verify(c => c.Group("restaurant-77"), Times.Never());
+
+        // 2. Complete payment via FoodPaymentSync with orderHub
+        var payment = new Payment
+        {
+            Id = 555,
+            UserId = customer.Id,
+            Module = "FOOD",
+            OrderId = orderDto.Id,
+            Amount = orderDto.GrandTotal,
+            TransactionId = "txn-online-77",
+            Status = "PAID",
+            PaymentMethod = "UPI",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        await FoodPaymentSync.ApplyAsync(db, "txn-online-77", true, hubMock.Object);
+
+        // Verify kitchen DID receive broadcast after payment is verified as PAID
+        clientsMock.Verify(c => c.Group("restaurant-77"), Times.Once());
+    }
+
+    [Fact]
+    public async Task FoodOrders_MissingOrInvalidAddress_ReturnsBadRequest()
+    {
+        var db = NewDb();
+        var hubMock = new Mock<IHubContext<OrderStatusHub>>();
+        var restaurant = new Restaurant { Id = 78, Name = "Pizza Place", IsActive = true };
+        var customer = new User { Id = 89, FullName = "Customer", MobileNumber = "9998887775", IsActive = true };
+        var item = new FoodItem { Id = 11, RestaurantId = 78, Name = "Pizza", BasePrice = 200m, IsActive = true };
+
+        db.Restaurants.Add(restaurant);
+        db.Users.Add(customer);
+        db.FoodItems.Add(item);
+        await db.SaveChangesAsync();
+
+        var ordersController = new FoodOrdersController(db, hubMock.Object);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        ordersController.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // Missing address ID
+        var req = new PlaceFoodOrderRequest
+        {
+            RestaurantId = 78,
+            AddressId = null,
+            PaymentMethod = "COD",
+            Items = new List<OrderItemRequest> { new() { FoodItemId = 11, Quantity = 1 } }
+        };
+
+        var res = await ordersController.PlaceOrder(req);
+        var badReq = Assert.IsType<BadRequestObjectResult>(res.Result);
+        var apiRes = Assert.IsType<ApiResponse<FoodOrderDto>>(badReq.Value);
+        Assert.False(apiRes.Success);
+        Assert.Contains("Delivery address is required", apiRes.Message);
+    }
+
+    [Fact]
+    public async Task EasebuzzWebhook_AmountMismatch_OrMissingAmount_FailsClosed()
+    {
+        var db = NewDb();
+        var key = "TESTKEY123";
+        var salt = "TESTSALT456";
+
+        var origKey = Environment.GetEnvironmentVariable("PAYMENT_KEY");
+        var origSalt = Environment.GetEnvironmentVariable("PAYMENT_SECRET");
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", key);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", salt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Easebuzz");
+
+            var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+            var httpClient = new HttpClient();
+            var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EasebuzzPaymentService>.Instance;
+            var easebuzzService = new EasebuzzPaymentService(httpClient, db, config, logger);
+            var controller = new SuperApp.API.Controllers.PaymentsController(easebuzzService, db, config);
+
+            var user = new User { Id = 92, FullName = "Tamper Tester", MobileNumber = "9876543212", Email = "tamper@test.com" };
+            db.Users.Add(user);
+            var payment = new Payment
+            {
+                UserId = 92,
+                Module = "FOOD",
+                OrderId = 921,
+                Amount = 500.00m,
+                PaymentMethod = "EASEBUZZ",
+                TransactionId = "txn-tamper-921",
+                Status = "PENDING",
+                CreatedAt = DateTime.UtcNow
+            };
+            db.Payments.Add(payment);
+            await db.SaveChangesAsync();
+
+            // 1. Underpayment: stored is 500, callback tries 100
+            var underpayHash = EasebuzzHash.Reverse(
+                salt, "success", "", "", "", "", "", "", "", "", "", "",
+                "tamper@test.com", "Tamper Tester", "FOOD", "100.00", "txn-tamper-921", key);
+
+            var underpayDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-tamper-921",
+                ["status"] = "success",
+                ["amount"] = "100.00",
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "Tamper Tester",
+                ["email"] = "tamper@test.com",
+                ["key"] = key,
+                ["hash"] = underpayHash
+            };
+
+            var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(underpayDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext };
+
+            var underpayRes = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(underpayRes);
+
+            var paymentAfterUnderpay = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == "txn-tamper-921");
+            Assert.Equal("PENDING", paymentAfterUnderpay.Status); // Must NOT be PAID!
+
+            // 2. Missing amount
+            var missingAmtHash = EasebuzzHash.Reverse(
+                salt, "success", "", "", "", "", "", "", "", "", "", "",
+                "tamper@test.com", "Tamper Tester", "FOOD", "", "txn-tamper-921", key);
+
+            var missingAmtDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-tamper-921",
+                ["status"] = "success",
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "Tamper Tester",
+                ["email"] = "tamper@test.com",
+                ["key"] = key,
+                ["hash"] = missingAmtHash
+            };
+
+            var httpContext2 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext2.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext2.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(missingAmtDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext2 };
+
+            var missingAmtRes = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(missingAmtRes);
+
+            var paymentAfterMissing = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == "txn-tamper-921");
+            Assert.Equal("PENDING", paymentAfterMissing.Status); // Must NOT be PAID!
+
+            // 3. Foreign Currency != INR
+            var foreignCurrHash = EasebuzzHash.Reverse(
+                salt, "success", "", "", "", "", "", "", "", "", "", "",
+                "tamper@test.com", "Tamper Tester", "FOOD", "500.00", "txn-tamper-921", key);
+
+            var foreignCurrDict = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
+            {
+                ["txnid"] = "txn-tamper-921",
+                ["status"] = "success",
+                ["amount"] = "500.00",
+                ["currency"] = "USD",
+                ["productinfo"] = "FOOD",
+                ["firstname"] = "Tamper Tester",
+                ["email"] = "tamper@test.com",
+                ["key"] = key,
+                ["hash"] = foreignCurrHash
+            };
+
+            var httpContext3 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            httpContext3.Request.ContentType = "application/x-www-form-urlencoded";
+            httpContext3.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(foreignCurrDict);
+            controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = httpContext3 };
+
+            var foreignCurrRes = await controller.Webhook();
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(foreignCurrRes);
+
+            var paymentAfterForeign = await db.Payments.AsNoTracking().SingleAsync(p => p.TransactionId == "txn-tamper-921");
+            Assert.Equal("PENDING", paymentAfterForeign.Status); // Must NOT be PAID!
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", origKey);
+            Environment.SetEnvironmentVariable("PAYMENT_SECRET", origSalt);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
+        }
     }
 }

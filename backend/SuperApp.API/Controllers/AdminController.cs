@@ -230,10 +230,11 @@ public class AdminController : ControllerBase
                         _db.UserRoles.Remove(existingRole);
                         if (role.Name == RoleNames.RestaurantOwner)
                         {
-                            var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
-                            if (restMapping != null)
+                            var restMappings = await _db.RestaurantUsers.Where(ru => ru.UserId == user.Id).ToListAsync();
+                            foreach (var rm in restMappings)
                             {
-                                restMapping.IsActive = false;
+                                rm.IsActive = false;
+                                // rm updated
                             }
                         }
                         if (role.Name == RoleNames.Admin)
@@ -294,30 +295,32 @@ public class AdminController : ControllerBase
                     // Provision RestaurantUser mapping if assigning RESTAURANT_OWNER
                     if (role.Name == RoleNames.RestaurantOwner)
                     {
-                        var targetRestId = request.RestaurantId;
-                        if (!targetRestId.HasValue || targetRestId.Value <= 0)
+                        if (!request.RestaurantId.HasValue || request.RestaurantId.Value <= 0)
                         {
-                            targetRestId = await _db.Restaurants.Where(r => r.IsActive).Select(r => r.Id).FirstOrDefaultAsync();
+                            return BadRequest(ApiResponse.Fail("Explicit and valid RestaurantId is required when assigning RESTAURANT_OWNER role."));
                         }
 
-                        if (targetRestId.HasValue && targetRestId.Value > 0)
+                        var targetRestaurant = await _db.Restaurants.FirstOrDefaultAsync(r => r.Id == request.RestaurantId.Value && r.IsActive);
+                        if (targetRestaurant == null)
                         {
-                            var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id);
-                            if (restMapping == null)
+                            return BadRequest(ApiResponse.Fail("Specified restaurant does not exist or is inactive."));
+                        }
+
+                        var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id && ru.RestaurantId == targetRestaurant.Id);
+                        if (restMapping == null)
+                        {
+                            _db.RestaurantUsers.Add(new RestaurantUser
                             {
-                                _db.RestaurantUsers.Add(new RestaurantUser
-                                {
-                                    UserId = user.Id,
-                                    RestaurantId = targetRestId.Value,
-                                    IsActive = true,
-                                    CreatedAt = DateTime.UtcNow
-                                });
-                            }
-                            else
-                            {
-                                restMapping.RestaurantId = targetRestId.Value;
-                                restMapping.IsActive = true;
-                            }
+                                UserId = user.Id,
+                                RestaurantId = targetRestaurant.Id,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                        else
+                        {
+                            restMapping.IsActive = true;
+                            // restMapping updated
                         }
                     }
 
@@ -520,35 +523,7 @@ public class AdminController : ControllerBase
                 _db.Restaurants.Add(newRest);
                 await _db.SaveChangesAsync();
 
-                if (!string.IsNullOrWhiteSpace(newRest.Phone))
-                {
-                    var cleanPhone = PunjabGovSmsService.NormalizeMobileNumber(newRest.Phone);
-                    var matchedUser = await _db.Users
-                        .Include(u => u.UserRoles)
-                        .FirstOrDefaultAsync(u => u.MobileNumber == newRest.Phone || u.MobileNumber == cleanPhone);
 
-                    if (matchedUser != null)
-                    {
-                        var ownerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.RestaurantOwner);
-                        if (ownerRole != null && !matchedUser.UserRoles.Any(ur => ur.RoleId == ownerRole.Id))
-                        {
-                            _db.UserRoles.Add(new UserRole { UserId = matchedUser.Id, RoleId = ownerRole.Id, CreatedAt = DateTime.UtcNow });
-                        }
-
-                        var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == matchedUser.Id && ru.RestaurantId == newRest.Id);
-                        if (restMapping == null)
-                        {
-                            _db.RestaurantUsers.Add(new RestaurantUser
-                            {
-                                UserId = matchedUser.Id,
-                                RestaurantId = newRest.Id,
-                                IsActive = true,
-                                CreatedAt = DateTime.UtcNow
-                            });
-                        }
-                        await _db.SaveChangesAsync();
-                    }
-                }
 
                 return Ok(ApiResponse<Restaurant>.Ok(newRest, "Restaurant added successfully"));
 

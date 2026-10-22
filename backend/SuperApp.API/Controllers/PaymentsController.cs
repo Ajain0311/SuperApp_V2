@@ -17,11 +17,18 @@ public class PaymentsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
 
-    public PaymentsController(IPaymentService paymentService, AppDbContext db, IConfiguration configuration)
+    private readonly Microsoft.AspNetCore.SignalR.IHubContext<SuperApp.API.Hubs.OrderStatusHub>? _orderHub;
+
+    public PaymentsController(
+        IPaymentService paymentService,
+        AppDbContext db,
+        IConfiguration configuration,
+        Microsoft.AspNetCore.SignalR.IHubContext<SuperApp.API.Hubs.OrderStatusHub>? orderHub = null)
     {
         _paymentService = paymentService;
         _db = db;
         _configuration = configuration;
+        _orderHub = orderHub;
     }
 
     private long? GetCurrentUserId()
@@ -96,6 +103,14 @@ public class PaymentsController : ControllerBase
             {
                 return Forbid();
             }
+            if (string.Equals(foodOrder.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Cancelled food orders cannot be paid"));
+            }
+            if (string.Equals(foodOrder.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(ApiResponse<PaymentOrderResult>.Fail("Food order is already paid"));
+            }
             authoritativeAmount = foodOrder.GrandTotal;
         }
         else if (string.Equals(request.Module, "RIDE", StringComparison.OrdinalIgnoreCase) && long.TryParse(request.ReceiptId, out var rideId))
@@ -108,6 +123,14 @@ public class PaymentsController : ControllerBase
             if (ride.UserId != userId && !User.IsInRole(RoleNames.Admin))
             {
                 return Forbid();
+            }
+            if (string.Equals(ride.Status, RideStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Cancelled rides cannot be paid"));
+            }
+            if (string.Equals(ride.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict(ApiResponse<PaymentOrderResult>.Fail("Ride is already paid"));
             }
             authoritativeAmount = ride.ActualFare ?? ride.EstimatedFare;
         }
@@ -160,9 +183,9 @@ public class PaymentsController : ControllerBase
             request.PaymentSignature);
 
         if (result.IsVerified)
-            await FoodPaymentSync.ApplyAsync(_db, result.TransactionId, true);
+            await FoodPaymentSync.ApplyAsync(_db, result.TransactionId, true, _orderHub);
         else
-            await FoodPaymentSync.ApplyAsync(_db, request.TransactionId, false);
+            await FoodPaymentSync.ApplyAsync(_db, request.TransactionId, false, _orderHub);
 
         return Ok(ApiResponse<PaymentVerificationResult>.Ok(result));
     }
@@ -208,7 +231,7 @@ public class PaymentsController : ControllerBase
 
         if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
-            await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, true);
+            await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, true, _orderHub);
             return Ok(ApiResponse<PaymentVerificationResult>.Ok(new PaymentVerificationResult
             {
                 IsVerified = true,
@@ -221,7 +244,7 @@ public class PaymentsController : ControllerBase
         payment.Status = request.Success ? "PAID" : "FAILED";
         payment.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, request.Success);
+        await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, request.Success, _orderHub);
 
         var result = new PaymentVerificationResult
         {
@@ -323,7 +346,7 @@ setTimeout(function(){{ window.close(); }}, 1200);
             return;
         if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
-            await FoodPaymentSync.ApplyAsync(_db, txnid, true);
+            await FoodPaymentSync.ApplyAsync(_db, txnid, true, _orderHub);
             return;
         }
 
@@ -333,17 +356,24 @@ setTimeout(function(){{ window.close(); }}, 1200);
             if (!hashVerified)
                 return;
 
-            // Enforce amount parity if gateway provides amount
-            if (fields != null && (fields.TryGetValue("amount", out var amtStr) || fields.TryGetValue("net_amount_debit", out amtStr)))
+            // Enforce required amount and parity on live success callback
+            if (fields == null)
+                return;
+
+            if (!fields.TryGetValue("amount", out var amtStr) && !fields.TryGetValue("net_amount_debit", out amtStr))
+                return; // Amount is mandatory on success callbacks
+
+            if (string.IsNullOrWhiteSpace(amtStr) || !decimal.TryParse(amtStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var callbackAmount))
+                return; // Malformed amount
+
+            if (Math.Abs(callbackAmount - payment.Amount) > 0.01m)
+                return; // Amount mismatch! Fail closed to prevent underpayment spoofing
+
+            // Enforce currency is INR if currency field is present
+            if (fields.TryGetValue("currency", out var currStr) && !string.IsNullOrWhiteSpace(currStr))
             {
-                if (decimal.TryParse(amtStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var callbackAmount))
-                {
-                    if (Math.Abs(callbackAmount - payment.Amount) > 0.01m)
-                    {
-                        // Amount mismatch! Fail closed to prevent underpayment spoofing.
-                        return;
-                    }
-                }
+                if (!string.Equals(currStr.Trim(), "INR", StringComparison.OrdinalIgnoreCase))
+                    return; // Currency mismatch
             }
 
             payment.Status = "PAID";
@@ -363,7 +393,7 @@ setTimeout(function(){{ window.close(); }}, 1200);
 
         payment.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        await FoodPaymentSync.ApplyAsync(_db, txnid, payment.Status == "PAID");
+        await FoodPaymentSync.ApplyAsync(_db, txnid, payment.Status == "PAID", _orderHub);
     }
 
     [Authorize]

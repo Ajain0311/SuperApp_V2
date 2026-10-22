@@ -263,8 +263,8 @@ public class CaptainPushNotificationTests
         var passenger = new User { Id = 222, MobileNumber = "9876500222", FullName = "Passenger" };
         db.Users.AddRange(driverUser1, driverUser2, passenger);
 
-        var driver1 = new Driver { Id = 11, UserId = driverUser1.Id, IsOnline = true, IsActive = true };
-        var driver2 = new Driver { Id = 12, UserId = driverUser2.Id, IsOnline = true, IsActive = true };
+        var driver1 = new Driver { Id = 11, UserId = driverUser1.Id, IsOnline = true, IsActive = true, IsVerified = true };
+        var driver2 = new Driver { Id = 12, UserId = driverUser2.Id, IsOnline = true, IsActive = true, IsVerified = true };
         db.Drivers.AddRange(driver1, driver2);
 
         var ride = new Ride
@@ -403,7 +403,7 @@ public class CaptainPushNotificationTests
         var customerUser = new User { Id = 502, FullName = "Customer One" };
         db.Users.AddRange(driverUser, customerUser);
 
-        var driver = new Driver { Id = 51, UserId = driverUser.Id, IsOnline = true, IsActive = true };
+        var driver = new Driver { Id = 51, UserId = driverUser.Id, IsOnline = true, IsActive = true, IsVerified = true };
         db.Drivers.Add(driver);
 
         var ride = new Ride
@@ -460,7 +460,7 @@ public class CaptainPushNotificationTests
         var customerUser = new User { Id = 602, FullName = "Customer Two" };
         db.Users.AddRange(driverUser, customerUser);
 
-        var driver = new Driver { Id = 61, UserId = driverUser.Id, IsOnline = true, IsActive = true };
+        var driver = new Driver { Id = 61, UserId = driverUser.Id, IsOnline = true, IsActive = true, IsVerified = true };
         db.Drivers.Add(driver);
 
         var ride = new Ride
@@ -574,5 +574,375 @@ public class CaptainPushNotificationTests
             Assert.Equal(RideStatus.Expired, sweptRide!.Status);
             Assert.Equal(RideStatus.Requested, freshRide!.Status);
         }
+    }
+
+    [Fact]
+    public async Task Test_12_OrderStatusHub_JoinOrder_Throws_WhenCallerNotAuthorized()
+    {
+        var db = CreateDb();
+        var customer = new User { Id = 801, MobileNumber = "9876500801", FullName = "Customer 801" };
+        var intruder = new User { Id = 802, MobileNumber = "9876500802", FullName = "Intruder 802" };
+        var restaurant = new Restaurant { Id = 801, Name = "Bazaar Kitchen", IsActive = true };
+        db.Users.AddRange(customer, intruder);
+        db.Restaurants.Add(restaurant);
+
+        var order = new FoodOrder
+        {
+            Id = 8801,
+            OrderNumber = "FO-TEST-HUB-AUTH-01",
+            UserId = customer.Id,
+            RestaurantId = restaurant.Id,
+            Status = OrderStatus.Pending
+        };
+        db.FoodOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var hub = new OrderStatusHub(db);
+        var hubCallerContextMock = new Mock<HubCallerContext>();
+        hubCallerContextMock.Setup(c => c.ConnectionId).Returns("conn-intruder");
+        hubCallerContextMock.Setup(c => c.User).Returns(new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, intruder.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth")));
+        hub.Context = hubCallerContextMock.Object;
+
+        var ex = await Assert.ThrowsAsync<HubException>(() => hub.JoinOrder(order.Id));
+        Assert.Contains("Unauthorized", ex.Message);
+    }
+
+    [Fact]
+    public async Task Test_13_OrderStatusHub_JoinRestaurantKitchen_Throws_WhenCallerNotMappedStaff()
+    {
+        var db = CreateDb();
+        var outsider = new User { Id = 803, MobileNumber = "9876500803", FullName = "Outsider 803" };
+        var restaurant = new Restaurant { Id = 802, Name = "Dosa Corner", IsActive = true };
+        db.Users.Add(outsider);
+        db.Restaurants.Add(restaurant);
+        await db.SaveChangesAsync();
+
+        var hub = new OrderStatusHub(db);
+        var hubCallerContextMock = new Mock<HubCallerContext>();
+        hubCallerContextMock.Setup(c => c.ConnectionId).Returns("conn-outsider");
+        hubCallerContextMock.Setup(c => c.User).Returns(new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, outsider.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth")));
+        hub.Context = hubCallerContextMock.Object;
+
+        var ex = await Assert.ThrowsAsync<HubException>(() => hub.JoinRestaurantKitchen(restaurant.Id));
+        Assert.Contains("Unauthorized", ex.Message);
+    }
+
+
+    [Fact]
+    public async Task CancelOrder_WhenOrderAlreadyPaid_MarksOrderRefunded()
+    {
+        var db = CreateDb();
+        var customer = new User { Id = 901, MobileNumber = "9876500901", FullName = "Customer 901" };
+        var restaurant = new Restaurant { Id = 901, Name = "Cafe 901", IsActive = true };
+        db.Users.Add(customer);
+        db.Restaurants.Add(restaurant);
+
+        var order = new FoodOrder
+        {
+            Id = 9901,
+            OrderNumber = "FO-REFUND-01",
+            UserId = customer.Id,
+            RestaurantId = restaurant.Id,
+            PaymentMethod = "ONLINE",
+            PaymentStatus = "PAID",
+            Status = OrderStatus.Pending,
+            GrandTotal = 350.00m
+        };
+        db.FoodOrders.Add(order);
+
+        var payment = new Payment
+        {
+            Id = 9901,
+            UserId = customer.Id,
+            Module = "FOOD",
+            OrderId = order.Id,
+            Amount = 350.00m,
+            PaymentMethod = "UPI",
+            TransactionId = "txn-refund-9901",
+            Status = "PAID"
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        var origProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER"); Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", "Mock"); var mockPaymentService = new MockPaymentService(db); Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", origProvider);
+        var hubMock = new Mock<IHubContext<OrderStatusHub>>();
+        var controller = new FoodOrdersController(db, hubMock.Object, mockPaymentService);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var result = await controller.CancelOrder(order.Id);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        var updatedOrder = await db.FoodOrders.FindAsync(order.Id);
+        Assert.NotNull(updatedOrder);
+        Assert.Equal(OrderStatus.Cancelled, updatedOrder.Status);
+        Assert.Equal("REFUNDED", updatedOrder.PaymentStatus);
+    }
+
+    [Fact]
+    public async Task FoodPaymentSync_LatePaidCallbackOnCancelledOrder_SetsRefundDue()
+    {
+        var db = CreateDb();
+        var order = new FoodOrder
+        {
+            Id = 9902,
+            OrderNumber = "FO-LATE-02",
+            UserId = 902,
+            RestaurantId = 902,
+            PaymentMethod = "ONLINE",
+            PaymentStatus = "CANCELLED",
+            Status = OrderStatus.Cancelled,
+            GrandTotal = 200.00m
+        };
+        db.FoodOrders.Add(order);
+
+        var payment = new Payment
+        {
+            Id = 9902,
+            UserId = 902,
+            Module = "FOOD",
+            OrderId = order.Id,
+            Amount = 200.00m,
+            PaymentMethod = "UPI",
+            TransactionId = "txn-late-9902",
+            Status = "PAID"
+        };
+        db.Payments.Add(payment);
+        await db.SaveChangesAsync();
+
+        await FoodPaymentSync.ApplyAsync(db, payment.TransactionId, true);
+
+        var updatedOrder = await db.FoodOrders.FindAsync(order.Id);
+        Assert.NotNull(updatedOrder);
+        Assert.Equal(OrderStatus.Cancelled, updatedOrder.Status);
+        Assert.Equal("REFUND_DUE", updatedOrder.PaymentStatus);
+    }
+
+    [Fact]
+    public async Task ManageUser_AssignRestaurantOwner_RequiresValidExplicitRestaurantId()
+    {
+        var db = CreateDb();
+        var admin = new User { Id = 1001, MobileNumber = "9876501001", FullName = "Admin 1001" };
+        var citizen = new User { Id = 1002, MobileNumber = "9876501002", FullName = "Citizen 1002" };
+        var roleOwner = new Role { Id = 101, Name = RoleNames.RestaurantOwner };
+        db.Users.AddRange(admin, citizen);
+        db.Roles.Add(roleOwner);
+        await db.SaveChangesAsync();
+
+        var controller = new AdminController(db);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, admin.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Admin)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        // 1. Omitted RestaurantId -> BadRequest
+        var res1 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "ROLE",
+            RoleName = RoleNames.RestaurantOwner
+        });
+        Assert.IsType<BadRequestObjectResult>(res1.Result);
+
+        // 2. Inactive or nonexistent RestaurantId -> BadRequest
+        var res2 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "ROLE",
+            RoleName = RoleNames.RestaurantOwner,
+            RestaurantId = 99999
+        });
+        Assert.IsType<BadRequestObjectResult>(res2.Result);
+
+        // 3. Active valid restaurant -> Success & provisions RestaurantUsers mapping
+        var rest = new Restaurant { Id = 501, Name = "Spicy Delight", IsActive = true };
+        db.Restaurants.Add(rest);
+        await db.SaveChangesAsync();
+
+        var res3 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "ROLE",
+            RoleName = RoleNames.RestaurantOwner,
+            RestaurantId = rest.Id
+        });
+        Assert.IsType<OkObjectResult>(res3.Result);
+
+        var mapping = await db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == citizen.Id && ru.RestaurantId == rest.Id);
+        Assert.NotNull(mapping);
+        Assert.True(mapping.IsActive);
+
+        // 4. REMOVE_ROLE -> Deactivates RestaurantUsers mappings consistently
+        var res4 = await controller.ManageUser(new AdminUserActionRequest
+        {
+            UserId = citizen.Id,
+            Action = "REMOVE_ROLE",
+            RoleName = RoleNames.RestaurantOwner
+        });
+        Assert.IsType<OkObjectResult>(res4.Result);
+
+        var freshMapping = await db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == citizen.Id && ru.RestaurantId == rest.Id);
+        Assert.NotNull(freshMapping);
+        Assert.False(freshMapping.IsActive);
+    }
+
+    [Fact]
+    public async Task Test_14_StartRide_WithInvalidOtp_ReturnsBadRequest()
+    {
+        var db = CreateDb();
+        var captainUser = new User { Id = 1101, MobileNumber = "9876501101", FullName = "Captain 1101" };
+        var passenger = new User { Id = 1102, MobileNumber = "9876501102", FullName = "Passenger 1102" };
+        var driver = new Driver { Id = 1101, UserId = captainUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(captainUser, passenger);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 7101,
+            RideNumber = "RD-OTP-01",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            Status = RideStatus.Accepted,
+            OtpCode = "4567",
+            PickupAddress = "Point A",
+            DropoffAddress = "Point B"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var fakeHub = new FakeHubContext();
+        var controller = new DriverController(db, fakeHub);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, captainUser.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Driver)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var wrongResult = await controller.StartRide(ride.Id, new VerifyRideOtpRequest { OtpCode = "0000" });
+        Assert.IsType<BadRequestObjectResult>(wrongResult.Result);
+
+        var correctResult = await controller.StartRide(ride.Id, new VerifyRideOtpRequest { OtpCode = "4567" });
+        Assert.IsType<OkObjectResult>(correctResult.Result);
+
+        var updatedRide = await db.Rides.FindAsync(ride.Id);
+        Assert.NotNull(updatedRide);
+        Assert.Equal(RideStatus.Started, updatedRide.Status);
+    }
+
+    [Fact]
+    public async Task Test_15_CompleteRide_BeforeStarted_IsRejected()
+    {
+        var db = CreateDb();
+        var captainUser = new User { Id = 1103, MobileNumber = "9876501103", FullName = "Captain 1103" };
+        var passenger = new User { Id = 1104, MobileNumber = "9876501104", FullName = "Passenger 1104" };
+        var driver = new Driver { Id = 1103, UserId = captainUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(captainUser, passenger);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 7102,
+            RideNumber = "RD-COMPL-02",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            Status = RideStatus.Accepted,
+            EstimatedFare = 150.00m,
+            PickupAddress = "Point X",
+            DropoffAddress = "Point Y"
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var fakeHub = new FakeHubContext();
+        var controller = new DriverController(db, fakeHub);
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, captainUser.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Driver)
+        }, "TestAuth");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+
+        var res = await controller.CompleteRide(ride.Id);
+        var badReq = Assert.IsType<BadRequestObjectResult>(res.Result);
+        var apiResp = Assert.IsType<ApiResponse>(badReq.Value);
+        Assert.False(apiResp.Success);
+        Assert.Contains("must be STARTED", apiResp.Message);
+    }
+
+    [Fact]
+    public async Task RideTrackingHub_UpdateRideStatus_RejectsArbitraryStatusAndMismatch()
+    {
+        var db = CreateDb();
+        var hub = new RideTrackingHub(db);
+
+        var passenger = new User { Id = 801, MobileNumber = "9876543201", FullName = "Passenger 801" };
+        var driverUser = new User { Id = 802, MobileNumber = "9876543202", FullName = "Driver 802" };
+        var driver = new Driver { Id = 44, UserId = driverUser.Id, IsOnline = true, IsVerified = true };
+        db.Users.AddRange(passenger, driverUser);
+        db.Drivers.Add(driver);
+
+        var ride = new Ride
+        {
+            Id = 888,
+            RideNumber = "RD-888",
+            UserId = passenger.Id,
+            DriverId = driver.Id,
+            VehicleType = "BIKE",
+            PickupAddress = "Origin",
+            DropoffAddress = "Destination",
+            EstimatedFare = 150,
+            Status = RideStatus.Accepted,
+            OtpCode = "4321",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Rides.Add(ride);
+        await db.SaveChangesAsync();
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, passenger.Id.ToString()),
+            new Claim(ClaimTypes.Role, RoleNames.Customer)
+        }, "TestAuth"));
+
+        var hubCallerContextMock = new Mock<HubCallerContext>();
+        hubCallerContextMock.Setup(c => c.User).Returns(httpContext.User);
+        hubCallerContextMock.Setup(c => c.ConnectionId).Returns("conn-888");
+        hub.Context = hubCallerContextMock.Object;
+
+        // 1. Arbitrary string rejected
+        var ex1 = await Assert.ThrowsAsync<HubException>(() => hub.UpdateRideStatus(888, "HACKED_CUSTOM_STATUS"));
+        Assert.Contains("Only authoritative RideStatus values are permitted", ex1.Message);
+
+        // 2. Mismatch with actual DB status rejected (calling STARTED when DB is ACCEPTED)
+        var ex2 = await Assert.ThrowsAsync<HubException>(() => hub.UpdateRideStatus(888, RideStatus.Started));
+        Assert.Contains("State transition mismatch", ex2.Message);
     }
 }
