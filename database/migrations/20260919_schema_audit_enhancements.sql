@@ -35,7 +35,7 @@ ALTER TABLE marketplace_listings ADD CONSTRAINT chk_marketplace_listings_status
 -- 2.2 Rides Status: Add 'SEARCHING' for driver dispatch pool state
 ALTER TABLE rides DROP CONSTRAINT IF EXISTS chk_rides_status;
 ALTER TABLE rides ADD CONSTRAINT chk_rides_status 
-    CHECK (status IN ('REQUESTED', 'SEARCHING', 'ASSIGNED', 'ACCEPTED', 'ARRIVING', 'STARTED', 'COMPLETED', 'CANCELLED'));
+    CHECK (status IN ('REQUESTED', 'SEARCHING', 'ASSIGNED', 'ACCEPTED', 'ARRIVING', 'STARTED', 'COMPLETED', 'CANCELLED', 'EXPIRED'));
 
 -- 2.3 Payments Module: Add 'MARKETPLACE', 'WALLET', 'GENERAL' for cross-module support
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS chk_payments_module;

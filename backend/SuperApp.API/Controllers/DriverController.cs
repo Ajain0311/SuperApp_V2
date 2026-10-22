@@ -144,22 +144,35 @@ public class DriverController : ControllerBase
                 stale.Status = RideStatus.Expired;
                 stale.UpdatedAt = now;
             }
-            await _db.SaveChangesAsync();
 
-            foreach (var stale in staleRides)
+            try
             {
-                await _hub.Clients.Group($"ride-{stale.Id}").SendAsync("RideStatusChanged", new
+                await _db.SaveChangesAsync();
+
+                foreach (var stale in staleRides)
                 {
-                    rideId = stale.Id,
-                    status = RideStatus.Expired,
-                    reason = "No driver accepted within 5 minutes.",
-                    updatedAt = now
-                });
-                await _hub.Clients.Group("drivers-pool").SendAsync("RideExpired", new
+                    await _hub.Clients.Group($"ride-{stale.Id}").SendAsync("RideStatusChanged", new
+                    {
+                        rideId = stale.Id,
+                        status = RideStatus.Expired,
+                        reason = "No driver accepted within 5 minutes.",
+                        updatedAt = now
+                    });
+                    await _hub.Clients.Group("drivers-pool").SendAsync("RideExpired", new
+                    {
+                        rideId = stale.Id,
+                        status = RideStatus.Expired
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                // Stale expiry must not 500 the available-rides poll (e.g. DB check constraint lag).
+                _logger?.LogError(ex, "[Driver] Failed to expire {Count} stale rides; continuing with available list", staleRides.Count);
+                foreach (var stale in staleRides)
                 {
-                    rideId = stale.Id,
-                    status = RideStatus.Expired
-                });
+                    _db.Entry(stale).State = EntityState.Detached;
+                }
             }
         }
 

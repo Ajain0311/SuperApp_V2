@@ -84,8 +84,16 @@ export const DriverHomeScreen: React.FC = () => {
       setIsOnline(p.isOnline);
 
       const [active, available, activeFood, availableFood] = await Promise.all([
-        driverService.getActiveRide(),
-        p.isOnline ? driverService.getAvailableRides() : Promise.resolve([]),
+        driverService.getActiveRide().catch((err) => {
+          console.warn('[DriverHome] active ride fetch failed:', err?.message || err);
+          return null;
+        }),
+        p.isOnline
+          ? driverService.getAvailableRides().catch((err) => {
+              console.warn('[DriverHome] available rides fetch failed:', err?.message || err);
+              return [];
+            })
+          : Promise.resolve([]),
         driverService.getActiveFoodOrder().catch((err) => {
           console.warn('[DriverHome] active food fetch failed:', err?.message || err);
           return null;
