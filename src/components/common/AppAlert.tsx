@@ -4,6 +4,7 @@ import { useAlertStore } from '../../store/alertStore';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
+import { shadowStyle } from '../../utils/platformStyles';
 
 export const AppAlert: React.FC = () => {
   const { isVisible, config, hideAlert } = useAlertStore();
@@ -97,11 +98,13 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...shadowStyle({
+      color: '#000',
+      offsetY: 4,
+      opacity: 0.3,
+      radius: 8,
+      elevation: 8,
+    }),
   },
   title: {
     ...typography.h3,

@@ -41,19 +41,21 @@ export default function App() {
       }
     }
 
-    // Request push notification permissions and register token on app startup
+    // Native push only — web skips expo-notifications (unsupported token listeners).
+    if (Platform.OS === 'web') {
+      return;
+    }
+
     notificationService.getExpoPushToken().then((token) => {
       if (token) {
         notificationService.registerDeviceTokenWithBackend(token);
       }
     });
 
-    // Handle foreground notifications
     const removeReceived = notificationService.addNotificationReceivedListener((notification) => {
       console.log('[Notification Received Foreground]', notification.request.content.title);
     });
 
-    // Handle user interaction / response with notification
     const removeResponse = notificationService.addNotificationResponseReceivedListener((response) => {
       if (navigationRef.isReady()) {
         notificationService.handleNotificationResponse(response, navigationRef as any);

@@ -56,6 +56,10 @@ export function isRunningInExpoGoClient(): boolean {
 }
 
 function resolveNotificationsModule(): typeof ExpoNotifications | null {
+  // expo-notifications push token listeners are unsupported on web and spam console warnings.
+  if (Platform.OS === 'web') {
+    return null;
+  }
   // Guard against fatal crash in Expo Go on Android (removed in SDK 53+)
   if (Platform.OS === 'android' && isRunningInExpoGoClient()) {
     console.warn(
@@ -187,6 +191,11 @@ export class NotificationService {
       return this.cachedPushToken;
     }
 
+    // Browser push via expo-notifications is incomplete; skip quietly on web.
+    if (Platform.OS === 'web') {
+      return null;
+    }
+
     if (Platform.OS === 'android' && isRunningInExpoGoClient()) {
       console.warn(
         '[NotificationService] Remote push notifications are disabled in Expo Go on Android (SDK 53+). ' +
@@ -205,7 +214,7 @@ export class NotificationService {
 
     const permission = await this.requestPermission();
     if (permission !== 'granted') {
-      console.warn('[NotificationService] Cannot retrieve push token: permission denied');
+      // Permission denied is expected after repeated browser/system denies — avoid noisy warn loops.
       return null;
     }
 

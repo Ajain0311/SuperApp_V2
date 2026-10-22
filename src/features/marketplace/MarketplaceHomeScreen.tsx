@@ -23,6 +23,7 @@ import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { absoluteImageUrl } from '../../services/documentService';
+import { shadowStyle } from '../../utils/platformStyles';
 
 const CATEGORIES: MarketplaceCategory[] = [
   { id: 0, name: 'All' },
@@ -611,11 +612,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 28,
     gap: 8,
-    elevation: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    ...shadowStyle({ offsetY: 4, opacity: 0.3, radius: 6, elevation: 6 }),
   },
   fabText: {
     ...typography.bodyMedium,

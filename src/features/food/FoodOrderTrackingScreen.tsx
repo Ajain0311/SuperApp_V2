@@ -19,6 +19,7 @@ import { RatingModal } from '../../components/RatingModal';
 import { signalRService, OrderStatusEvent } from '../../services/signalr';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { shadowStyle } from '../../utils/platformStyles';
 
 interface FoodOrderTrackingScreenProps {
   route: {
@@ -687,11 +688,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#EA580C',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    elevation: 6,
+    ...shadowStyle({
+      color: '#EA580C',
+      offsetY: 6,
+      opacity: 0.3,
+      radius: 18,
+      elevation: 6,
+    }),
   },
   etaIconCircle: {
     width: 52,
@@ -793,11 +796,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadowStyle({
+      color: '#059669',
+      offsetY: 2,
+      opacity: 0.2,
+      radius: 4,
+      elevation: 3,
+    }),
   },
   callOwnerButtonText: {
     color: '#FFFFFF',

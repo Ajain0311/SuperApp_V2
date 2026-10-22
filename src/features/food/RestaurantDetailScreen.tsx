@@ -25,6 +25,7 @@ import { CartItem, FoodItemVariant, FoodItemAddon } from '../../models/food';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { absoluteImageUrl } from '../../services/documentService';
+import { shadowStyle } from '../../utils/platformStyles';
 
 const DEFAULT_DISH_IMAGE = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600';
 
@@ -822,11 +823,13 @@ const styles = StyleSheet.create({
   },
   floatingCartTouch: {
     borderRadius: 16,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    elevation: 8,
+    ...shadowStyle({
+      color: AppColors.primary,
+      offsetY: 6,
+      opacity: 0.4,
+      radius: 18,
+      elevation: 8,
+    }),
   },
   floatingCartGradient: {
     borderRadius: 16,

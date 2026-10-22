@@ -26,6 +26,7 @@ import { RatingModal } from '../../components/RatingModal';
 import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
 import { locationService } from '../../services/locationService';
 import { mapboxService } from '../../services/mapboxService';
+import { shadowStyle } from '../../utils/platformStyles';
 
 const canUseNativeMap = Platform.OS === 'ios' || Platform.OS === 'android';
 let MapboxMaps: typeof import('@rnmapbox/maps') | null = null;
@@ -1302,11 +1303,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
+    ...shadowStyle({ offsetY: 2, opacity: 0.3, radius: 3, elevation: 4 }),
   },
   pinTriangle: {
     width: 0,
@@ -1334,11 +1331,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
+    ...shadowStyle({ offsetY: 2, opacity: 0.4, radius: 4, elevation: 5 }),
   },
   captainMarkerAura: {
     position: 'absolute',
