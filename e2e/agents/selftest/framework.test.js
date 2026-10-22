@@ -10,12 +10,19 @@ import { buildReport, summarize, toMarkdown, writeReports } from '../lib/reporte
 import { mapPool, mobileFor } from '../lib/utils.js';
 
 test('config example has placeholders and no live password', () => {
-  const config = loadConfig(path.join(import.meta.dirname, '..'));
-  assert.equal(config.baseUrl, 'http://localhost:80');
-  assert.ok(typeof config.admin.password === 'string');
-  const raw = fs.readFileSync(path.join(import.meta.dirname, '..', 'config.example.json'), 'utf8');
+  const agentsDir = path.join(import.meta.dirname, '..');
+  const examplePath = path.join(agentsDir, 'config.example.json');
+  const raw = fs.readFileSync(examplePath, 'utf8');
+  const example = JSON.parse(raw);
+  // Assert the committed example, not config.local.json (gitignored live overrides).
+  assert.equal(example.baseUrl, 'http://localhost:80');
+  assert.ok(typeof example.admin.password === 'string');
   assert.match(raw, /password/);
   assert.doesNotMatch(raw, /Adi@/);
+  // loadConfig still merges local overrides without throwing
+  const merged = loadConfig(agentsDir);
+  assert.ok(typeof merged.baseUrl === 'string' && merged.baseUrl.length > 0);
+  assert.ok(typeof merged.admin.password === 'string');
 });
 
 test('agent creation keeps independent clients', () => {
