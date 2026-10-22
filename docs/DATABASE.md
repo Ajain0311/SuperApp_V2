@@ -282,7 +282,7 @@ Ride dispatch, passenger OTP handshake, route telemetry, and fare records.
 - `estimated_fare` (`NUMERIC(10,2)`, NOT NULL)
 - `actual_fare` (`NUMERIC(10,2)`, NULL)
 - `status` (`VARCHAR(30)`, NOT NULL, DEFAULT 'REQUESTED')
-  - Valid: `'SEARCHING'`, `'REQUESTED'`, `'ASSIGNED'`, `'ACCEPTED'`, `'ARRIVING'`, `'STARTED'`, `'COMPLETED'`, `'CANCELLED'`
+  - Valid: `'SEARCHING'`, `'REQUESTED'`, `'ASSIGNED'`, `'ACCEPTED'`, `'ARRIVING'`, `'STARTED'`, `'COMPLETED'`, `'CANCELLED'`, `'EXPIRED'`
 - `otp_code` (`VARCHAR(10)`, NOT NULL)
 - `payment_method` (`VARCHAR(30)`, NOT NULL, DEFAULT 'CASH')
 - `payment_status` (`VARCHAR(30)`, NOT NULL, DEFAULT 'PENDING')
@@ -463,7 +463,7 @@ ALTER TABLE marketplace_listings ADD CONSTRAINT chk_marketplace_listings_status
 
 ALTER TABLE rides DROP CONSTRAINT IF EXISTS chk_rides_status;
 ALTER TABLE rides ADD CONSTRAINT chk_rides_status 
-  CHECK (status IN ('SEARCHING', 'REQUESTED', 'ASSIGNED', 'ACCEPTED', 'ARRIVING', 'STARTED', 'COMPLETED', 'CANCELLED'));
+  CHECK (status IN ('SEARCHING', 'REQUESTED', 'ASSIGNED', 'ACCEPTED', 'ARRIVING', 'STARTED', 'COMPLETED', 'CANCELLED', 'EXPIRED'));
 
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS chk_payments_module;
 ALTER TABLE payments ADD CONSTRAINT chk_payments_module 

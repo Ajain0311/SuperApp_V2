@@ -385,7 +385,7 @@ CREATE TABLE IF NOT EXISTS rides (
     CONSTRAINT fk_rides_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
     CONSTRAINT fk_rides_drivers FOREIGN KEY (driver_id) REFERENCES drivers(id) ON DELETE RESTRICT,
     CONSTRAINT fk_rides_vehicles FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_rides_status CHECK (status IN ('REQUESTED', 'ASSIGNED', 'ACCEPTED', 'ARRIVING', 'STARTED', 'COMPLETED', 'CANCELLED')),
+    CONSTRAINT chk_rides_status CHECK (status IN ('REQUESTED', 'SEARCHING', 'ASSIGNED', 'ACCEPTED', 'ARRIVING', 'STARTED', 'COMPLETED', 'CANCELLED', 'EXPIRED')),
     CONSTRAINT chk_rides_vehicle_type CHECK (vehicle_type IN ('BIKE', 'AUTO', 'CAB'))
 );
 
