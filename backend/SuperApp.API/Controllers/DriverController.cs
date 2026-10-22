@@ -959,7 +959,9 @@ public class DriverController : ControllerBase
             .Include(o => o.Address)
             .Include(o => o.Items)
             .Where(o => o.Status == OrderStatus.Ready && o.DriverId == null)
-            .OrderBy(o => o.CreatedAt)
+            // Newest ready orders first so captains see live kitchen dispatch, not stale seed/e2e leftovers.
+            .OrderByDescending(o => o.UpdatedAt ?? o.CreatedAt)
+            .ThenByDescending(o => o.Id)
             .Take(30)
             .ToListAsync();
 
