@@ -249,7 +249,8 @@ public class FoodOrdersController : ControllerBase
         }
         catch { }
 
-        var orderDto = MapToOrderDto(order, restaurant, validatedAddress);
+        var ownerPhone = await ResolveRestaurantOwnerPhoneAsync(restaurant.Id, restaurant.Phone);
+        var orderDto = MapToOrderDto(order, restaurant, validatedAddress, ownerPhone: ownerPhone);
 
         // Real-time notification to all active restaurant kitchen staff:
         // Only dispatch immediately if COD or already PAID. Unpaid online orders await verified payment callback.
@@ -289,7 +290,15 @@ public class FoodOrdersController : ControllerBase
             .Take(50)
             .ToListAsync();
 
-        var dtos = orders.Select(o => MapToOrderDto(o, o.Restaurant, o.Address)).ToList();
+        var ownerPhones = await ResolveRestaurantOwnerPhonesAsync(
+            orders.Select(o => o.RestaurantId).Distinct().ToList());
+        var dtos = orders
+            .Select(o => MapToOrderDto(
+                o,
+                o.Restaurant,
+                o.Address,
+                ownerPhone: ownerPhones.GetValueOrDefault(o.RestaurantId)))
+            .ToList();
         return Ok(ApiResponse<List<FoodOrderDto>>.Ok(dtos));
     }
 
@@ -328,7 +337,9 @@ public class FoodOrdersController : ControllerBase
         if (!isAuthorized)
             return Forbid();
 
-        return Ok(ApiResponse<FoodOrderDto>.Ok(MapToOrderDto(order, order.Restaurant, order.Address, order.User)));
+        var ownerPhone = await ResolveRestaurantOwnerPhoneAsync(order.RestaurantId, order.Restaurant?.Phone);
+        return Ok(ApiResponse<FoodOrderDto>.Ok(
+            MapToOrderDto(order, order.Restaurant, order.Address, order.User, ownerPhone)));
     }
 
     /// <summary>
@@ -422,11 +433,61 @@ public class FoodOrdersController : ControllerBase
         return Ok(ApiResponse<PaymentOrderResult>.Ok(result, "Complete payment in Easebuzz. The order is paid only after verification."));
     }
 
-    public static FoodOrderDto MapToOrderDto(FoodOrder o, Restaurant restaurant, Address? address = null, User? user = null)
+    private async Task<string?> ResolveRestaurantOwnerPhoneAsync(long restaurantId, string? restaurantPhone)
     {
-        var restPhone = !string.IsNullOrWhiteSpace(restaurant?.Phone) 
-            ? restaurant.Phone 
-            : null;
+        var map = await ResolveRestaurantOwnerPhonesAsync(new List<long> { restaurantId });
+        if (map.TryGetValue(restaurantId, out var resolved) && !string.IsNullOrWhiteSpace(resolved))
+            return resolved;
+        return string.IsNullOrWhiteSpace(restaurantPhone) ? null : restaurantPhone.Trim();
+    }
+
+    private async Task<Dictionary<long, string?>> ResolveRestaurantOwnerPhonesAsync(IReadOnlyList<long> restaurantIds)
+    {
+        var result = new Dictionary<long, string?>();
+        if (restaurantIds.Count == 0)
+            return result;
+
+        var phones = await _db.Restaurants.AsNoTracking()
+            .Where(r => restaurantIds.Contains(r.Id))
+            .Select(r => new { r.Id, r.Phone })
+            .ToDictionaryAsync(r => r.Id, r => r.Phone);
+
+        var links = await _db.RestaurantUsers
+            .AsNoTracking()
+            .Where(ru => restaurantIds.Contains(ru.RestaurantId) && ru.IsActive)
+            .Include(ru => ru.User)
+                .ThenInclude(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+            .OrderBy(ru => ru.CreatedAt)
+            .ToListAsync();
+
+        foreach (var restaurantId in restaurantIds)
+        {
+            phones.TryGetValue(restaurantId, out var restaurantPhone);
+            var owners = links
+                .Where(l => l.RestaurantId == restaurantId
+                    && l.User != null
+                    && l.User.UserRoles.Any(ur => ur.Role != null && ur.Role.Name == RoleNames.RestaurantOwner))
+                .Select(l => (l.User!.MobileNumber, l.User.FullName))
+                .ToList();
+
+            result[restaurantId] = RestaurantContactResolver.ResolveOwnerPhone(restaurantPhone, owners);
+        }
+
+        return result;
+    }
+
+    public static FoodOrderDto MapToOrderDto(
+        FoodOrder o,
+        Restaurant restaurant,
+        Address? address = null,
+        User? user = null,
+        string? ownerPhone = null)
+    {
+        // Prefer linked RESTAURANT_OWNER mobile when provided; otherwise restaurants.phone.
+        var restPhone = !string.IsNullOrWhiteSpace(ownerPhone)
+            ? ownerPhone.Trim()
+            : (!string.IsNullOrWhiteSpace(restaurant?.Phone) ? restaurant.Phone : null);
         var restAddr = !string.IsNullOrWhiteSpace(restaurant?.AddressLine) 
             ? (!string.IsNullOrWhiteSpace(restaurant?.City) ? $"{restaurant.AddressLine}, {restaurant.City}" : restaurant.AddressLine)
             : (!string.IsNullOrWhiteSpace(restaurant?.City) ? restaurant.City : null);

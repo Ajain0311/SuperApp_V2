@@ -56,6 +56,8 @@ public static class FoodPaymentSync
 
                     if (fullOrder != null && fullOrder.Restaurant != null)
                     {
+                        // Keep restaurant.Phone for kitchen SignalR payload; owner-call resolution
+                        // is applied on customer order-detail reads in FoodOrdersController.
                         var dto = FoodOrdersController.MapToOrderDto(fullOrder, fullOrder.Restaurant, fullOrder.Address, fullOrder.User);
                         await orderHub.Clients.Group($"restaurant-{fullOrder.RestaurantId}").SendAsync("NewIncomingOrder", dto);
                     }
