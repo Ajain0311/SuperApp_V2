@@ -86,14 +86,25 @@ export const DriverHomeScreen: React.FC = () => {
       const [active, available, activeFood, availableFood] = await Promise.all([
         driverService.getActiveRide(),
         p.isOnline ? driverService.getAvailableRides() : Promise.resolve([]),
-        driverService.getActiveFoodOrder().catch(() => null),
-        p.isOnline ? driverService.getAvailableFoodOrders().catch(() => []) : Promise.resolve([]),
+        driverService.getActiveFoodOrder().catch((err) => {
+          console.warn('[DriverHome] active food fetch failed:', err?.message || err);
+          return null;
+        }),
+        p.isOnline
+          ? driverService.getAvailableFoodOrders().catch((err) => {
+              console.warn('[DriverHome] available food fetch failed:', err?.message || err);
+              return [];
+            })
+          : Promise.resolve([]),
       ]);
 
       setActiveRide(active);
       setAvailableRides(available);
-      setActiveFoodOrder(activeFood);
-      setAvailableFoodOrders(Array.isArray(availableFood) ? availableFood : []);
+      setActiveFoodOrder(activeFood && activeFood.id ? activeFood : null);
+      const foodList = Array.isArray(availableFood) ? availableFood : [];
+      // Newest first on client too (backend also sorts this way).
+      foodList.sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0));
+      setAvailableFoodOrders(foodList);
     } catch (e: any) {
       console.warn('[DriverHome] Error loading driver data:', e.message);
     } finally {
@@ -101,6 +112,15 @@ export const DriverHomeScreen: React.FC = () => {
       setIsRefreshing(false);
     }
   }, []);
+
+  // Keep food/ride offers fresh while online (SignalR can miss events after role switch).
+  useEffect(() => {
+    if (!isOnline) return;
+    const timer = setInterval(() => {
+      loadDriverData();
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [isOnline, loadDriverData]);
 
   const [roadRouteCoordinates, setRoadRouteCoordinates] = useState<[number, number][] | null>(null);
   const [roadRouteMeta, setRoadRouteMeta] = useState<{ distanceKm: number; durationMinutes: number } | null>(null);
@@ -1089,7 +1109,7 @@ export const DriverHomeScreen: React.FC = () => {
               <View style={styles.emptyRequestsCard}>
                 <Text style={styles.emptyRequestsTitle}>No food pickups waiting</Text>
                 <Text style={styles.emptyRequestsSubtitle}>
-                  When a restaurant marks an order READY, it will appear here for captain accept.
+                  Pull to refresh after restaurant marks READY. Food deliveries show here above ride requests.
                 </Text>
               </View>
             ) : (

@@ -117,18 +117,24 @@ class DriverService {
   }
 
   async getAvailableFoodOrders(): Promise<any[]> {
-    const res = await apiClient.get<{ success: boolean; data: any[] }>(ApiEndpoints.driver.availableFood);
-    return res.data || [];
+    const res = await apiClient.get<{ success: boolean; data: any[] } | any[]>(ApiEndpoints.driver.availableFood);
+    const list = Array.isArray(res) ? res : res?.data;
+    return Array.isArray(list) ? list : [];
   }
 
   async getActiveFoodOrder(): Promise<any | null> {
-    const res = await apiClient.get<{ success: boolean; data: any }>(ApiEndpoints.driver.activeFood);
-    return res.data;
+    const res = await apiClient.get<{ success: boolean; data: any } | any>(ApiEndpoints.driver.activeFood);
+    if (!res) return null;
+    if (typeof res === 'object' && 'data' in res) return res.data ?? null;
+    // Some payloads omit null data; treat bare success envelope as no active order.
+    if (typeof res === 'object' && 'success' in res && !('id' in res)) return null;
+    return res;
   }
 
   async acceptFoodOrder(id: number | string): Promise<any> {
-    const res = await apiClient.post<{ success: boolean; data: any }>(ApiEndpoints.driver.acceptFood(id));
-    return res.data;
+    const res = await apiClient.post<{ success: boolean; data: any } | any>(ApiEndpoints.driver.acceptFood(id));
+    if (res && typeof res === 'object' && 'data' in res) return res.data;
+    return res;
   }
 
   async unassignFoodOrder(id: number | string): Promise<void> {
