@@ -90,6 +90,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [todayDeals, setTodayDeals] = useState<TodayDealItem[]>([]);
   const [bazaarListings, setBazaarListings] = useState<ListingSummary[]>([]);
   const [isLoadingHome, setIsLoadingHome] = useState<boolean>(true);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [homeAnnouncement, setHomeAnnouncement] = useState<{
+    id: string;
+    title: string;
+    body: string;
+  } | null>(null);
+  const [dismissedAnnouncementId, setDismissedAnnouncementId] = useState<string | null>(null);
 
   // Multi-Category Search Overlay State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -102,12 +109,43 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const loadHomeData = useCallback(async () => {
     setIsLoadingHome(true);
     try {
-      const [bannersRes, restsRes, listingsRes, ridesRes] = await Promise.allSettled([
+      const [bannersRes, restsRes, listingsRes, ridesRes, notifsRes] = await Promise.allSettled([
         apiClient.get<any>(ApiEndpoints.common.banners),
         apiClient.get<any>(ApiEndpoints.food.restaurants),
         apiClient.get<any>(ApiEndpoints.marketplace.listings),
         apiClient.get<any>(ApiEndpoints.ride.myRides),
+        apiClient.get<any>(ApiEndpoints.common.notifications),
       ]);
+
+      // 0. Admin broadcasts / in-app alerts (home strip + bell badge)
+      if (notifsRes.status === 'fulfilled') {
+        const raw = notifsRes.value?.data?.data || notifsRes.value?.data;
+        const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
+        const isUnread = (n: any) => !(n.isRead ?? n.IsRead ?? false);
+        const unread = items.filter((n: any) => n && isUnread(n)).length;
+        setUnreadNotifCount(unread);
+
+        const broadcastTypes = new Set(['SYSTEM', 'CUSTOMER', 'ANNOUNCEMENT', 'BROADCAST']);
+        const latestBroadcast = items.find((n: any) => {
+          if (!n) return false;
+          const type = String(n.type || n.Type || '').toUpperCase();
+          return isUnread(n) && broadcastTypes.has(type);
+        });
+        if (latestBroadcast) {
+          const id = String(latestBroadcast.id ?? latestBroadcast.Id);
+          if (dismissedAnnouncementId && id === dismissedAnnouncementId) {
+            setHomeAnnouncement(null);
+          } else {
+            setHomeAnnouncement({
+              id,
+              title: String(latestBroadcast.title || latestBroadcast.Title || 'Announcement'),
+              body: String(latestBroadcast.body || latestBroadcast.Body || latestBroadcast.message || ''),
+            });
+          }
+        } else {
+          setHomeAnnouncement(null);
+        }
+      }
 
       // 1. Banners
       if (bannersRes.status === 'fulfilled') {
@@ -198,7 +236,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     } finally {
       setIsLoadingHome(false);
     }
-  }, []);
+  }, [dismissedAnnouncementId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -458,6 +496,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               accessibilityLabel="View notifications"
             >
               <Ionicons name="notifications-outline" size={20} color={AppColors.textPrimary} />
+              {unreadNotifCount > 0 ? (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotifCount > 99 ? '99+' : String(unreadNotifCount)}
+                  </Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -478,6 +523,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             onPress={openSearch}
           />
         </View>
+
+        {/* Admin broadcast announcement (in-app SYSTEM notifications) */}
+        {homeAnnouncement ? (
+          <TouchableOpacity
+            style={styles.announcementCard}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('Notifications')}
+            accessibilityRole="button"
+            accessibilityLabel="Open broadcast announcement"
+          >
+            <View style={styles.announcementIconWrap}>
+              <Ionicons name="megaphone" size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.announcementTextCol}>
+              <Text style={styles.announcementEyebrow}>ANNOUNCEMENT</Text>
+              <Text style={styles.announcementTitle} numberOfLines={1}>
+                {homeAnnouncement.title}
+              </Text>
+              {homeAnnouncement.body ? (
+                <Text style={styles.announcementBody} numberOfLines={2}>
+                  {homeAnnouncement.body}
+                </Text>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={styles.announcementClose}
+              onPress={() => {
+                setDismissedAnnouncementId(homeAnnouncement.id);
+                setHomeAnnouncement(null);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss announcement"
+            >
+              <Ionicons name="close" size={18} color={AppColors.textSecondary} />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        ) : null}
 
         {/* 3. ACTIVE RIDE STATUS CARD (If user has a live ride in transit) */}
         {activeRide ? (
@@ -973,6 +1056,26 @@ const styles = StyleSheet.create({
     borderColor: AppColors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: AppColors.surface,
+  },
+  notifBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   profileAvatar: {
     width: 38,
@@ -991,6 +1094,52 @@ const styles = StyleSheet.create({
   },
   searchWrapper: {
     marginBottom: 18,
+  },
+  announcementCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF1F2',
+    borderRadius: AppRadius.lg,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    padding: 12,
+    marginBottom: 16,
+  },
+  announcementIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EC4899',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
+  announcementTextCol: {
+    flex: 1,
+    paddingRight: 4,
+  },
+  announcementEyebrow: {
+    color: '#BE185D',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  announcementTitle: {
+    color: AppColors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  announcementBody: {
+    color: AppColors.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  announcementClose: {
+    padding: 2,
+    marginTop: -2,
   },
   liveRideCard: {
     backgroundColor: AppColors.surface,

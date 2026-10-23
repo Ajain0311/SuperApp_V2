@@ -36,11 +36,14 @@ public class MockNotificationService : INotificationService
         return true;
     }
 
-    public async Task<bool> SendBroadcastNotificationAsync(string title, string body, string module)
+    public async Task<bool> SendBroadcastNotificationAsync(string title, string body, string module, bool persistInApp = true)
     {
-        _logger.LogInformation("[BroadcastPush] Module: {Module}: {Title} - {Body}", module, title, body);
+        _logger.LogInformation("[BroadcastPush] Module: {Module}: {Title} - {Body} persist={Persist}", module, title, body, persistInApp);
 
-        var activeUserIds = await _db.Users.Where(u => u.IsActive).Select(u => u.Id).Take(100).ToListAsync();
+        if (!persistInApp)
+            return true;
+
+        var activeUserIds = await _db.Users.Where(u => u.IsActive).OrderBy(u => u.Id).Select(u => u.Id).Take(2000).ToListAsync();
 
         foreach (var id in activeUserIds)
         {

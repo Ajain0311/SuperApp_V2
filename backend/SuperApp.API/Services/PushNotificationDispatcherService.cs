@@ -104,22 +104,25 @@ public class PushNotificationDispatcherService : INotificationService
         return true;
     }
 
-    public async Task<bool> SendBroadcastNotificationAsync(string title, string body, string module)
+    public async Task<bool> SendBroadcastNotificationAsync(string title, string body, string module, bool persistInApp = true)
     {
-        var activeUserIds = await _db.Users.Where(u => u.IsActive).Select(u => u.Id).Take(500).ToListAsync();
-        foreach (var id in activeUserIds)
+        var activeUserIds = await _db.Users.Where(u => u.IsActive).OrderBy(u => u.Id).Select(u => u.Id).Take(2000).ToListAsync();
+        if (persistInApp)
         {
-            _db.Notifications.Add(new Notification
+            foreach (var id in activeUserIds)
             {
-                UserId = id,
-                Title = title,
-                Body = body,
-                Type = module.ToUpperInvariant(),
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
-            });
+                _db.Notifications.Add(new Notification
+                {
+                    UserId = id,
+                    Title = title,
+                    Body = body,
+                    Type = module.ToUpperInvariant(),
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            await _db.SaveChangesAsync();
         }
-        await _db.SaveChangesAsync();
 
         var tokens = await _db.UserDeviceTokens
             .Where(t => t.IsActive && activeUserIds.Contains(t.UserId) && !string.IsNullOrEmpty(t.DeviceToken))

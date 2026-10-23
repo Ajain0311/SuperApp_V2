@@ -1230,7 +1230,8 @@ public class AdminController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Message))
             return BadRequest(ApiResponse.Fail("Title and Message are required"));
 
-        var query = _db.Users.AsQueryable();
+        // Active users only; ordered so recipients are deterministic (old Take(200) without OrderBy could miss users).
+        var query = _db.Users.Where(u => u.IsActive);
 
         if (!string.IsNullOrWhiteSpace(request.TargetRole))
         {
@@ -1238,7 +1239,7 @@ public class AdminController : ControllerBase
             query = query.Where(u => u.UserRoles.Any(ur => ur.Role.Name == roleName));
         }
 
-        var targetUsers = await query.Take(200).ToListAsync();
+        var targetUsers = await query.OrderBy(u => u.Id).Take(2000).ToListAsync();
 
         foreach (var u in targetUsers)
         {
@@ -1259,9 +1260,12 @@ public class AdminController : ControllerBase
         {
             try
             {
-                var role = request.TargetRole?.Trim().ToUpperInvariant();
-                var module = !string.IsNullOrWhiteSpace(role) ? role : "SYSTEM";
-                await _notificationService.SendBroadcastNotificationAsync(request.Title.Trim(), request.Message.Trim(), module);
+                // In-app rows already saved above — push path must not duplicate Notification inserts.
+                await _notificationService.SendBroadcastNotificationAsync(
+                    request.Title.Trim(),
+                    request.Message.Trim(),
+                    "SYSTEM",
+                    persistInApp: false);
             }
             catch
             {
