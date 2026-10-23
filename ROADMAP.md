@@ -15,10 +15,10 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Food cancel visibility + soft place chime shipped (PR #33 → main, deploy in progress).
-  - Problem: after captain accepted food pickup, customer cancel silently cleared the job with no Alert/push for captain/kitchen.
-  - Fix: `NotifyCancelStakeholdersAsync` (captain + restaurant staff + customer); captain/kitchen Alerts; soft `expo-av` order-placed chime.
-  - Verified: **224** backend, **113** Jest, **16** agents self, tsc clean. Live smoke: place→READY→accept→cancel → `CANCELLED` (notify awaited post-deploy).
-  - Commit: `b1e470a` / merge `6261794` on `dev`; PR #33 merged.
-  - Metro LAN still on `:8081` for multi-phone UAT. Actors: cust 7014065979, owner 9900000004, captain 6375002348, TEST_OTP 123456.
-  - Next: after deploy green, re-run live smoke for `captain_notif_hit` / `owner_notif_hit`; phone UAT cancel Alert + place chime.
+- **Status**: Hotel self-delivery shipped (PR #38 → main, deploy in progress). Captains no longer handle food pickup.
+  - Rider UI: removed Food Ready for Pickup list/Alert/accept/pickup/deliver.
+  - Kitchen: READY → DELIVERED (`Mark Delivered`); no `FoodDeliveryAvailable` to drivers pool.
+  - OTP: live SMS on (`OTP_TEST_MODE=false`); UI hides 123456 (PR #37).
+  - Verified: **225** backend, **113** Jest, tsc clean.
+  - Commit: `0ba715c` on `dev`; PR #38 merged.
+  - Next: post-deploy live smoke READY→DELIVERED; phone UAT captain has no food offers; kitchen Mark Delivered.
