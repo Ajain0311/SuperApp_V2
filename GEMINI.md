@@ -35,4 +35,4 @@
      - Mark completed tasks as `[x]` or remove fixed items from the backlog.
      - Add any newly identified tasks or blockers.
      - Update the **Last Session Handoff** section with date, status, and what the next agent should do.
-  3. **Auto-Commit & Push:** Automatically `git commit -am 'message'` and `git push` without asking for permission.
+  3. **Mandatory Pull-Before-Push & Commit:** Before pushing, ALWAYS run `git pull --rebase origin <branch>` first to ensure local is up to date with remote. Then push cleanly (`git commit -am 'message'` -> `git pull --rebase origin <branch>` -> `git push`). Never push without pulling first.
