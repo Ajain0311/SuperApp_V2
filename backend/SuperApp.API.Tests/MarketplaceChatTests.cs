@@ -6,6 +6,7 @@ using SuperApp.API.Controllers;
 using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
+using SuperApp.API.Services;
 using Xunit;
 
 namespace SuperApp.API.Tests;
@@ -191,5 +192,143 @@ public class MarketplaceChatTests
         // Intruder tries to send message
         var sendRes = await controller.SendMessage(conv.Id, new SendChatMessageRequest { MessageText = "Spying" });
         Assert.IsType<ForbidResult>(sendRes.Result);
+    }
+
+    [Fact]
+    public async Task SendMessage_DuplicateRapidRetry_IsIdempotentAndDoesNotCreateSecondMessage()
+    {
+        using var db = GetInMemoryDbContext();
+        var seller = new User { Id = 10, FullName = "Seller User", MobileNumber = "9876543210" };
+        var buyer = new User { Id = 20, FullName = "Buyer User", MobileNumber = "9876543211" };
+        var listing = new MarketplaceListing
+        {
+            Id = 100,
+            UserId = seller.Id,
+            Title = "iPhone 15",
+            Price = 75000m,
+            IsActive = true,
+            Status = ListingStatus.Active
+        };
+        var conv = new ChatConversation
+        {
+            Id = 50,
+            ListingId = listing.Id,
+            BuyerId = buyer.Id,
+            SellerId = seller.Id
+        };
+        db.Users.AddRange(seller, buyer);
+        db.MarketplaceListings.Add(listing);
+        db.ChatConversations.Add(conv);
+        await db.SaveChangesAsync();
+
+        var controller = new MarketplaceController(db);
+        SetUserContext(controller, buyer.Id);
+
+        var req = new SendChatMessageRequest
+        {
+            MessageText = "Hello, is price negotiable?",
+            ClientMessageId = "cmsg-test-123"
+        };
+
+        // First send
+        var res1 = await controller.SendMessage(conv.Id, req);
+        var ok1 = Assert.IsType<OkObjectResult>(res1.Result);
+        var api1 = Assert.IsType<ApiResponse<ChatMessageDto>>(ok1.Value);
+        Assert.True(api1.Success);
+
+        // Immediate retry (same sender, same conversation, same text within 5s window)
+        var res2 = await controller.SendMessage(conv.Id, req);
+        var ok2 = Assert.IsType<OkObjectResult>(res2.Result);
+        var api2 = Assert.IsType<ApiResponse<ChatMessageDto>>(ok2.Value);
+        Assert.True(api2.Success);
+
+        // Assert same message ID returned
+        Assert.Equal(api1.Data!.Id, api2.Data!.Id);
+
+        // Verify only 1 row was stored in DB
+        var totalMessages = await db.ChatMessages.Where(m => m.ConversationId == conv.Id).CountAsync();
+        Assert.Equal(1, totalMessages);
+    }
+
+    [Fact]
+    public async Task SendMessage_SendsNotificationToSellerNotBuyer()
+    {
+        using var db = GetInMemoryDbContext();
+        var seller = new User { Id = 10, FullName = "Seller User", MobileNumber = "9876543210" };
+        var buyer = new User { Id = 20, FullName = "Buyer User", MobileNumber = "9876543211" };
+        var listing = new MarketplaceListing
+        {
+            Id = 100,
+            UserId = seller.Id,
+            Title = "Sony Headphones",
+            Price = 18000m,
+            IsActive = true,
+            Status = ListingStatus.Active
+        };
+        var conv = new ChatConversation
+        {
+            Id = 50,
+            ListingId = listing.Id,
+            BuyerId = buyer.Id,
+            SellerId = seller.Id
+        };
+        db.Users.AddRange(seller, buyer);
+        db.MarketplaceListings.Add(listing);
+        db.ChatConversations.Add(conv);
+        await db.SaveChangesAsync();
+
+        long? notifiedUserId = null;
+        string? notifiedTitle = null;
+        string? notifiedType = null;
+
+        var mockNotifService = new MockNotificationTracker((userId, title, body, type, refId) =>
+        {
+            notifiedUserId = userId;
+            notifiedTitle = title;
+            notifiedType = type;
+            return Task.FromResult(true);
+        });
+
+        var controller = new MarketplaceController(db, notificationService: mockNotifService);
+        SetUserContext(controller, buyer.Id);
+
+        var res = await controller.SendMessage(conv.Id, new SendChatMessageRequest
+        {
+            MessageText = "I want to buy this"
+        });
+
+        var ok = Assert.IsType<OkObjectResult>(res.Result);
+        var api = Assert.IsType<ApiResponse<ChatMessageDto>>(ok.Value);
+        Assert.True(api.Success);
+
+        // Verify seller received notification, NOT buyer
+        Assert.Equal(seller.Id, notifiedUserId);
+        Assert.Contains("Buyer User", notifiedTitle);
+        Assert.Equal("MARKETPLACE_CHAT", notifiedType);
+    }
+
+    private class MockNotificationTracker : INotificationService
+    {
+        private readonly Func<long, string, string, string, string?, Task<bool>> _onSend;
+
+        public MockNotificationTracker(Func<long, string, string, string, string?, Task<bool>> onSend)
+        {
+            _onSend = onSend;
+        }
+
+        public Task<bool> SendPushNotificationAsync(long userId, string title, string body, string type, string? referenceId = null)
+        {
+            return _onSend(userId, title, body, type, referenceId);
+        }
+
+        public Task<bool> SendBroadcastNotificationAsync(string title, string body, string module, bool persistInApp = true)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<PushDispatchResult> BroadcastRideToAllCaptainsAsync(Ride ride)
+        {
+            return Task.FromResult(PushDispatchResult.NoCaptains());
+        }
     }
 }

@@ -25,6 +25,8 @@ interface NotificationItem {
   icon: keyof typeof MaterialIcons.glyphMap;
   color: string;
   isUnread: boolean;
+  type?: string;
+  referenceId?: string;
 }
 
 const NOTIFICATIONS: NotificationItem[] = [
@@ -104,8 +106,12 @@ export const NotificationsScreen: React.FC = () => {
               ? colors.primary
               : n.category === 'RIDE' || n.type === 'RIDE'
               ? colors.blue
+              : n.type?.startsWith('MARKETPLACE')
+              ? '#8B5CF6'
               : colors.secondary,
           isUnread: n.isRead != null ? !n.isRead : !n.IsRead,
+          type: n.type,
+          referenceId: n.referenceId,
         }));
         setNotifications(mapped);
       } else {
@@ -366,7 +372,21 @@ export const NotificationsScreen: React.FC = () => {
         }
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
-          <View
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              if (item.type?.startsWith('MARKETPLACE') && item.referenceId) {
+                const convId = parseInt(item.referenceId, 10);
+                (navigation as any).navigate('MarketplaceChat', {
+                  conversationId: !isNaN(convId) ? convId : undefined,
+                  listingId: '0',
+                  sellerId: 0,
+                  sellerName: 'Chat',
+                  listingTitle: 'Marketplace Item',
+                  listingPrice: 0,
+                });
+              }
+            }}
             style={[
               styles.card,
               item.isUnread && { borderColor: `${item.color}66` },
@@ -384,7 +404,7 @@ export const NotificationsScreen: React.FC = () => {
               <Text style={styles.body}>{item.body}</Text>
               <Text style={styles.time}>{item.time}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
       />
     </SafeAreaView>

@@ -84,17 +84,32 @@ public class ChatHub : Hub
             throw new HubException("Sender not found");
         }
 
-        var msg = new ChatMessage
-        {
-            ConversationId = conv.Id,
-            SenderId = currentUserId.Value,
-            MessageText = messageText.Trim(),
-            CreatedAt = DateTime.UtcNow
-        };
+        var trimmedText = messageText.Trim();
+        var recentCutoff = DateTime.UtcNow.AddSeconds(-5);
+        var existingRecentMsg = await _db.ChatMessages
+            .Where(m => m.ConversationId == conv.Id && m.SenderId == currentUserId.Value && m.MessageText == trimmedText && m.CreatedAt >= recentCutoff)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefaultAsync();
 
-        _db.ChatMessages.Add(msg);
-        conv.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        ChatMessage msg;
+        if (existingRecentMsg != null)
+        {
+            msg = existingRecentMsg;
+        }
+        else
+        {
+            msg = new ChatMessage
+            {
+                ConversationId = conv.Id,
+                SenderId = currentUserId.Value,
+                MessageText = trimmedText,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.ChatMessages.Add(msg);
+            conv.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
 
         await Clients.Group($"chat-{conversationId}").SendAsync("MessageReceived", new
         {

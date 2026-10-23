@@ -32,6 +32,7 @@ export interface ChatMessageEvent {
   senderName: string;
   messageText: string;
   timestamp: string;
+  clientMessageId?: string;
 }
 
 class SignalRService {

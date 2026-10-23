@@ -22,17 +22,19 @@ import { spacing } from '../../theme/spacing';
 
 export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { customListings } = useMarketplaceStore();
+  const [activeTab, setActiveTab] = useState<'LISTINGS' | 'CHATS'>('LISTINGS');
   const [listings, setListings] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadMyListings = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
+      // 1. Load Listings
       const res = await apiClient.get<any>(ApiEndpoints.marketplace.myListings);
       const raw = res?.data?.data ?? res?.data?.items ?? res?.data ?? (Array.isArray(res) ? res : []);
       const serverItems: any[] = Array.isArray(raw) ? raw : [];
 
-      // Merge server items with any customListings from local store not yet in server list
       const merged = [...serverItems];
       for (const custom of customListings) {
         if (!merged.some((m) => m.id === custom.id || m.title === custom.title)) {
@@ -43,10 +45,16 @@ export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigatio
           });
         }
       }
-
       setListings(merged);
+
+      // 2. Load Conversations
+      const convRes = await apiClient.get<any>(ApiEndpoints.marketplace.myConversations);
+      const convRaw = convRes?.data?.data ?? convRes?.data ?? [];
+      if (Array.isArray(convRaw)) {
+        setConversations(convRaw);
+      }
     } catch (e: any) {
-      console.warn('[SellerDashboard] Error loading listings:', e.message);
+      console.warn('[SellerDashboard] Error loading data:', e.message);
       if (customListings.length > 0) {
         setListings(customListings);
       }
@@ -58,8 +66,8 @@ export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigatio
 
   useFocusEffect(
     useCallback(() => {
-      loadMyListings();
-    }, [loadMyListings])
+      loadData();
+    }, [loadData])
   );
 
   const handleDeleteListing = (id: number) => {
@@ -188,27 +196,111 @@ export const SellerDashboardScreen: React.FC<{ navigation: any }> = ({ navigatio
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: '#10B981' }]}>100%</Text>
-          <Text style={styles.statLabel}>Response Rate</Text>
+          <Text style={[styles.statNumber, { color: '#10B981' }]}>{conversations.length}</Text>
+          <Text style={styles.statLabel}>Buyer Chats</Text>
         </View>
+      </View>
+
+      {/* Tabs Selector: My Ads vs Buyer Inquiries */}
+      <View style={styles.tabSelector}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'LISTINGS' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('LISTINGS')}
+        >
+          <Ionicons
+            name="cube-outline"
+            size={18}
+            color={activeTab === 'LISTINGS' ? '#8B5CF6' : colors.textSecondary}
+          />
+          <Text style={[styles.tabButtonText, activeTab === 'LISTINGS' && styles.tabButtonTextActive]}>
+            My Ads ({listings.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'CHATS' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('CHATS')}
+        >
+          <Ionicons
+            name="chatbubbles-outline"
+            size={18}
+            color={activeTab === 'CHATS' ? '#8B5CF6' : colors.textSecondary}
+          />
+          <Text style={[styles.tabButtonText, activeTab === 'CHATS' && styles.tabButtonTextActive]}>
+            Inquiries ({conversations.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {isLoading ? (
         <View style={styles.centerBox}>
           <ActivityIndicator size="large" color="#8B5CF6" />
         </View>
-      ) : (
+      ) : activeTab === 'LISTINGS' ? (
         <FlatList
           data={listings}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderListing}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); loadMyListings(); }} tintColor="#8B5CF6" />}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); loadData(); }} tintColor="#8B5CF6" />}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
               <Ionicons name="bag-handle-outline" size={48} color={colors.textTertiary} />
               <Text style={styles.emptyTitle}>No Listings Yet</Text>
               <Text style={styles.emptySubtitle}>Tap 'Post Ad' above to sell electronics, vehicles, or items to citizens nearby.</Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={conversations}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); loadData(); }} tintColor="#8B5CF6" />}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.chatCard}
+              onPress={() =>
+                navigation.navigate('MarketplaceChat', {
+                  conversationId: item.id,
+                  listingId: String(item.listingId),
+                  sellerId: item.sellerId,
+                  sellerName: item.sellerName,
+                  listingTitle: item.listingTitle,
+                  listingPrice: item.listingPrice,
+                  listingImageUrl: item.listingImageUrl,
+                })
+              }
+            >
+              <View style={styles.chatCardHeader}>
+                <View style={styles.chatBuyerAvatar}>
+                  <Text style={styles.chatBuyerInitial}>{(item.buyerName || 'B')[0].toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.chatBuyerName}>{item.buyerName}</Text>
+                    <Text style={styles.chatTimestamp}>
+                      {item.lastMessageTimestamp
+                        ? new Date(item.lastMessageTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : 'New'}
+                    </Text>
+                  </View>
+                  <Text style={styles.chatListingTag} numberOfLines={1}>
+                    Re: {item.listingTitle} (₹{item.listingPrice})
+                  </Text>
+                  <Text style={styles.chatLastMsg} numberOfLines={1}>
+                    {item.lastMessageText || 'No messages yet'}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Ionicons name="chatbubbles-outline" size={48} color={colors.textTertiary} />
+              <Text style={styles.emptyTitle}>No Inquiries Yet</Text>
+              <Text style={styles.emptySubtitle}>When buyers send messages about your items, conversations will appear here in real-time.</Text>
             </View>
           }
         />
@@ -415,5 +507,80 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     maxWidth: 260,
+  },
+  tabSelector: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    gap: 12,
+    marginBottom: spacing.xs,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  tabButtonActive: {
+    backgroundColor: '#8B5CF618',
+    borderColor: '#8B5CF6',
+  },
+  tabButtonText: {
+    ...typography.bodySm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  tabButtonTextActive: {
+    color: '#8B5CF6',
+    fontWeight: '700',
+  },
+  chatCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chatCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chatBuyerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#8B5CF625',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatBuyerInitial: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#8B5CF6',
+  },
+  chatBuyerName: {
+    ...typography.bodyMedium,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  chatTimestamp: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  chatListingTag: {
+    ...typography.caption,
+    color: '#8B5CF6',
+    marginTop: 2,
+  },
+  chatLastMsg: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

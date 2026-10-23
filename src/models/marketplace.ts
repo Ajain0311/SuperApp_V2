@@ -69,6 +69,7 @@ export interface ChatMessage {
   senderName: string;
   messageText: string;
   createdAt: string;
+  clientMessageId?: string;
   isSending?: boolean;
   failed?: boolean;
 }

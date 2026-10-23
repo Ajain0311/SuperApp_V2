@@ -125,9 +125,11 @@ public class ChatMessageDto
     public string SenderName { get; set; } = string.Empty;
     public string MessageText { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public string? ClientMessageId { get; set; }
 }
 
 public class SendChatMessageRequest
 {
     public string MessageText { get; set; } = string.Empty;
+    public string? ClientMessageId { get; set; }
 }
