@@ -182,4 +182,63 @@ public class MarketplaceFavoriteTests
         Assert.Equal(1, body.Data.PageSize);
         Assert.Single(body.Data.Items);
     }
+
+    [Fact]
+    public async Task GetListings_EmptyDb_ReturnsEmptyPage_WithoutFakeSeedItems()
+    {
+        await using var db = CreateDb();
+        var controller = new MarketplaceController(db);
+
+        var result = await controller.GetListings(null, null, null, null, null, null, page: 1, pageSize: 20);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var body = Assert.IsType<ApiResponse<PagedResult<ListingSummaryDto>>>(ok.Value);
+        Assert.True(body.Success);
+        Assert.Equal(0, body.Data!.TotalCount);
+        Assert.Empty(body.Data.Items);
+    }
+
+    [Fact]
+    public async Task GetListingById_Missing_ReturnsNotFound_WithoutFakeSeller()
+    {
+        await using var db = CreateDb();
+        var controller = new MarketplaceController(db);
+
+        var result = await controller.GetListingById(101);
+        Assert.IsType<NotFoundObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task MakeOffer_OnOwnListing_IsRejected()
+    {
+        await using var db = CreateDb();
+        var seller = new User
+        {
+            MobileNumber = "9000000888",
+            FullName = "Owner",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var category = new MarketplaceCategory { Name = "Phones", IsActive = true };
+        db.Users.Add(seller);
+        db.MarketplaceCategories.Add(category);
+        await db.SaveChangesAsync();
+        var listing = new MarketplaceListing
+        {
+            UserId = seller.Id,
+            CategoryId = category.Id,
+            Title = "My Phone",
+            Price = 1000m,
+            Status = ListingStatus.Active,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.MarketplaceListings.Add(listing);
+        await db.SaveChangesAsync();
+
+        var controller = new MarketplaceController(db);
+        SetUser(controller, seller.Id);
+
+        var result = await controller.MakeOffer(listing.Id, new CreateOfferRequest { OfferedPrice = 900m });
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
 }

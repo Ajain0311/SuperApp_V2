@@ -14,7 +14,6 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
-  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -32,10 +31,35 @@ import { useAuthStore } from '../../store/authStore';
 
 const { width } = Dimensions.get('window');
 
+function sanitizeDialNumber(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  // Keep leading + for country code; strip other non-digits
+  const sanitized = trimmed.replace(/[^\d+]/g, '');
+  const digits = sanitized.replace(/\D/g, '');
+  if (digits.length < 6) return null;
+  return sanitized.startsWith('+') ? `+${digits}` : digits;
+}
+
+async function openPhoneDialer(rawPhone: string): Promise<void> {
+  const sanitized = sanitizeDialNumber(rawPhone);
+  if (!sanitized) {
+    Alert.alert('Invalid Phone Number', 'Seller phone number format is invalid.');
+    return;
+  }
+  const telUrl = `tel:${sanitized}`;
+  try {
+    // Do not gate on canOpenURL — Android often returns false for tel: even when dialer works.
+    await Linking.openURL(telUrl);
+  } catch {
+    Alert.alert('Call Error', `Could not open phone dialer. Number: ${rawPhone}`);
+  }
+}
+
 export const ListingDetailScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'ListingDetail'>>();
-  const listingId = route.params?.listingId || '101';
+  const listingId = route.params?.listingId;
 
   const { favorites, toggleFavorite } = useMarketplaceStore();
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -45,50 +69,67 @@ export const ListingDetailScreen: React.FC = () => {
   const [reportReason, setReportReason] = useState('SPAM');
   const [reportDetails, setReportDetails] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
-  const [offerPrice, setOfferPrice] = useState('50000');
+  const [offerPrice, setOfferPrice] = useState('');
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
-  const currentUserId = useAuthStore((s) => s.user?.id);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const currentUser = useAuthStore((s) => s.user);
+  const currentUserId = currentUser?.id;
+  const isAdmin = (currentUser?.roles || []).some(
+    (r) => String(r).toUpperCase() === 'ADMIN',
+  );
 
-  const idNum = parseInt(listingId, 10) || 101;
-  const isFav = favorites.includes(idNum);
+  const idNum = listingId != null && listingId !== '' ? parseInt(String(listingId), 10) : NaN;
+  const isFav = Number.isFinite(idNum) ? favorites.includes(idNum) : false;
 
   const [detail, setDetail] = useState<ListingDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchListing = useCallback(async () => {
+    if (!listingId) {
+      setError('Listing id is missing');
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
       const res = await apiClient.get<any>(ApiEndpoints.marketplace.listingDetail(listingId));
       const data = res.data?.data || res.data;
       if (data && data.title) {
+        const resolvedId = Number(data.id);
+        const imagesRaw = Array.isArray(data.images) ? data.images : [];
+        const images = imagesRaw
+          .map((im: any) => (typeof im === 'string' ? im : im?.imageUrl))
+          .filter((u: any) => typeof u === 'string' && u.trim().length > 0);
+        if (images.length === 0 && data.primaryImageUrl) {
+          images.push(String(data.primaryImageUrl));
+        }
         setDetail({
-          id: data.id || idNum,
+          id: Number.isFinite(resolvedId) ? resolvedId : idNum,
           title: data.title,
-          description: data.description || 'No description provided.',
-          price: Number(data.price) || 0,
-          condition: data.condition || 'USED',
-          location: data.location || 'Location not specified',
-          images:
-            data.images && data.images.length > 0
-              ? data.images.map((im: any) => (typeof im === 'string' ? im : im.imageUrl || ''))
-              : data.primaryImageUrl
-              ? [data.primaryImageUrl]
-              : ['https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=800'],
+          description: data.description ?? null,
+          price: Number(data.price),
+          condition: data.condition ?? '',
+          location: data.location ?? null,
+          images,
           isFeatured: Boolean(data.isFeatured),
-          viewCount: data.viewCount || 1,
-          createdAt: data.createdAt || new Date().toISOString(),
-          categoryId: data.categoryId || 1,
-          categoryName: data.categoryName || 'General',
-          sellerId: data.sellerId || 1,
-          sellerName: data.sellerName || 'Verified Community Member',
-          sellerPhone: data.sellerPhone || null,
-          sellerRating: Number(data.sellerRating) || 4.9,
-          dealsCount: data.dealsCount || 12,
-          isFavorite: favorites.includes(data.id || idNum),
+          viewCount: Number(data.viewCount) || 0,
+          createdAt: data.createdAt ?? '',
+          categoryId: Number(data.categoryId) || 0,
+          categoryName: data.categoryName ?? '',
+          sellerId: Number(data.sellerId),
+          sellerName: data.sellerName ?? '',
+          sellerPhone: data.sellerPhone ?? null,
+          sellerJoinedAt: data.sellerJoinedAt ?? null,
+          isFavorite: favorites.includes(Number.isFinite(resolvedId) ? resolvedId : idNum),
         });
-        setOfferPrice(Math.round((Number(data.price) || 1000) * 0.9).toString());
+        const listed = Number(data.price);
+        if (Number.isFinite(listed) && listed > 0) {
+          setOfferPrice(String(Math.round(listed)));
+        } else {
+          setOfferPrice('');
+        }
       } else {
         setError('Listing details not found');
       }
@@ -103,9 +144,83 @@ export const ListingDetailScreen: React.FC = () => {
     fetchListing();
   }, [fetchListing]);
 
-  const handleSendOffer = () => {
-    setShowOfferModal(false);
-    Alert.alert('Offer Sent', `Offer of ₹${offerPrice} sent to ${detail?.sellerName || 'Seller'}!`);
+  const isOwner =
+    detail != null &&
+    currentUserId != null &&
+    Number(currentUserId) === Number(detail.sellerId);
+  const canRemoveListing = isOwner || isAdmin;
+  const canContactSeller = detail != null && !isOwner;
+
+  const handleSendOffer = async () => {
+    if (!detail || isOwner) return;
+    const price = Number(offerPrice);
+    if (!Number.isFinite(price) || price <= 0) {
+      Alert.alert('Invalid Offer', 'Enter a valid offer amount greater than zero.');
+      return;
+    }
+    setIsSubmittingOffer(true);
+    try {
+      await apiClient.post(ApiEndpoints.marketplace.makeOffer(detail.id), {
+        offeredPrice: price,
+      });
+      setShowOfferModal(false);
+      Alert.alert('Offer Sent', `Offer of ₹${price} sent to ${detail.sellerName || 'seller'}.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not send offer');
+    } finally {
+      setIsSubmittingOffer(false);
+    }
+  };
+
+  const handleRemoveListing = () => {
+    if (!detail || !canRemoveListing) return;
+    Alert.alert('Remove Listing', 'Remove this listing from the bazaar?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setIsRemoving(true);
+          try {
+            await apiClient.post(ApiEndpoints.marketplace.manageListings, {
+              action: 'DELETE',
+              id: detail.id,
+            });
+            Alert.alert('Removed', 'Listing has been removed.');
+            navigation.goBack();
+          } catch (err: any) {
+            Alert.alert('Error', err.message || 'Could not remove listing');
+          } finally {
+            setIsRemoving(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleOpenChat = () => {
+    if (!detail || isOwner) return;
+    navigation.navigate('MarketplaceChat', {
+      listingId: detail.id,
+      sellerId: detail.sellerId,
+      sellerName: detail.sellerName || '',
+      listingTitle: detail.title,
+      listingPrice: detail.price,
+      listingImageUrl: detail.images[0],
+    });
+  };
+
+  const handleCallSeller = async () => {
+    if (!detail || isOwner) return;
+    const rawPhone = detail.sellerPhone?.trim();
+    if (!rawPhone) {
+      Alert.alert(
+        'Phone Number Unavailable',
+        'Seller has not shared a phone number. Use in-app chat instead.',
+      );
+      return;
+    }
+    await openPhoneDialer(rawPhone);
   };
 
   const handleReportListing = async () => {
@@ -159,24 +274,31 @@ export const ListingDetailScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Photo Carousel */}
         <View style={styles.carouselContainer}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const newIndex = Math.round(e.nativeEvent.contentOffset.x / width);
-              setActivePhotoIndex(newIndex);
-            }}
-          >
-            {detail.images.map((imgUrl, idx) => (
-              <Image
-                key={idx}
-                source={{ uri: imgUrl }}
-                style={styles.carouselImage}
-                resizeMode="cover"
-              />
-            ))}
-          </ScrollView>
+          {detail.images.length > 0 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const newIndex = Math.round(e.nativeEvent.contentOffset.x / width);
+                setActivePhotoIndex(newIndex);
+              }}
+            >
+              {detail.images.map((imgUrl, idx) => (
+                <Image
+                  key={idx}
+                  source={{ uri: imgUrl }}
+                  style={styles.carouselImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={[styles.carouselImage, styles.carouselEmpty]}>
+              <MaterialIcons name="image-not-supported" size={48} color={colors.textTertiary} />
+              <Text style={styles.carouselEmptyText}>No photos</Text>
+            </View>
+          )}
 
           {/* Floating Top Nav Buttons */}
           <View style={styles.floatingTopBar}>
@@ -188,19 +310,29 @@ export const ListingDetailScreen: React.FC = () => {
             </TouchableOpacity>
 
             <View style={styles.topRightActions}>
-              <TouchableOpacity
-                style={styles.roundIconButton}
-                onPress={() => setShowReportModal(true)}
-              >
-                <MaterialIcons name="flag" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
+              {canRemoveListing ? (
+                <TouchableOpacity
+                  style={styles.roundIconButton}
+                  onPress={handleRemoveListing}
+                  disabled={isRemoving}
+                  accessibilityLabel="Remove listing"
+                >
+                  {isRemoving ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <MaterialIcons name="delete-outline" size={20} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+              ) : null}
 
-              <TouchableOpacity
-                style={styles.roundIconButton}
-                onPress={() => Alert.alert('Share', 'Listing link copied to clipboard!')}
-              >
-                <MaterialIcons name="share" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
+              {!isOwner ? (
+                <TouchableOpacity
+                  style={styles.roundIconButton}
+                  onPress={() => setShowReportModal(true)}
+                >
+                  <MaterialIcons name="flag" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity
                 style={styles.roundIconButton}
@@ -235,7 +367,9 @@ export const ListingDetailScreen: React.FC = () => {
         <View style={styles.contentBody}>
           {/* Price & Views */}
           <View style={styles.priceRow}>
-            <Text style={styles.priceText}>₹{detail.price.toFixed(0)}</Text>
+            <Text style={styles.priceText}>
+              ₹{Number.isFinite(detail.price) ? detail.price.toFixed(0) : '—'}
+            </Text>
             <View style={styles.negotiableBadge}>
               <Text style={styles.negotiableText}>Negotiable</Text>
             </View>
@@ -250,34 +384,22 @@ export const ListingDetailScreen: React.FC = () => {
 
           {/* Meta Tags Row */}
           <View style={styles.metaTagsRow}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>{detail.categoryName}</Text>
-            </View>
-            <View style={styles.conditionBadge}>
-              <Text style={styles.conditionBadgeText}>{detail.condition}</Text>
-            </View>
-            <View style={styles.locationWrapper}>
-              <MaterialIcons name="location-on" size={14} color={colors.textTertiary} />
-              <Text style={styles.locationText}>{detail.location}</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Highlights */}
-          <Text style={styles.sectionHeader}>Highlights</Text>
-          <View style={styles.highlightsWrap}>
-            {[
-              { icon: 'verified', label: 'Authentic Guaranteed' },
-              { icon: 'inventory-2', label: 'Original Bill & Box' },
-              { icon: 'local-shipping', label: 'Self Pickup / Handover' },
-              { icon: 'access-time', label: 'Fast Response Seller' },
-            ].map((chip, idx) => (
-              <View key={idx} style={styles.highlightChip}>
-                <MaterialIcons name={chip.icon as any} size={15} color={colors.secondary} />
-                <Text style={styles.highlightChipText}>{chip.label}</Text>
+            {detail.categoryName ? (
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryBadgeText}>{detail.categoryName}</Text>
               </View>
-            ))}
+            ) : null}
+            {detail.condition ? (
+              <View style={styles.conditionBadge}>
+                <Text style={styles.conditionBadgeText}>{detail.condition}</Text>
+              </View>
+            ) : null}
+            {detail.location ? (
+              <View style={styles.locationWrapper}>
+                <MaterialIcons name="location-on" size={14} color={colors.textTertiary} />
+                <Text style={styles.locationText}>{detail.location}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.divider} />
@@ -285,7 +407,9 @@ export const ListingDetailScreen: React.FC = () => {
           {/* Description */}
           <Text style={styles.sectionHeader}>Description</Text>
           <View style={styles.descriptionBox}>
-            <Text style={styles.descriptionText}>{detail.description}</Text>
+            <Text style={styles.descriptionText}>
+              {detail.description?.trim() ? detail.description : 'No description'}
+            </Text>
           </View>
 
           <View style={styles.divider} />
@@ -299,34 +423,34 @@ export const ListingDetailScreen: React.FC = () => {
               </View>
               <View style={styles.sellerMeta}>
                 <View style={styles.sellerNameRow}>
-                  <Text style={styles.sellerName}>{detail.sellerName}</Text>
-                  <MaterialIcons name="verified" size={16} color={colors.secondary} />
+                  <Text style={styles.sellerName}>
+                    {detail.sellerName?.trim() ? detail.sellerName : 'Seller'}
+                  </Text>
                 </View>
-                <Text style={styles.sellerStats}>
-                  Active member • {detail.sellerRating} ★ ({detail.dealsCount} deals closed)
-                </Text>
+                {isOwner ? (
+                  <Text style={styles.sellerStats}>This is your listing</Text>
+                ) : detail.sellerPhone ? (
+                  <Text style={styles.sellerStats}>{detail.sellerPhone}</Text>
+                ) : null}
               </View>
             </View>
 
-            <View style={styles.sellerDivider} />
+            {canContactSeller ? (
+              <>
+                <View style={styles.sellerDivider} />
+                <View style={styles.sellerActionsRow}>
+                  <TouchableOpacity style={styles.sellerChatBtn} onPress={handleOpenChat}>
+                    <MaterialIcons name="chat-bubble-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.sellerActionText}>Chat</Text>
+                  </TouchableOpacity>
 
-            <View style={styles.sellerActionsRow}>
-              <TouchableOpacity
-                style={styles.sellerChatBtn}
-                onPress={() => setShowContactModal(true)}
-              >
-                <MaterialIcons name="chat-bubble-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.sellerActionText}>Chat</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sellerCallBtn}
-                onPress={() => setShowContactModal(true)}
-              >
-                <MaterialIcons name="call" size={16} color="#FFFFFF" />
-                <Text style={styles.sellerActionText}>Call</Text>
-              </TouchableOpacity>
-            </View>
+                  <TouchableOpacity style={styles.sellerCallBtn} onPress={handleCallSeller}>
+                    <MaterialIcons name="call" size={16} color="#FFFFFF" />
+                    <Text style={styles.sellerActionText}>Call</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : null}
           </View>
 
           {/* Safety Advice */}
@@ -343,21 +467,31 @@ export const ListingDetailScreen: React.FC = () => {
       </ScrollView>
 
       {/* Persistent Bottom Action Bar */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={styles.bottomContactBtn}
-          onPress={() => setShowContactModal(true)}
-        >
-          <Text style={styles.bottomContactText}>Chat / Call</Text>
-        </TouchableOpacity>
+      {canContactSeller ? (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity style={styles.bottomContactBtn} onPress={() => setShowContactModal(true)}>
+            <Text style={styles.bottomContactText}>Chat / Call</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.bottomOfferBtn}
-          onPress={() => setShowOfferModal(true)}
-        >
-          <Text style={styles.bottomOfferText}>Make an Offer</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.bottomOfferBtn} onPress={() => setShowOfferModal(true)}>
+            <Text style={styles.bottomOfferText}>Make an Offer</Text>
+          </TouchableOpacity>
+        </View>
+      ) : canRemoveListing ? (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={[styles.bottomOfferBtn, { flex: 1, backgroundColor: colors.error }]}
+            onPress={handleRemoveListing}
+            disabled={isRemoving}
+          >
+            {isRemoving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.bottomOfferText}>Remove Listing</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Make Offer Modal */}
       <Modal visible={showOfferModal} transparent animationType="slide">
@@ -371,7 +505,7 @@ export const ListingDetailScreen: React.FC = () => {
             </View>
 
             <Text style={styles.modalPriceHint}>
-              Listed price: ₹{detail.price.toFixed(0)}
+              Listed price: ₹{Number.isFinite(detail.price) ? detail.price.toFixed(0) : '—'}
             </Text>
 
             <View style={styles.offerInputWrapper}>
@@ -384,19 +518,29 @@ export const ListingDetailScreen: React.FC = () => {
               />
             </View>
 
-            <TouchableOpacity style={styles.submitOfferBtn} onPress={handleSendOffer}>
-              <Text style={styles.submitOfferText}>Send Offer to Seller</Text>
+            <TouchableOpacity
+              style={styles.submitOfferBtn}
+              onPress={handleSendOffer}
+              disabled={isSubmittingOffer}
+            >
+              {isSubmittingOffer ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitOfferText}>Send Offer to Seller</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
       {/* Contact Options Modal */}
-      <Modal visible={showContactModal} transparent animationType="slide">
+      <Modal visible={showContactModal && canContactSeller} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Contact {detail.sellerName}</Text>
+              <Text style={styles.modalTitle}>
+                Contact {detail.sellerName?.trim() ? detail.sellerName : 'seller'}
+              </Text>
               <TouchableOpacity onPress={() => setShowContactModal(false)}>
                 <MaterialIcons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -406,42 +550,7 @@ export const ListingDetailScreen: React.FC = () => {
               style={styles.contactOptionRow}
               onPress={async () => {
                 setShowContactModal(false);
-                const rawPhone = detail.sellerPhone?.trim();
-                if (!rawPhone) {
-                  Alert.alert(
-                    'Phone Number Unavailable',
-                    'The seller has not provided a contact number. Please use SuperApp Chat to reach out.'
-                  );
-                  return;
-                }
-
-                // Strip non-dialable characters while preserving leading + for country code
-                const sanitized = rawPhone.replace(/[^\d+]/g, '');
-                if (!sanitized || sanitized === '+') {
-                  Alert.alert(
-                    'Invalid Phone Number',
-                    'The seller phone number format is invalid.'
-                  );
-                  return;
-                }
-
-                const telUrl = `tel:${sanitized}`;
-                try {
-                  const supported = await Linking.canOpenURL(telUrl);
-                  if (supported || Platform.OS === 'web') {
-                    await Linking.openURL(telUrl);
-                  } else {
-                    Alert.alert(
-                      'Dialer Not Supported',
-                      `Unable to open phone dialer on this device. You can manually dial: ${rawPhone}`
-                    );
-                  }
-                } catch (err) {
-                  Alert.alert(
-                    'Call Error',
-                    `Could not open phone dialer. Seller number: ${rawPhone}`
-                  );
-                }
+                await handleCallSeller();
               }}
             >
               <View style={[styles.contactIconCircle, { backgroundColor: 'rgba(0, 200, 83, 0.2)' }]}>
@@ -459,7 +568,7 @@ export const ListingDetailScreen: React.FC = () => {
               style={styles.contactOptionRow}
               onPress={() => {
                 setShowContactModal(false);
-                Alert.alert('SuperApp Chat', `Opening secure chat with ${detail.sellerName}...`);
+                handleOpenChat();
               }}
             >
               <View style={[styles.contactIconCircle, { backgroundColor: 'rgba(33, 150, 243, 0.2)' }]}>
@@ -467,7 +576,7 @@ export const ListingDetailScreen: React.FC = () => {
               </View>
               <View>
                 <Text style={styles.contactOptionTitle}>Chat in SuperApp</Text>
-                <Text style={styles.contactOptionSub}>Fast responses, secure and in-app</Text>
+                <Text style={styles.contactOptionSub}>In-app messages with the seller</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -554,6 +663,16 @@ const styles = StyleSheet.create({
   carouselImage: {
     width: width,
     height: 320,
+  },
+  carouselEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cardDark,
+    gap: 8,
+  },
+  carouselEmptyText: {
+    ...typography.caption,
+    color: colors.textTertiary,
   },
   floatingTopBar: {
     position: 'absolute',
