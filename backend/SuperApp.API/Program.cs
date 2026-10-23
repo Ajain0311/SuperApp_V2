@@ -174,20 +174,20 @@ else
     builder.Services.AddScoped<IStorageService, LocalStorageService>();
 }
 
-// 2. OTP / SMS Provider (Mock in development/testing; PunjabGov / 2Factor in production)
+// 2. OTP / SMS Provider (Mock in development/testing; BIGB / 2Factor in production)
 var otpTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
 var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") 
     ?? builder.Configuration["Providers:Otp"] 
-    ?? (otpTestMode ? "Mock" : "PunjabGov");
+    ?? (otpTestMode ? "Mock" : "BIGB");
 
 // SMS Provider Selection:
-// 1 = PunjabGov SMS Provider (current)
+// 1 = BIGB SMS Provider (current)
 // 2 = 2Factor.in SMS Provider (new)
 var smsProviderConfig = Environment.GetEnvironmentVariable("SMS_PROVIDER") 
     ?? builder.Configuration["Providers:SmsProvider"] 
-    ?? "1"; // Default to 1 (PunjabGov)
+    ?? "1"; // Default to 1 (BIGB)
 
-builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
+builder.Services.AddHttpClient<BigBSmsService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
@@ -204,23 +204,23 @@ if (smsProviderConfig == "2" || string.Equals(smsProviderConfig, "TwoFactor", St
 }
 else
 {
-    // Option 1: PunjabGov SMS Provider
-    builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
+    // Option 1: BIGB SMS Provider
+    builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<BigBSmsService>());
 }
 
 // Previous hardcoded provider (commented out):
-// builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
+// builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<BigBSmsService>());
 
 builder.Services.AddScoped<MockOtpService>();
-builder.Services.AddScoped<PunjabGovOtpService>();
+builder.Services.AddScoped<BigBOtpService>();
 ProductionSecurityValidator.ValidateOtpProvider(otpProvider, otpTestMode, isProduction);
 
-// OTP_TEST_MODE with an explicit live provider (PunjabGov) must keep that provider.
-// PunjabGovOtpService honors TEST_OTP and skips SMS when OTP_TEST_MODE=true outside Production.
-// Selecting MockOtpService while OTP_PROVIDER=PunjabGov throws at resolve-time and breaks all auth.
-if (string.Equals(otpProvider, "PunjabGov", StringComparison.OrdinalIgnoreCase))
+// OTP_TEST_MODE with an explicit live provider (BIGB) must keep that provider.
+// BigBOtpService honors TEST_OTP and skips SMS when OTP_TEST_MODE=true outside Production.
+// Selecting MockOtpService while OTP_PROVIDER=BIGB throws at resolve-time and breaks all auth.
+if (string.Equals(otpProvider, "BIGB", StringComparison.OrdinalIgnoreCase))
 {
-    builder.Services.AddScoped<IOtpService, PunjabGovOtpService>();
+    builder.Services.AddScoped<IOtpService, BigBOtpService>();
 }
 else if (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
 {
@@ -228,7 +228,7 @@ else if (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.Ordi
 }
 else
 {
-    builder.Services.AddScoped<IOtpService, PunjabGovOtpService>();
+    builder.Services.AddScoped<IOtpService, BigBOtpService>();
 }
 
 // 3. Payment Gateway Provider (Easebuzz test/live; Mock fallback)

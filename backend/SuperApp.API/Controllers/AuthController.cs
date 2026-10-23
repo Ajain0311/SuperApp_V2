@@ -36,7 +36,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Invalid request" });
 
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(request.MobileNumber);
         if (string.IsNullOrWhiteSpace(cleanMobile) || cleanMobile.Length < 10)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Invalid mobile number" });
 
@@ -54,7 +54,7 @@ public class AuthController : ControllerBase
         // Generate OTP for both Citizen and Admin (Admin requires Password + OTP)
         string devOtp = await _otpService.GenerateAndSendOtpAsync(cleanMobile);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
-        bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
+        bool isRealSms = otpProvider.Equals("BIGB", StringComparison.OrdinalIgnoreCase);
         var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
 
         return Ok(new SendOtpResponse
@@ -78,7 +78,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid request" });
 
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(request.MobileNumber);
         var isValid = await _otpService.VerifyOtpAsync(cleanMobile, request.OtpCode);
         if (!isValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid or expired OTP" });
@@ -184,7 +184,7 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.OtpCode))
             return BadRequest(new AuthResponse { Success = false, Message = "OTP code is required for admin authentication" });
 
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(request.MobileNumber);
 
         var user = await _db.Users
             .Include(u => u.UserRoles)
@@ -259,7 +259,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new SendOtpResponse { Success = false, Message = "Invalid request" });
 
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(request.MobileNumber);
 
         var user = await _db.Users
             .Include(u => u.UserRoles)
@@ -274,7 +274,7 @@ public class AuthController : ControllerBase
 
         string devOtp = await _otpService.GenerateAndSendOtpAsync(cleanMobile);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
-        bool isRealSms = otpProvider.Equals("PunjabGov", StringComparison.OrdinalIgnoreCase);
+        bool isRealSms = otpProvider.Equals("BIGB", StringComparison.OrdinalIgnoreCase);
         var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
 
         return Ok(new SendOtpResponse
@@ -295,7 +295,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(new AuthResponse { Success = false, Message = "Invalid request" });
 
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(request.MobileNumber);
 
         var user = await _db.Users
             .Include(u => u.UserRoles)

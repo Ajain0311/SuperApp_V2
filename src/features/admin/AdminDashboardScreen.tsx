@@ -848,7 +848,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
               <Text style={styles.fieldLabel}>Restaurant Name *</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Royal Punjab Dhaba"
+                placeholder="e.g. Royal Heritage Dhaba"
                 placeholderTextColor={colors.textTertiary}
                 value={restName}
                 onChangeText={setRestName}

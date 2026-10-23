@@ -24,7 +24,7 @@ This note does not replace the September results below.
 **Live API Host**: `http://localhost:5000`  
 **Live Web Client**: `http://localhost:8081`  
 **Database**: Supabase PostgreSQL (`aws-0-ap-south-1.pooler.supabase.com:6543/postgres`)  
-**SMS Gateway**: Punjab State e-Governance SMS API (`https://eapi.punjab.gov.in/smapi/sms`)  
+**SMS Gateway**: BIGB SMS API (`https://api.bigb.in/sms/send`)  
 
 ---
 
@@ -60,7 +60,7 @@ This note does not replace the September results below.
 The automated UAT runner ([`scripts/execute_full_uat.js`](file:///D:/FREELANCER/HTTP-EXPNAT-NET/scripts/execute_full_uat.js)) verified 48 end-to-end scenarios against live HTTP endpoints and SignalR hubs:
 
 ### 3.1 Authentication & Profile (4 Scenarios)
-- `AUTH-01`: Customer OTP request dispatched via Punjab DLT Gateway (`POST /api/auth/send-otp`) — **PASS**
+- `AUTH-01`: Customer OTP request dispatched via BIGB Gateway (`POST /api/auth/send-otp`) — **PASS**
 - `AUTH-02`: OTP verification with multi-role token generation (`POST /api/auth/verify-otp`) — **PASS**
 - `AUTH-03`: Super Administrator direct credential login (`POST /api/auth/admin-login`) — **PASS**
 - `AUTH-04`: Token profile query returning user and assigned roles (`GET /api/auth/profile`) — **PASS**

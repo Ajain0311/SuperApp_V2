@@ -5,28 +5,28 @@ using SuperApp.API.Models;
 namespace SuperApp.API.Services;
 
 /// <summary>
-/// Real OTP service backed by the Punjab Government SMS gateway API.
+/// Real OTP service backed by the BIGB SMS gateway API.
 /// Generates a 6-digit random code, saves it to the database with 3-minute expiry,
 /// and dispatches SMS via the registered DLT template.
 /// When OTP_TEST_MODE=true outside Production, stores TEST_OTP and skips live SMS
 /// so overnight multi-agent volume runs can authenticate without SMS spam.
 /// </summary>
-public class PunjabGovOtpService : IOtpService
+public class BigBOtpService : IOtpService
 {
     private readonly AppDbContext _db;
     private readonly ISmsService _smsService;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<PunjabGovOtpService> _logger;
+    private readonly ILogger<BigBOtpService> _logger;
     private const int OtpExpiryMinutes = 3;
     private const int MaxAttempts = 5;
     private readonly string _templateId;
     private readonly string _testOtp;
 
-    public PunjabGovOtpService(
+    public BigBOtpService(
         AppDbContext db,
         ISmsService smsService,
         IConfiguration configuration,
-        ILogger<PunjabGovOtpService> logger)
+        ILogger<BigBOtpService> logger)
     {
         _db = db;
         _smsService = smsService;
@@ -51,7 +51,7 @@ public class PunjabGovOtpService : IOtpService
 
     public async Task<string> GenerateAndSendOtpAsync(string mobileNumber, string purpose = "LOGIN")
     {
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(mobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(mobileNumber);
 
         // 1. Invalidate previous unused OTPs for this number and purpose
         var previousOtps = await _db.OtpRequests
@@ -86,22 +86,22 @@ public class PunjabGovOtpService : IOtpService
 
         if (useTestOtp)
         {
-            _logger.LogInformation("[PunjabGovOtpService] OTP_TEST_MODE active — stored TEST_OTP for {Mobile}, skipped live SMS.", cleanMobile);
+            _logger.LogInformation("[BigBOtpService] OTP_TEST_MODE active — stored TEST_OTP for {Mobile}, skipped live SMS.", cleanMobile);
             return otpCode;
         }
 
         // 4. Construct registered DLT message with dynamic OTP
-        var message = $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. Govt. of Punjab";
+        var message = $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. BIGB Secure";
 
-        // 5. Dispatch SMS via Punjab Gov Gateway
+        // 5. Dispatch SMS via BIGB Gateway
         var sent = await _smsService.SendSmsAsync(cleanMobile, message, _templateId);
         if (sent)
         {
-            _logger.LogInformation("[PunjabGovOtpService] Live OTP SMS sent successfully to {Mobile}", cleanMobile);
+            _logger.LogInformation("[BigBOtpService] Live OTP SMS sent successfully to {Mobile}", cleanMobile);
         }
         else
         {
-            _logger.LogWarning("[PunjabGovOtpService] Live SMS send returned false for {Mobile}. OTP is saved in database.", cleanMobile);
+            _logger.LogWarning("[BigBOtpService] Live SMS send returned false for {Mobile}. OTP is saved in database.", cleanMobile);
         }
 
         return otpCode;
@@ -109,7 +109,7 @@ public class PunjabGovOtpService : IOtpService
 
     public async Task<bool> VerifyOtpAsync(string mobileNumber, string otpCode, string purpose = "LOGIN")
     {
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(mobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(mobileNumber);
 
         var otpRequest = await _db.OtpRequests
             .Where(o => (o.MobileNumber == mobileNumber || o.MobileNumber == cleanMobile)

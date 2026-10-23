@@ -107,10 +107,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Full Application UAT, Real API Integration & Security Hardening
 - **Dynamic OTP SMS Service Integration**:
-  - Implemented `ISmsService.cs`, `PunjabGovSmsService.cs`, and `PunjabGovOtpService.cs` integrated with Punjab State e-Governance SMS gateway (`https://eapi.punjab.gov.in/smapi/sms`).
+  - Implemented `ISmsService.cs`, `BigBSmsService.cs`, and `BigBOtpService.cs` integrated with BIGB SMS gateway (`https://api.bigb.in/sms/send`).
   - Implemented dynamic OTP code interpolation for template `1407177633307627182` with 3-minute validity.
   - Preserved non-production dev fallback master OTP `123456`.
-  - Added unit test suite `PunjabGovSmsServiceTests.cs` (7 tests, all passing).
+  - Added unit test suite `BigBSmsServiceTests.cs` (7 tests, all passing).
 - **Admin Password Hash Self-Healing**:
   - Added automatic BCrypt reconciliation in `AuthController.AdminLogin` to heal legacy migration hash mismatches in Supabase PostgreSQL upon successful credential authentication.
 - **Vendor Authorization Security Hardening**:

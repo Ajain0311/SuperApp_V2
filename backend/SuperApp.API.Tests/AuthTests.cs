@@ -105,7 +105,7 @@ public class AuthTests
         var origProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER");
         try
         {
-            Environment.SetEnvironmentVariable("OTP_PROVIDER", "PunjabGov");
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", "BIGB");
             var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
                 .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
                 .Options;
@@ -237,7 +237,7 @@ public class AuthTests
         try
         {
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
-            Environment.SetEnvironmentVariable("OTP_PROVIDER", "PunjabGov");
+            Environment.SetEnvironmentVariable("OTP_PROVIDER", "BIGB");
 
             var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SuperApp.API.Data.AppDbContext>()
                 .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -315,13 +315,13 @@ public class AuthTests
 
         // Rejects test mode OTP
         Assert.Throws<InvalidOperationException>(() =>
-            SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("PunjabGov", true, true));
+            SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("BIGB", true, true));
 
         // Allowed in non-production
         SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("Mock", true, false);
 
         // Allowed in production with live provider and test mode off
-        SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("PunjabGov", false, true);
+        SuperApp.API.Services.ProductionSecurityValidator.ValidateOtpProvider("BIGB", false, true);
     }
 
     private class MockOtpServiceForProdTest : IOtpService

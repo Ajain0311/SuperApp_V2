@@ -284,14 +284,14 @@ When anyone joins this project:
 ### FIX-17: .env & Backend — Remove ALL Test/Mock OTP and Payment at Runtime
 - **Problem:** Even after setting `EXPO_PUBLIC_SHOW_TEST_OTP=false` in `.env`, the underlying backend `MockOtpService` and `MockPaymentService` are still active because the `.env` file's `OTP_PROVIDER=Mock` and `PAYMENT_PROVIDER=Mock` values were pointing to dev/mock providers.
 - **Goal:** Fully lock down the runtime to production-grade providers:
-  - OTP: `PunjabGov` real SMS only
+  - OTP: `BIGB` real SMS only
   - Payment: `Easebuzz` production gateway only
   - `.env` must have zero trace of `123456` or `Mock`
 - **Execution Prompt:**
   ```text
   Lock down production environment completely:
-  1. In `.env`, ensure: OTP_PROVIDER=PunjabGov, PAYMENT_PROVIDER=Easebuzz, TEST_OTP=<empty>, EXPO_PUBLIC_SHOW_TEST_OTP=false.
-  2. In `backend/SuperApp.API/appsettings.json`, ensure Payment.Env=prod, Providers.Otp=PunjabGov, Providers.Payment=Easebuzz.
+  1. In `.env`, ensure: OTP_PROVIDER=BIGB, PAYMENT_PROVIDER=Easebuzz, TEST_OTP=<empty>, EXPO_PUBLIC_SHOW_TEST_OTP=false.
+  2. In `backend/SuperApp.API/appsettings.json`, ensure Payment.Env=prod, Providers.Otp=BIGB, Providers.Payment=Easebuzz.
   3. In `MockOtpService.cs`, add a hard check: if OTP_PROVIDER != "Mock", throw an exception at startup to prevent accidental use.
   4. In `PaymentsController.cs`, verify MockComplete endpoint returns 403 when PAYMENT_PROVIDER != "Mock".
   5. Run `dotnet test` and confirm all production security tests pass.

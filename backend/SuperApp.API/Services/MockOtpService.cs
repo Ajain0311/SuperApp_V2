@@ -31,7 +31,7 @@ public class MockOtpService : IOtpService
 
     public async Task<string> GenerateAndSendOtpAsync(string mobileNumber, string purpose = "LOGIN")
     {
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(mobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(mobileNumber);
 
         // Invalidate previous unused OTPs for this number
         var previousOtps = await _db.OtpRequests
@@ -68,7 +68,7 @@ public class MockOtpService : IOtpService
 
     public async Task<bool> VerifyOtpAsync(string mobileNumber, string otpCode, string purpose = "LOGIN")
     {
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(mobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(mobileNumber);
         var cleanInputOtp = otpCode?.Trim() ?? string.Empty;
         var otpRequest = await _db.OtpRequests
             .Where(o => (o.MobileNumber == mobileNumber || o.MobileNumber == cleanMobile)
