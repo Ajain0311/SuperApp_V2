@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
 using SuperApp.API.DTOs;
+using SuperApp.API.Services;
 
 namespace SuperApp.API.Controllers;
 
@@ -17,6 +18,17 @@ public class ConfigController : ControllerBase
     {
         _config = config;
         _db = db;
+    }
+
+    /// <summary>
+    /// Public Help &amp; Support contact/FAQ configured by admin (AppSettings).
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("support")]
+    public async Task<ActionResult<ApiResponse<SupportConfigDto>>> GetSupportConfig()
+    {
+        var dto = await SupportSettings.LoadAsync(_db);
+        return Ok(ApiResponse<SupportConfigDto>.Ok(dto));
     }
 
     /// <summary>

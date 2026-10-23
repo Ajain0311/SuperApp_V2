@@ -46,6 +46,7 @@ export const ApiEndpoints = {
   // Common
   common: {
     config: '/config',
+    support: '/config/support',
     addresses: '/addresses',
     address: (id: string | number) => `/addresses/${id}`,
     setDefaultAddress: (id: string | number) => `/addresses/${id}/default`,

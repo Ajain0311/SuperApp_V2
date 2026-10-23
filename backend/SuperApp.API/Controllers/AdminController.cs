@@ -1101,15 +1101,21 @@ public class AdminController : ControllerBase
             };
             _db.AppSettings.AddRange(defaultSettings);
             await _db.SaveChangesAsync();
+        }
 
-            settings = defaultSettings.Select(s => new AdminSettingDto
+        // Always ensure Help & Support keys exist (even when other settings already seeded).
+        await SupportSettings.EnsureDefaultsAsync(_db);
+
+        settings = await _db.AppSettings
+            .OrderBy(s => s.SettingKey)
+            .Select(s => new AdminSettingDto
             {
                 Key = s.SettingKey,
                 Value = s.SettingValue ?? string.Empty,
                 Description = s.Description ?? string.Empty,
                 UpdatedAt = s.UpdatedAt
-            }).ToList();
-        }
+            })
+            .ToListAsync();
 
         return Ok(ApiResponse<List<AdminSettingDto>>.Ok(settings));
     }

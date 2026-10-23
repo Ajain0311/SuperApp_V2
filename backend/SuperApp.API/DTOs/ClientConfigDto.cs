@@ -11,3 +11,13 @@ public class ClientConfigDto
     public string ApiBaseUrl { get; set; } = string.Empty;
     public string SignalRHubUrl { get; set; } = string.Empty;
 }
+
+/// <summary>Public Help &amp; Support content configured by admin via AppSettings.</summary>
+public class SupportConfigDto
+{
+    public string Phone { get; set; } = string.Empty;
+    public string WhatsApp { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Hours { get; set; } = string.Empty;
+    public string Faq { get; set; } = string.Empty;
+}

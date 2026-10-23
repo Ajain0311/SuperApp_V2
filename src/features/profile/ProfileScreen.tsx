@@ -204,9 +204,9 @@ export const ProfileScreen: React.FC = () => {
           <MenuItem
             icon="headset-mic"
             title="Help & Support"
-            subtitle="FAQ, live chat & dispute resolution"
+            subtitle="FAQ, call, WhatsApp & email"
             color={colors.purple}
-            onPress={() => Alert.alert('Support', '24x7 Customer Support available')}
+            onPress={() => navigation.navigate('HelpSupport')}
           />
         </View>
 

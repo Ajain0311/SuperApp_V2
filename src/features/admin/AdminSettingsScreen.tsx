@@ -43,11 +43,29 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
   const [editValue, setEditValue] = useState('');
   const [isSavingSetting, setIsSavingSetting] = useState(false);
 
+  // Help & Support (admin-configurable)
+  const [supportPhone, setSupportPhone] = useState('');
+  const [supportWhatsApp, setSupportWhatsApp] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [supportHours, setSupportHours] = useState('');
+  const [supportFaq, setSupportFaq] = useState('');
+  const [isSavingSupport, setIsSavingSupport] = useState(false);
+
+  const applySupportFromSettings = (payload: AdminSetting[]) => {
+    const map = new Map(payload.map((s) => [s.key, s.value || '']));
+    setSupportPhone(map.get('support_phone') || '');
+    setSupportWhatsApp(map.get('support_whatsapp') || '');
+    setSupportEmail(map.get('support_email') || '');
+    setSupportHours(map.get('support_hours') || '');
+    setSupportFaq(map.get('support_faq') || '');
+  };
+
   const fetchSettings = useCallback(async () => {
     try {
       const res = await apiClient.get<any>('/admin/settings');
       const payload = res.data?.data || res.data || [];
       setSettings(payload);
+      applySupportFromSettings(Array.isArray(payload) ? payload : []);
     } catch (err: any) {
       console.warn('[AdminSettingsScreen] Error fetching settings:', err.message);
     } finally {
@@ -55,6 +73,32 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
       setIsRefreshing(false);
     }
   }, []);
+
+  const handleSaveSupport = async () => {
+    setIsSavingSupport(true);
+    try {
+      const rows = [
+        { key: 'support_phone', value: supportPhone.trim(), description: 'Help & Support phone' },
+        { key: 'support_whatsapp', value: supportWhatsApp.trim(), description: 'Help & Support WhatsApp (country code, no +)' },
+        { key: 'support_email', value: supportEmail.trim(), description: 'Help & Support email' },
+        { key: 'support_hours', value: supportHours.trim(), description: 'Support hours label' },
+        { key: 'support_faq', value: supportFaq.trim(), description: 'FAQ text (Q:/A: blocks)' },
+      ];
+      for (const row of rows) {
+        if (row.key === 'support_faq' && row.value.length > 1000) {
+          Alert.alert('FAQ Too Long', 'FAQ must be 1000 characters or fewer.');
+          return;
+        }
+        await apiClient.post('/admin/settings', row);
+      }
+      Alert.alert('Support Saved', 'Help & Support details updated for all users.');
+      await fetchSettings();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not save Help & Support settings');
+    } finally {
+      setIsSavingSupport(false);
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -145,7 +189,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
       </View>
 
       <FlatList
-        data={settings}
+        data={settings.filter((s) => !String(s.key || '').startsWith('support_'))}
         keyExtractor={(item) => item.key}
         renderItem={renderSettingCard}
         contentContainerStyle={styles.listContent}
@@ -161,6 +205,81 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
           />
         }
         ListHeaderComponent={
+          <View>
+          <View style={styles.broadcastCard}>
+            <View style={styles.broadcastHeader}>
+              <Ionicons name="headset" size={18} color={AppColors.primary} />
+              <Text style={styles.broadcastTitle}>HELP & SUPPORT (USER APP)</Text>
+            </View>
+            <Text style={styles.broadcastSub}>
+              These values appear on Profile → Help & Support for customers (call, WhatsApp, email, hours, FAQ).
+            </Text>
+
+            <Text style={styles.inputLabel}>Support Phone</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 18001234567"
+              placeholderTextColor={AppColors.textSecondary}
+              value={supportPhone}
+              onChangeText={setSupportPhone}
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.inputLabel}>WhatsApp (with country code, no +)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 919876543210"
+              placeholderTextColor={AppColors.textSecondary}
+              value={supportWhatsApp}
+              onChangeText={setSupportWhatsApp}
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.inputLabel}>Support Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. support@makemytree.com"
+              placeholderTextColor={AppColors.textSecondary}
+              value={supportEmail}
+              onChangeText={setSupportEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <Text style={styles.inputLabel}>Support Hours</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 24x7 Customer Support"
+              placeholderTextColor={AppColors.textSecondary}
+              value={supportHours}
+              onChangeText={setSupportHours}
+            />
+
+            <Text style={styles.inputLabel}>FAQ (use Q: / A: blocks, max 1000 chars)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea, { minHeight: 120 }]}
+              placeholder={'Q: How do I track my order?\nA: Open Activity for live tracking.'}
+              placeholderTextColor={AppColors.textSecondary}
+              value={supportFaq}
+              onChangeText={setSupportFaq}
+              multiline
+              textAlignVertical="top"
+            />
+            <Text style={styles.charCount}>{supportFaq.length}/1000</Text>
+
+            <TouchableOpacity
+              style={styles.broadcastBtn}
+              onPress={handleSaveSupport}
+              disabled={isSavingSupport}
+            >
+              {isSavingSupport ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.broadcastBtnText}>Save Help & Support</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.broadcastCard}>
             <View style={styles.broadcastHeader}>
               <Ionicons name="megaphone" size={18} color={AppColors.primary} />
@@ -226,6 +345,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
             </TouchableOpacity>
 
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>PLATFORM CONFIGURATION</Text>
+          </View>
           </View>
         }
         ListEmptyComponent={
@@ -332,6 +452,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: AppColors.textSecondary,
     marginBottom: 14,
+  },
+  charCount: {
+    fontSize: 11,
+    color: AppColors.textSecondary,
+    textAlign: 'right',
+    marginTop: -6,
+    marginBottom: 10,
   },
   inputLabel: {
     fontSize: 12,

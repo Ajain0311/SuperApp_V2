@@ -53,6 +53,7 @@ export type RootStackParamList = {
   AddListing: undefined;
   Profile: undefined;
   SavedAddresses: undefined;
+  HelpSupport: undefined;
   PaymentTest: undefined;
   Notifications: undefined;
   Activity: {

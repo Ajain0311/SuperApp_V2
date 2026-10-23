@@ -13,6 +13,7 @@ import { ListingDetailScreen } from '../features/marketplace/ListingDetailScreen
 import { AddListingScreen } from '../features/marketplace/AddListingScreen';
 import { ProfileScreen } from '../features/profile/ProfileScreen';
 import { SavedAddressesScreen } from '../features/profile/SavedAddressesScreen';
+import { HelpSupportScreen } from '../features/profile/HelpSupportScreen';
 import { PaymentTestScreen } from '../features/payments/PaymentTestScreen';
 import { NotificationsScreen } from '../features/notifications/NotificationsScreen';
 import { ActivityScreen } from '../features/activity/ActivityScreen';
@@ -44,6 +45,7 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen name="AddListing" component={AddListingScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />
+      <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="PaymentTest" component={PaymentTestScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Activity" component={ActivityScreen} />
