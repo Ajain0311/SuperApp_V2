@@ -40,7 +40,7 @@ Successful responses return standard JSON envelopes or direct payloads:
 
 ### 2.1 Request Mobile OTP
 `POST /api/auth/send-otp`  
-Sends a 6-digit OTP via Punjab State e-Governance DLT SMS Gateway. In non-production environments, fallback code `123456` is enabled.
+Sends a 6-digit OTP via BIGB Gateway. In non-production environments, fallback code `123456` is enabled.
 
 - **Request Body**:
   ```json

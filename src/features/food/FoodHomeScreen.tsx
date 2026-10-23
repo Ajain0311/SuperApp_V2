@@ -214,7 +214,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
           } else if (catNorm === 'north indian') {
             matchesCategory =
               rCuisines.includes('north indian') ||
-              rCuisines.includes('punjabi') ||
+              rCuisines.includes('north indian') ||
               rCuisines.includes('mughlai') ||
               rCuisines.includes('thali') ||
               rCuisines.includes('tandoor') ||

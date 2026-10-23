@@ -15,12 +15,19 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
+<<<<<<< HEAD
 - **Status**: Overnight #68 still failed (`verify-otp` 500 + empty DB error) during Production Auto-Deploy race; follow-up harden in flight.
   - **Root causes**:
     1. Volume ran while deploy restarted `superapp`; old process still resolved `MockOtpService` under `OTP_PROVIDER=PunjabGov` → ctor 500.
     2. `db-verifier` spread a `postgresql://` URL into `pg.Pool({ ...url })`, which yields garbage options and `Database connection failed:` with an empty message.
   - **Fix**: Overnight auth smoke wait (~3 min) before volume; prefer `OVERNIGHT_DB_URL` + `connectionString` pool options; only register `MockOtpService` when Mock is selected; `manage.sh` re-links `dist/.env` after every publish.
   - **Next**: Merge PR → wait for Auto-Deploy → re-dispatch overnight; confirm PASS.
+=======
+- **Status**: Fixed overnight multi-agent auth (`verify-otp` 400) against live DuckDNS API.
+  - **Root cause**: B-series `.env` had empty `TEST_OTP=` and no `OTP_TEST_MODE`; overnight sent `123456` while BIGB stored a random SMS OTP. Enabling `OTP_TEST_MODE` alone also broke auth by selecting `MockOtpService` while `OTP_PROVIDER=BIGB`.
+  - **Fix**: Server `OTP_TEST_MODE=true` + `TEST_OTP=123456`; `Program.cs` keeps BIGB when provider is explicit; BIGB test-mode stores TEST_OTP and skips SMS; overnight workflow SSH-tunnels VM Postgres via `OVERNIGHT_DB_URL` + `VM_*` secrets.
+  - **Next**: Confirm scheduled overnight run goes green after merge/deploy; watch DB verifier rows against azuredb tunnel.
+>>>>>>> 862ee10 (chore(provider): rename PunjabGov provider to BIGB across entire project)
   - **Verification**:
     - Live send/verify `123456` → 200 with PunjabGov OTP_TEST_MODE after deploy settled
     - agents self 16/16 (includes URL pool regression)

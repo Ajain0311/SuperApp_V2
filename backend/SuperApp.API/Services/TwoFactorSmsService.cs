@@ -42,7 +42,7 @@ public class TwoFactorSmsService : ISmsService
 
     public async Task<bool> SendSmsAsync(string mobileNumber, string message, string? templateId = null)
     {
-        var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(mobileNumber);
+        var cleanMobile = BigBSmsService.NormalizeMobileNumber(mobileNumber);
         if (string.IsNullOrWhiteSpace(cleanMobile) || cleanMobile.Length < 10)
         {
             _logger.LogWarning("[TwoFactorSms] Invalid mobile number: {MobileNumber}", mobileNumber);

@@ -16,7 +16,7 @@ flowchart LR
     Kestrel["Kestrel ASP.NET Core 10\n(Docker Container)"]
     PgBouncer["PgBouncer Connection Pool"]
     Postgres[("Managed PostgreSQL 15+\n(Supabase / AWS RDS)")]
-    DLT["Punjab DLT SMS API"]
+    DLT["BIGB SMS API"]
     Easebuzz["Easebuzz Payment"]
 
     Client -->|HTTPS / WSS| Cloudflare
@@ -144,9 +144,9 @@ server {
 
 ## 4. Production Gateway Integrations
 
-### 4.1 Punjab State e-Governance DLT SMS Gateway
-The SMS integration communicates directly with the Punjab government API:
-- **Base URL**: `https://eapi.punjab.gov.in/smapi/sms`
+### 4.1 BIGB Gateway
+The SMS integration communicates directly with the BIGB API:
+- **Base URL**: `https://api.bigb.in/sms/send`
 - **Template ID**: `1407177633307627182`
 - **Production Setting**: In `appsettings.Production.json`, ensure `EnableMasterOtpFallback` is set to `false`. Every OTP must be dispatched and validated via the live DLT gateway.
 

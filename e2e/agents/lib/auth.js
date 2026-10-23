@@ -13,7 +13,7 @@ function messageOf(res) {
 /**
  * OTP selection. Never logs the code.
  * devOtp from Mock send-otp wins. Otherwise TEST_OTP / config.
- * If the API hid devOtp, try the development test code once. PunjabGov
+ * If the API hid devOtp, try the development test code once. BIGB
  * accepts that code outside Production. A rejected probe is BLOCKED, not a fake JWT.
  */
 export function chooseOtp({ send, fallbackOtp, allowDevProbe }) {

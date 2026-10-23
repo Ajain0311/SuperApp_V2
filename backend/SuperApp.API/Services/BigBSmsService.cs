@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace SuperApp.API.Services;
 
-public class PunjabGovSmsResponse
+public class BigBSmsResponse
 {
     [JsonPropertyName("message")]
     public string? Message { get; set; }
@@ -15,24 +15,24 @@ public class PunjabGovSmsResponse
     public int Code { get; set; }
 }
 
-public class PunjabGovSmsService : ISmsService
+public class BigBSmsService : ISmsService
 {
     private readonly HttpClient _http;
-    private readonly ILogger<PunjabGovSmsService> _logger;
+    private readonly ILogger<BigBSmsService> _logger;
     private readonly string _serverKey;
     private readonly string _apiUrl;
     private readonly string _defaultTemplateId;
 
-    public PunjabGovSmsService(
+    public BigBSmsService(
         HttpClient http,
         IConfiguration configuration,
-        ILogger<PunjabGovSmsService> logger)
+        ILogger<BigBSmsService> logger)
     {
         _http = http;
         _logger = logger;
         _apiUrl = Environment.GetEnvironmentVariable("SMS_API_URL")
             ?? configuration["Sms:ApiUrl"]
-            ?? "https://eapi.punjab.gov.in/smapi/sms";
+            ?? "https://api.bigb.in/sms/send";
         _serverKey = Environment.GetEnvironmentVariable("SMS_SERVER_KEY")
             ?? configuration["Sms:ServerKey"]
             ?? "r6JKjqXoUXbLpT4nGXTafB6wDjBAKovyQ4t7uOsMnOvtTEPoNCO43KE3edWeXSmb";
@@ -46,7 +46,7 @@ public class PunjabGovSmsService : ISmsService
         var cleanNumber = NormalizeMobileNumber(mobileNumber);
         if (string.IsNullOrWhiteSpace(cleanNumber) || cleanNumber.Length < 10)
         {
-            _logger.LogWarning("[PunjabGovSms] Invalid mobile number: {MobileNumber}", mobileNumber);
+            _logger.LogWarning("[BigBSms] Invalid mobile number: {MobileNumber}", mobileNumber);
             return false;
         }
 
@@ -72,21 +72,21 @@ public class PunjabGovSmsService : ISmsService
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("[PunjabGovSms] HTTP failure {StatusCode} for {Mobile}: {Body}",
+                _logger.LogWarning("[BigBSms] HTTP failure {StatusCode} for {Mobile}: {Body}",
                     response.StatusCode, cleanNumber, responseBody);
                 return false;
             }
 
             try
             {
-                var result = System.Text.Json.JsonSerializer.Deserialize<PunjabGovSmsResponse>(responseBody, new System.Text.Json.JsonSerializerOptions
+                var result = System.Text.Json.JsonSerializer.Deserialize<BigBSmsResponse>(responseBody, new System.Text.Json.JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
                 if (result != null && (result.Status || result.Code == 200))
                 {
-                    _logger.LogInformation("[PunjabGovSms] SMS delivered to {Mobile}. Response: {Message}", cleanNumber, result.Message);
+                    _logger.LogInformation("[BigBSms] SMS delivered to {Mobile}. Response: {Message}", cleanNumber, result.Message);
                     return true;
                 }
             }
@@ -95,17 +95,17 @@ public class PunjabGovSmsService : ISmsService
                 // If deserialization fails but HTTP was 200, assume sent if body indicates success
                 if (responseBody.Contains("success", StringComparison.OrdinalIgnoreCase))
                 {
-                    _logger.LogInformation("[PunjabGovSms] SMS delivered to {Mobile}. Response body: {Body}", cleanNumber, responseBody);
+                    _logger.LogInformation("[BigBSms] SMS delivered to {Mobile}. Response body: {Body}", cleanNumber, responseBody);
                     return true;
                 }
             }
 
-            _logger.LogWarning("[PunjabGovSms] SMS service reported unsuccessful result for {Mobile}: {Body}", cleanNumber, responseBody);
+            _logger.LogWarning("[BigBSms] SMS service reported unsuccessful result for {Mobile}: {Body}", cleanNumber, responseBody);
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[PunjabGovSms] Error dispatching SMS to {Mobile}", cleanNumber);
+            _logger.LogError(ex, "[BigBSms] Error dispatching SMS to {Mobile}", cleanNumber);
             return false;
         }
     }

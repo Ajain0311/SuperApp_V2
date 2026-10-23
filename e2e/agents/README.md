@@ -19,7 +19,7 @@ npm run test:agents:volume -- --customers 500 --restaurant-owners 50 --captains 
 
 Also: `--run-id`, `--no-db`, `--cleanup`. Environment overrides when the flag is omitted: `AGENT_CUSTOMERS`, `AGENT_OWNERS`, `AGENT_CAPTAINS`, `AGENT_SELLERS`, `AGENT_CONCURRENCY`, `RUN_ID`, `AGENT_NO_DB=true`.
 
-OTP provider is not changed by the runner. PunjabGov stays PunjabGov. A development API still accepts the documented test code when it is not Production. Do not point this at production.
+OTP provider is not changed by the runner. BIGB stays BIGB. A development API still accepts the documented test code when it is not Production. Do not point this at production.
 
 ## Overnight GitHub workflow
 
@@ -33,7 +33,7 @@ That is 100 customers plus 10 owners, 20 captains, 20 sellers, and the admin acc
 
 Required Actions secrets: `API_BASE_URL` (host only, for example `https://makemytree.duckdns.org` — paths already include `/api/...`; host allow-list removed so the scheduled job can hit the configured API), `ADMIN_PASSWORD`, `TEST_OTP`, and a DB URL. Prefer `OVERNIGHT_DB_URL` as `postgresql://azuredbuser:PASSWORD@127.0.0.1:5433/azuredb` plus deploy secrets `VM_HOST` / `VM_USER` / `VM_SSH_KEY` so the workflow can SSH-tunnel to the B-series Postgres that the live API uses. Fallback: `SUPABASE_DB_URL` or `SUPABASE_CONNECTION` (must be the same database the API writes to). The DB verifier prefers `OVERNIGHT_DB_URL`, and postgresql URL strings are passed to `pg.Pool` via `connectionString` (spreading a URL string breaks the pool). Overnight waits for a send-otp/verify-otp smoke (TEST_OTP) before the 100-user volume so a concurrent Production Auto-Deploy restart does not fail the whole job. Optional `ADMIN_MOBILE` overrides the example admin mobile. `ADMIN_EMAIL` is passed through but the runner logs the admin in with the mobile number, not email. The 100-user volume run mutates whatever database that API uses — keep `--cleanup` on and watch live data. Live B-series needs `OTP_PROVIDER=PunjabGov`, `OTP_TEST_MODE=true`, and `TEST_OTP` matching the Actions secret; `manage.sh` re-links `dist/.env` to `/opt/SuperApp_V2/.env` on every publish.
 
-Live API for overnight must have `OTP_TEST_MODE=true` and non-empty `TEST_OTP` (for example `123456`) while `ASPNETCORE_ENVIRONMENT` is not Production. With `OTP_PROVIDER=PunjabGov`, the API keeps PunjabGovOtpService (does not switch to Mock); test mode stores `TEST_OTP` and skips live SMS so volume auth does not spam the gateway.
+Live API for overnight must have `OTP_TEST_MODE=true` and non-empty `TEST_OTP` (for example `123456`) while `ASPNETCORE_ENVIRONMENT` is not Production. With `OTP_PROVIDER=BIGB`, the API keeps BIGBOtpService (does not switch to Mock); test mode stores `TEST_OTP` and skips live SMS so volume auth does not spam the gateway.
 
 Each run uploads `e2e/agents/reports/` as `overnight-test-report-<run id>` for 14 days and writes a job summary. A single file that totals every hour of the night is not produced; those totals are not in the next job's workspace.
 
@@ -48,7 +48,7 @@ The Expo frontend is never required. These commands talk to the API, or to nothi
 
 Self-test only checks the framework (config, agents, assertions, reports, concurrency). It does not open a port.
 
-Live test logs real agents into the API. Set `ADMIN_PASSWORD`. Do not change `OTP_PROVIDER` or set `OTP_TEST_MODE`. On Development, PunjabGov still accepts the probe code `123456` when `devOtp` is hidden. Do not start Expo.
+Live test logs real agents into the API. Set `ADMIN_PASSWORD`. Do not change `OTP_PROVIDER` or set `OTP_TEST_MODE`. On Development, BIGB still accepts the probe code `123456` when `devOtp` is hidden. Do not start Expo.
 
 ## Configuration
 
@@ -60,11 +60,11 @@ Environment variables override the file:
 - `ADMIN_MOBILE` (default `9999999999`)
 - `ADMIN_PASSWORD` (required for admin and role provisioning; not stored in git)
 - `TEST_OTP` (for example `123456`) when `send-otp` hides `devOtp`
-- `OTP_TEST_MODE=true` on the API process selects `MockOtpService` even if `OTP_PROVIDER=PunjabGov`
+- `OTP_TEST_MODE=true` on the API process selects `MockOtpService` even if `OTP_PROVIDER=BIGB`
 
-If `devOtp` is missing, the runner tries `TEST_OTP` or one development probe of `123456`. PunjabGov accepts that code when the API is not Production. A rejected probe is `BLOCKED` (real SMS or production). Downstream orders, rides, and listings are not called for that agent, so a missing JWT does not become a pile of 401 failures.
+If `devOtp` is missing, the runner tries `TEST_OTP` or one development probe of `123456`. BIGB accepts that code when the API is not Production. A rejected probe is `BLOCKED` (real SMS or production). Downstream orders, rides, and listings are not called for that agent, so a missing JWT does not become a pile of 401 failures.
 
-When `OTP_PROVIDER=PunjabGov`, the API hides `devOtp`. The runner does not switch the OTP provider. A rejected probe is a failed or blocked login. It does not invent a pass.
+When `OTP_PROVIDER=BIGB`, the API hides `devOtp`. The runner does not switch the OTP provider. A rejected probe is a failed or blocked login. It does not invent a pass.
 
 ## How to run
 
@@ -139,7 +139,7 @@ Add `scenarios/<name>.json`, register the name in `SCENARIOS` inside `runner.js`
 
 ## Troubleshooting
 
-- Login fails with no `devOtp`: the API is on the Punjab SMS provider.
+- Login fails with no `devOtp`: the API is on the BIGB SMS provider.
 - Admin steps are `BLOCKED`: `ADMIN_PASSWORD` is empty.
 - Food steps are `BLOCKED`: fewer than two active restaurants have an available menu item.
 - Port 80 on Windows may require an elevated process for the API.

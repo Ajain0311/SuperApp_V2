@@ -37,7 +37,7 @@ This checklist defines the mandatory pre-flight verification gates, security aud
   - [ ] No hardcoded passwords, tokens, or connection strings in Git repository.
   - [ ] Production JWT Secret Key is a minimum 256-bit high-entropy secret injected via environment variable `JwtSettings__SecretKey`.
 - [ ] **External Gateways Configured**:
-  - [ ] **Punjab DLT SMS Gateway**: Production API key and approved DLT template ID (`1407177633307627182`) verified.
+  - [ ] **BIGB Gateway**: Production API key and approved DLT template ID (`1407177633307627182`) verified.
   - [ ] **Easebuzz Payment Gateway**: Live merchant key and salt configured; environment set to `prod`.
   - [ ] **Expo Push Notifications**: Production Expo access token configured for push broadcast.
 - [ ] **CORS Hardening**: Strict CORS origins configured in `Program.cs` allowing only authorized mobile and web domains.

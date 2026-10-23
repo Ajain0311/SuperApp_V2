@@ -7,7 +7,7 @@ using Xunit;
 
 namespace SuperApp.API.Tests;
 
-public class PunjabGovSmsServiceTests
+public class BigBSmsServiceTests
 {
     private class MockSmsClient : ISmsService
     {
@@ -34,12 +34,12 @@ public class PunjabGovSmsServiceTests
     [InlineData("+91-63750-02348", "6375002348")]
     public void NormalizeMobileNumber_ReturnsTenDigitCleanString(string input, string expected)
     {
-        var result = PunjabGovSmsService.NormalizeMobileNumber(input);
+        var result = BigBSmsService.NormalizeMobileNumber(input);
         Assert.Equal(expected, result);
     }
 
     [Fact]
-    public async Task PunjabGovOtpService_GeneratesDynamicOtp_AndDispatchesTemplateMessage()
+    public async Task BigBOtpService_GeneratesDynamicOtp_AndDispatchesTemplateMessage()
     {
         var previousTestMode = Environment.GetEnvironmentVariable("OTP_TEST_MODE");
         var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
@@ -56,7 +56,7 @@ public class PunjabGovSmsServiceTests
             using var db = new AppDbContext(options);
             var mockSms = new MockSmsClient();
             var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-            var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
+            var otpService = new BigBOtpService(db, mockSms, config, NullLogger<BigBOtpService>.Instance);
             var testPhone = "+916375002348";
 
             var otpCode = await otpService.GenerateAndSendOtpAsync(testPhone, "LOGIN");
@@ -66,7 +66,7 @@ public class PunjabGovSmsServiceTests
             Assert.Equal("6375002348", mockSms.LastMobile);
             Assert.Equal("1407177633307627182", mockSms.LastTemplateId);
             Assert.Equal(
-                $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. Govt. of Punjab",
+                $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. BIGB Secure",
                 mockSms.LastMessage);
 
             var dbRecord = await db.OtpRequests.FirstOrDefaultAsync(o => o.MobileNumber == "6375002348");
@@ -93,7 +93,7 @@ public class PunjabGovSmsServiceTests
     }
 
     [Fact]
-    public async Task PunjabGovOtpService_TestMode_StoresTestOtp_SkipsSms_AndAcceptsVerify()
+    public async Task BigBOtpService_TestMode_StoresTestOtp_SkipsSms_AndAcceptsVerify()
     {
         var previousTestMode = Environment.GetEnvironmentVariable("OTP_TEST_MODE");
         var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
@@ -110,7 +110,7 @@ public class PunjabGovSmsServiceTests
             using var db = new AppDbContext(options);
             var mockSms = new MockSmsClient();
             var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-            var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
+            var otpService = new BigBOtpService(db, mockSms, config, NullLogger<BigBOtpService>.Instance);
 
             var otpCode = await otpService.GenerateAndSendOtpAsync("9810012345", "LOGIN");
 
@@ -129,7 +129,7 @@ public class PunjabGovSmsServiceTests
     }
 
     [Fact]
-    public async Task PunjabGovOtpService_EmptyTestOtpEnv_FallsBackToDefault123456_InTestMode()
+    public async Task BigBOtpService_EmptyTestOtpEnv_FallsBackToDefault123456_InTestMode()
     {
         var previousTestMode = Environment.GetEnvironmentVariable("OTP_TEST_MODE");
         var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
@@ -146,7 +146,7 @@ public class PunjabGovSmsServiceTests
             using var db = new AppDbContext(options);
             var mockSms = new MockSmsClient();
             var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-            var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
+            var otpService = new BigBOtpService(db, mockSms, config, NullLogger<BigBOtpService>.Instance);
 
             var otpCode = await otpService.GenerateAndSendOtpAsync("9810099999", "LOGIN");
             Assert.Equal("123456", otpCode);
