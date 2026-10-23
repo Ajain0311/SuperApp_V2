@@ -14,11 +14,11 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 
 ## 📌 Last Session Handoff
 
-- **Date**: October 22, 2026
-- **Status**: Fixed captain `/driver/available-rides` 500 that aborted Driver Home (food APIs were already 200).
-  - **Root cause**: `chk_rides_status` omitted `EXPIRED` while stale-ride sweep wrote `EXPIRED` → Postgres 23514 → API 500 → `Promise.all` killed food UI.
-  - **Fix**: Applied `database/migrations/20261022_rides_status_expired.sql` on B-series; RideExpiryBackgroundService expired 53 stale rides; hardened `GetAvailableRides` SaveChanges; Driver Home isolates ride fetch failures. Merged PR #18 (`b937269`) and redeployed.
-  - **Next**: Captain hard-refresh / Online ON → confirm available-rides 200 and **Food Ready for Pickup** list; continue captain food pickup E2E if still needed.
+- **Date**: October 23, 2026
+- **Status**: Fixed overnight multi-agent auth (`verify-otp` 400) against live DuckDNS API.
+  - **Root cause**: B-series `.env` had empty `TEST_OTP=` and no `OTP_TEST_MODE`; overnight sent `123456` while PunjabGov stored a random SMS OTP. Enabling `OTP_TEST_MODE` alone also broke auth by selecting `MockOtpService` while `OTP_PROVIDER=PunjabGov`.
+  - **Fix**: Server `OTP_TEST_MODE=true` + `TEST_OTP=123456`; `Program.cs` keeps PunjabGov when provider is explicit; PunjabGov test-mode stores TEST_OTP and skips SMS; overnight workflow SSH-tunnels VM Postgres via `OVERNIGHT_DB_URL` + `VM_*` secrets.
+  - **Next**: Confirm scheduled overnight run goes green after merge/deploy; watch DB verifier rows against azuredb tunnel.
   - **Verification**:
-    - DriverTests 21/21; expiry-related 6/6; `npx tsc --noEmit` clean; driverService Jest 10/10
-    - Prod health after deploy: check `/health` on makemytree.duckdns.org
+    - Live probe 2/1/1/1: all citizen + admin logins PASS
+    - `dotnet test` 178/178; Jest 109/109; agents self 14/14; Metro 8081 up; `/health` Healthy

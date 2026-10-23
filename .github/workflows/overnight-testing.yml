@@ -30,6 +30,11 @@ jobs:
       TEST_OTP: ${{ secrets.TEST_OTP || vars.TEST_OTP }}
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL || vars.SUPABASE_DB_URL }}
       ConnectionStrings__SupabaseConnection: ${{ secrets.SUPABASE_CONNECTION || vars.SUPABASE_CONNECTION }}
+      # Optional: postgresql://user:pass@127.0.0.1:5433/azuredb (after SSH tunnel to B-series)
+      OVERNIGHT_DB_URL: ${{ secrets.OVERNIGHT_DB_URL || vars.OVERNIGHT_DB_URL }}
+      VM_HOST: ${{ secrets.VM_HOST }}
+      VM_USER: ${{ secrets.VM_USER }}
+      VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,17 +58,31 @@ jobs:
               missing=1
             fi
           done
-          if [ -z "${SUPABASE_DB_URL}" ] && [ -z "${ConnectionStrings__SupabaseConnection}" ]; then
-            echo "Missing secret SUPABASE_DB_URL or SUPABASE_CONNECTION"
+          if [ -z "${SUPABASE_DB_URL}" ] && [ -z "${ConnectionStrings__SupabaseConnection}" ] && [ -z "${OVERNIGHT_DB_URL}" ]; then
+            echo "Missing secret SUPABASE_DB_URL, SUPABASE_CONNECTION, or OVERNIGHT_DB_URL"
             missing=1
           fi
           if [ "$missing" -ne 0 ]; then
-            echo "::warning::Repository secrets (API_BASE_URL, ADMIN_PASSWORD, TEST_OTP, SUPABASE_CONNECTION) not configured yet. Skipping volume test."
+            echo "::warning::Repository secrets (API_BASE_URL, ADMIN_PASSWORD, TEST_OTP, DB URL) not configured yet. Skipping volume test."
             echo "has_secrets=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_secrets=true" >> "$GITHUB_OUTPUT"
             echo "Secrets present. Target API_BASE_URL host accepted."
           fi
+
+      - name: Tunnel VM Postgres for DB verifier
+        if: steps.check_secrets.outputs.has_secrets == 'true' && env.OVERNIGHT_DB_URL != '' && env.VM_HOST != '' && env.VM_SSH_KEY != ''
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/vm.pem
+          chmod 600 ~/.ssh/vm.pem
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -i ~/.ssh/vm.pem -f -N -L 5433:127.0.0.1:5432 "${VM_USER}@${VM_HOST}"
+          echo "Postgres SSH tunnel up on localhost:5433"
+          # Prefer the overnight tunnel URL so verifier hits the same DB as the live API.
+          echo "SUPABASE_DB_URL=${OVERNIGHT_DB_URL}" >> "$GITHUB_ENV"
+          echo "ConnectionStrings__SupabaseConnection=" >> "$GITHUB_ENV"
 
       - name: Run 100-user volume regression
         if: steps.check_secrets.outputs.has_secrets == 'true'
