@@ -135,7 +135,6 @@ export class NotificationService {
         importance: (Notifications.AndroidImportance?.MAX ?? 5) as any,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF6B00',
-        sound: 'default',
         enableVibrate: true,
         showBadge: true,
       });
@@ -143,7 +142,6 @@ export class NotificationService {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'General Notifications',
         importance: (Notifications.AndroidImportance?.DEFAULT ?? 3) as any,
-        sound: 'default',
         enableVibrate: true,
         showBadge: true,
       });
