@@ -9,6 +9,7 @@ import { colors } from './src/theme/colors';
 import { notificationService } from './src/services/notificationService';
 import { AppEnvironment } from './src/config/environment';
 import { mapboxService } from './src/services/mapboxService';
+import { configService } from './src/services/configService';
 import { polyfillAlert } from './src/utils/alertPolyfill';
 
 polyfillAlert();
@@ -30,6 +31,17 @@ import { AppAlert } from './src/components/common/AppAlert';
 
 export default function App() {
   useEffect(() => {
+    configService.fetchConfig().then(() => {
+      if ((Platform.OS === 'ios' || Platform.OS === 'android') && AppEnvironment.hasMapboxToken) {
+        try {
+          const Mapbox = require('@rnmapbox/maps').default;
+          Mapbox?.setAccessToken?.(mapboxService.getAccessToken());
+        } catch (error) {
+          console.warn('[Mapbox] Native maps unavailable in this runtime:', error);
+        }
+      }
+    });
+
     if ((Platform.OS === 'ios' || Platform.OS === 'android') && AppEnvironment.hasMapboxToken) {
       try {
         // Native Mapbox SDK — requires Expo Dev Client / prebuild (not Expo Go).

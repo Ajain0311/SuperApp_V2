@@ -96,9 +96,17 @@ export class AppEnvironment {
     return !this.isProduction;
   }
 
+  private static _runtimeMapboxToken: string | null = null;
+
+  static setRuntimeMapboxToken(token: string) {
+    if (token && token.trim().length > 0) {
+      this._runtimeMapboxToken = token.trim();
+    }
+  }
+
   /** Mapbox public access token (pk.*) for maps + geocoding search */
   static get mapboxAccessToken(): string {
-    return (process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '').trim();
+    return (this._runtimeMapboxToken || process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '').trim();
   }
 
   static get hasMapboxToken(): boolean {

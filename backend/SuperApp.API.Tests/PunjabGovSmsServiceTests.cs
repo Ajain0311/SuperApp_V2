@@ -41,47 +41,123 @@ public class PunjabGovSmsServiceTests
     [Fact]
     public async Task PunjabGovOtpService_GeneratesDynamicOtp_AndDispatchesTemplateMessage()
     {
-        // Arrange
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        using var db = new AppDbContext(options);
-        var mockSms = new MockSmsClient();
-        var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
-        var testPhone = "+916375002348";
+        var previousTestMode = Environment.GetEnvironmentVariable("OTP_TEST_MODE");
+        var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var previousTestOtp = Environment.GetEnvironmentVariable("TEST_OTP");
+        try
+        {
+            Environment.SetEnvironmentVariable("OTP_TEST_MODE", null);
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+            Environment.SetEnvironmentVariable("TEST_OTP", null);
 
-        // Act
-        var otpCode = await otpService.GenerateAndSendOtpAsync(testPhone, "LOGIN");
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var db = new AppDbContext(options);
+            var mockSms = new MockSmsClient();
+            var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+            var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
+            var testPhone = "+916375002348";
 
-        // Assert
-        Assert.Equal(6, otpCode.Length);
-        Assert.True(int.TryParse(otpCode, out _));
+            var otpCode = await otpService.GenerateAndSendOtpAsync(testPhone, "LOGIN");
 
-        // Verify SMS client received the dynamically replaced template message
-        Assert.Equal("6375002348", mockSms.LastMobile);
-        Assert.Equal("1407177633307627182", mockSms.LastTemplateId);
-        Assert.Equal(
-            $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. Govt. of Punjab",
-            mockSms.LastMessage);
+            Assert.Equal(6, otpCode.Length);
+            Assert.True(int.TryParse(otpCode, out _));
+            Assert.Equal("6375002348", mockSms.LastMobile);
+            Assert.Equal("1407177633307627182", mockSms.LastTemplateId);
+            Assert.Equal(
+                $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. Govt. of Punjab",
+                mockSms.LastMessage);
 
-        // Verify Database record
-        var dbRecord = await db.OtpRequests.FirstOrDefaultAsync(o => o.MobileNumber == "6375002348");
-        Assert.NotNull(dbRecord);
-        Assert.Equal(otpCode, dbRecord.OtpCode);
-        Assert.False(dbRecord.IsUsed);
-        Assert.True(dbRecord.ExpiresAt > DateTime.UtcNow.AddMinutes(2.5));
+            var dbRecord = await db.OtpRequests.FirstOrDefaultAsync(o => o.MobileNumber == "6375002348");
+            Assert.NotNull(dbRecord);
+            Assert.Equal(otpCode, dbRecord.OtpCode);
+            Assert.False(dbRecord.IsUsed);
+            Assert.True(dbRecord.ExpiresAt > DateTime.UtcNow.AddMinutes(2.5));
 
-        // Verify OTP verification flow
-        var wrongCheck = await otpService.VerifyOtpAsync(testPhone, "000000", "LOGIN");
-        Assert.False(wrongCheck);
+            var wrongCheck = await otpService.VerifyOtpAsync(testPhone, "000000", "LOGIN");
+            Assert.False(wrongCheck);
 
-        var correctCheck = await otpService.VerifyOtpAsync(testPhone, otpCode, "LOGIN");
-        Assert.True(correctCheck);
+            var correctCheck = await otpService.VerifyOtpAsync(testPhone, otpCode, "LOGIN");
+            Assert.True(correctCheck);
 
-        // Verify OTP cannot be reused
-        var reuseCheck = await otpService.VerifyOtpAsync(testPhone, otpCode, "LOGIN");
-        Assert.False(reuseCheck);
+            var reuseCheck = await otpService.VerifyOtpAsync(testPhone, otpCode, "LOGIN");
+            Assert.False(reuseCheck);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OTP_TEST_MODE", previousTestMode);
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", previousEnv);
+            Environment.SetEnvironmentVariable("TEST_OTP", previousTestOtp);
+        }
+    }
+
+    [Fact]
+    public async Task PunjabGovOtpService_TestMode_StoresTestOtp_SkipsSms_AndAcceptsVerify()
+    {
+        var previousTestMode = Environment.GetEnvironmentVariable("OTP_TEST_MODE");
+        var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var previousTestOtp = Environment.GetEnvironmentVariable("TEST_OTP");
+        try
+        {
+            Environment.SetEnvironmentVariable("OTP_TEST_MODE", "true");
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+            Environment.SetEnvironmentVariable("TEST_OTP", "123456");
+
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var db = new AppDbContext(options);
+            var mockSms = new MockSmsClient();
+            var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+            var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
+
+            var otpCode = await otpService.GenerateAndSendOtpAsync("9810012345", "LOGIN");
+
+            Assert.Equal("123456", otpCode);
+            Assert.Null(mockSms.LastMobile); // SMS must not fire in overnight/UAT test mode
+
+            var ok = await otpService.VerifyOtpAsync("9810012345", "123456", "LOGIN");
+            Assert.True(ok);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OTP_TEST_MODE", previousTestMode);
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", previousEnv);
+            Environment.SetEnvironmentVariable("TEST_OTP", previousTestOtp);
+        }
+    }
+
+    [Fact]
+    public async Task PunjabGovOtpService_EmptyTestOtpEnv_FallsBackToDefault123456_InTestMode()
+    {
+        var previousTestMode = Environment.GetEnvironmentVariable("OTP_TEST_MODE");
+        var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var previousTestOtp = Environment.GetEnvironmentVariable("TEST_OTP");
+        try
+        {
+            Environment.SetEnvironmentVariable("OTP_TEST_MODE", "true");
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
+            Environment.SetEnvironmentVariable("TEST_OTP", ""); // empty .env value must not win
+
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var db = new AppDbContext(options);
+            var mockSms = new MockSmsClient();
+            var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+            var otpService = new PunjabGovOtpService(db, mockSms, config, NullLogger<PunjabGovOtpService>.Instance);
+
+            var otpCode = await otpService.GenerateAndSendOtpAsync("9810099999", "LOGIN");
+            Assert.Equal("123456", otpCode);
+            Assert.Null(mockSms.LastMobile);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OTP_TEST_MODE", previousTestMode);
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", previousEnv);
+            Environment.SetEnvironmentVariable("TEST_OTP", previousTestOtp);
+        }
     }
 
     [Fact]

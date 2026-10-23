@@ -8,6 +8,8 @@ namespace SuperApp.API.Services;
 /// Real OTP service backed by the Punjab Government SMS gateway API.
 /// Generates a 6-digit random code, saves it to the database with 3-minute expiry,
 /// and dispatches SMS via the registered DLT template.
+/// When OTP_TEST_MODE=true outside Production, stores TEST_OTP and skips live SMS
+/// so overnight multi-agent volume runs can authenticate without SMS spam.
 /// </summary>
 public class PunjabGovOtpService : IOtpService
 {
@@ -33,9 +35,18 @@ public class PunjabGovOtpService : IOtpService
         _templateId = Environment.GetEnvironmentVariable("SMS_TEMPLATE_ID")
             ?? configuration["Sms:TemplateId"]
             ?? "1407177633307627182";
-        _testOtp = Environment.GetEnvironmentVariable("TEST_OTP")
-            ?? configuration["Auth:TestOtp"]
-            ?? "123456";
+        // Empty TEST_OTP= in .env must not win over the default — overnight relies on 123456.
+        var envTestOtp = Environment.GetEnvironmentVariable("TEST_OTP");
+        _testOtp = string.IsNullOrWhiteSpace(envTestOtp)
+            ? (configuration["Auth:TestOtp"] ?? "123456")
+            : envTestOtp.Trim();
+    }
+
+    private static bool IsOtpTestModeEnabled()
+    {
+        var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+        return isTestMode && !isProd;
     }
 
     public async Task<string> GenerateAndSendOtpAsync(string mobileNumber, string purpose = "LOGIN")
@@ -52,8 +63,11 @@ public class PunjabGovOtpService : IOtpService
             otp.IsUsed = true;
         }
 
-        // 2. Generate random 6-digit numeric OTP
-        var otpCode = Random.Shared.Next(100000, 1000000).ToString();
+        // 2. OTP_TEST_MODE (non-Production): store configured TEST_OTP and skip live SMS spam for overnight/UAT.
+        var useTestOtp = IsOtpTestModeEnabled() && !string.IsNullOrWhiteSpace(_testOtp);
+        var otpCode = useTestOtp
+            ? _testOtp
+            : Random.Shared.Next(100000, 1000000).ToString();
 
         // 3. Save to database with 3-minute validity
         var otpRequest = new OtpRequest
@@ -69,6 +83,12 @@ public class PunjabGovOtpService : IOtpService
 
         _db.OtpRequests.Add(otpRequest);
         await _db.SaveChangesAsync();
+
+        if (useTestOtp)
+        {
+            _logger.LogInformation("[PunjabGovOtpService] OTP_TEST_MODE active — stored TEST_OTP for {Mobile}, skipped live SMS.", cleanMobile);
+            return otpCode;
+        }
 
         // 4. Construct registered DLT message with dynamic OTP
         var message = $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. Govt. of Punjab";
@@ -114,10 +134,8 @@ public class PunjabGovOtpService : IOtpService
         var cleanInputOtp = otpCode.Trim();
         if (otpRequest.OtpCode != cleanInputOtp)
         {
-            // In non-production environments with OTP_TEST_MODE=true and configured test OTP
-            var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
-            var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
-            if (!isProd && isTestMode && !string.IsNullOrWhiteSpace(_testOtp) && cleanInputOtp == _testOtp)
+            // Non-Production + OTP_TEST_MODE: accept configured TEST_OTP (overnight agents).
+            if (IsOtpTestModeEnabled() && !string.IsNullOrWhiteSpace(_testOtp) && cleanInputOtp == _testOtp)
             {
                 otpRequest.IsUsed = true;
                 await _db.SaveChangesAsync();
