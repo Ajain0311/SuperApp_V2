@@ -23,37 +23,54 @@ public class ConfigControllerTests
     [Fact]
     public async Task GetConfig_ReturnsConfigWithMapboxAndPaymentKit()
     {
-        using var db = CreateDb();
-        var inMemorySettings = new Dictionary<string, string?>
+        // Env vars win over IConfiguration — isolate so CI secrets / parallel tests cannot leak.
+        var prevPaymentKey = Environment.GetEnvironmentVariable("PAYMENT_KEY");
+        var prevMapProvider = Environment.GetEnvironmentVariable("MAP_PROVIDER");
+        var prevPaymentProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER");
+        Environment.SetEnvironmentVariable("PAYMENT_KEY", null);
+        Environment.SetEnvironmentVariable("MAP_PROVIDER", null);
+        Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", null);
+
+        try
         {
-            { "Mapbox:AccessToken", "pk.test_mapbox_token_12345" },
-            { "Providers:Map", "Mapbox" },
-            { "Payment:Key", "TEST_KEY_999" },
-            { "Providers:Payment", "Easebuzz" },
-            { "Environment", "Staging" }
-        };
+            using var db = CreateDb();
+            var inMemorySettings = new Dictionary<string, string?>
+            {
+                { "Mapbox:AccessToken", "pk.test_mapbox_token_12345" },
+                { "Providers:Map", "Mapbox" },
+                { "Payment:Key", "TEST_KEY_999" },
+                { "Providers:Payment", "Easebuzz" },
+                { "Environment", "Staging" }
+            };
 
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(inMemorySettings)
-            .Build();
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(inMemorySettings)
+                .Build();
 
-        var controller = new ConfigController(config, db);
-        var httpContext = new DefaultHttpContext();
-        httpContext.Request.Scheme = "https";
-        httpContext.Request.Host = new HostString("superapp.local");
-        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+            var controller = new ConfigController(config, db);
+            var httpContext = new DefaultHttpContext();
+            httpContext.Request.Scheme = "https";
+            httpContext.Request.Host = new HostString("superapp.local");
+            controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
-        var actionResult = await controller.GetConfig();
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        var response = Assert.IsType<ApiResponse<ClientConfigDto>>(okResult.Value);
+            var actionResult = await controller.GetConfig();
+            var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+            var response = Assert.IsType<ApiResponse<ClientConfigDto>>(okResult.Value);
 
-        Assert.True(response.Success);
-        Assert.NotNull(response.Data);
-        Assert.Equal("Mapbox", response.Data.MapProvider);
-        Assert.Equal("pk.test_mapbox_token_12345", response.Data.MapboxAccessToken);
-        Assert.Equal("TEST_KEY_999", response.Data.PaymentKeyId);
-        Assert.Equal("https://superapp.local/api", response.Data.ApiBaseUrl);
-        Assert.Equal("https://superapp.local", response.Data.SignalRHubUrl);
+            Assert.True(response.Success);
+            Assert.NotNull(response.Data);
+            Assert.Equal("Mapbox", response.Data.MapProvider);
+            Assert.Equal("pk.test_mapbox_token_12345", response.Data.MapboxAccessToken);
+            Assert.Equal("TEST_KEY_999", response.Data.PaymentKeyId);
+            Assert.Equal("https://superapp.local/api", response.Data.ApiBaseUrl);
+            Assert.Equal("https://superapp.local", response.Data.SignalRHubUrl);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PAYMENT_KEY", prevPaymentKey);
+            Environment.SetEnvironmentVariable("MAP_PROVIDER", prevMapProvider);
+            Environment.SetEnvironmentVariable("PAYMENT_PROVIDER", prevPaymentProvider);
+        }
     }
 
     [Fact]
