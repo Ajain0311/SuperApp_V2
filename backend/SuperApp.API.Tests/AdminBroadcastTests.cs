@@ -81,4 +81,43 @@ public class AdminBroadcastTests
         var expires = DateTime.Parse(iso, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
         Assert.InRange(expires, before.AddMinutes(55), before.AddHours(1).AddMinutes(10));
     }
+
+    [Fact]
+    public async Task Broadcast_ReachesUsersBeyondOldTake2000Cap()
+    {
+        await using var db = CreateDb();
+        // Simulate a large older population + a new high-id style user by inserting many then one more.
+        for (var i = 0; i < 25; i++)
+        {
+            db.Users.Add(new User
+            {
+                MobileNumber = $"9000002{i:D3}",
+                FullName = $"Old{i}",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+            });
+        }
+        await db.SaveChangesAsync();
+        var newbie = new User
+        {
+            MobileNumber = "9000002999",
+            FullName = "Newbie",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Users.Add(newbie);
+        await db.SaveChangesAsync();
+
+        var controller = new AdminController(db, Mock.Of<INotificationService>());
+        var result = await controller.BroadcastNotification(new BroadcastNotificationRequest
+        {
+            Title = "All Users",
+            Message = "No cap",
+            DisplayHours = 2,
+        });
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal(26, db.Notifications.Count());
+        Assert.Contains(db.Notifications, n => n.UserId == newbie.Id && n.ReferenceId!.StartsWith("exp:"));
+    }
 }
