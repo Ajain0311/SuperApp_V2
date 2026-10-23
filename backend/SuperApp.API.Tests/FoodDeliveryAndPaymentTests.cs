@@ -582,7 +582,8 @@ public class FoodDeliveryAndPaymentTests
     {
         var db = NewDb();
         var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        var controller = new SuperApp.API.Controllers.PaymentsController(new MockPaymentService(db), db, config);
+        // Moq avoids process-wide ASPNETCORE_ENVIRONMENT races with Production-guard tests.
+        var controller = new SuperApp.API.Controllers.PaymentsController(new Mock<IPaymentService>().Object, db, config);
         controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 
         var result = await controller.VerifyPayment(new VerifyPaymentRequest
@@ -600,7 +601,7 @@ public class FoodDeliveryAndPaymentTests
     {
         var db = NewDb();
         var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        var controller = new SuperApp.API.Controllers.PaymentsController(new MockPaymentService(db), db, config);
+        var controller = new SuperApp.API.Controllers.PaymentsController(new Mock<IPaymentService>().Object, db, config);
 
         // Payment owned by User 1
         db.Payments.Add(new Payment
