@@ -8,6 +8,9 @@ import { AdminDriversScreen } from './AdminDriversScreen';
 import { AdminOrdersScreen } from './AdminOrdersScreen';
 import { AdminPaymentsScreen } from './AdminPaymentsScreen';
 import { AdminSettingsScreen } from './AdminSettingsScreen';
+import { AdminCouponsScreen } from './AdminCouponsScreen';
+import { AdminHotelCommissionsScreen } from './AdminHotelCommissionsScreen';
+import { AdminRideFaresScreen } from './AdminRideFaresScreen';
 
 const Stack = createNativeStackNavigator<AdminStackParamList>();
 

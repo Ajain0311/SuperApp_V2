@@ -119,4 +119,7 @@ export type AdminStackParamList = {
   AdminOrders: undefined;
   AdminPayments: undefined;
   AdminSettings: undefined;
+  AdminCoupons: undefined;
+  AdminHotelCommissions: undefined;
+  AdminRideFares: undefined;
 };

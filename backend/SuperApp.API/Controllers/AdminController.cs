@@ -37,7 +37,11 @@ public class AdminController : ControllerBase
         var foodSales = await _db.FoodOrders.Where(o => o.Status == OrderStatus.Delivered).SumAsync(o => (decimal?)o.GrandTotal) ?? 0;
         var rideFares = await _db.Rides.Where(r => r.Status == RideStatus.Completed).SumAsync(r => (decimal?)r.ActualFare) ?? 0;
 
-        decimal platformCommission = Math.Round(foodSales * 0.15m + rideFares * 0.20m, 2);
+        var ledgerCommission = await _db.HotelCommissionLedgers.SumAsync(l => (decimal?)l.CommissionAmount) ?? 0;
+        var driverCutSetting = await _db.AppSettings.AsNoTracking().FirstOrDefaultAsync(s => s.SettingKey == "driver_commission_percent");
+        var driverPercent = (driverCutSetting != null && decimal.TryParse(driverCutSetting.SettingValue, out var dp)) ? dp : 20.00m;
+        var rideCommission = Math.Round(rideFares * (driverPercent / 100m), 2);
+        decimal platformCommission = (ledgerCommission > 0 ? ledgerCommission : Math.Round(foodSales * 0.15m, 2)) + rideCommission;
 
         var recentActivities = new List<RecentActivityDto>();
 
@@ -690,6 +694,35 @@ public class AdminController : ControllerBase
                 await _db.SaveChangesAsync();
                 return Ok(ApiResponse<Coupon>.Ok(coupon, "Coupon created successfully"));
 
+            case "EDIT":
+                if (!request.Id.HasValue)
+                    return BadRequest(ApiResponse<Coupon>.Fail("ID is required for EDIT"));
+                var cEdit = await _db.Coupons.FindAsync(request.Id.Value);
+                if (cEdit == null) return NotFound(ApiResponse<Coupon>.Fail("Coupon not found"));
+                if (!string.IsNullOrWhiteSpace(request.Code))
+                {
+                    var newCode = request.Code.Trim().ToUpperInvariant();
+                    var dup = await _db.Coupons.FirstOrDefaultAsync(c => c.Code == newCode && c.Id != cEdit.Id);
+                    if (dup != null) return Conflict(ApiResponse<Coupon>.Fail("Another coupon with this code already exists"));
+                    cEdit.Code = newCode;
+                }
+                if (request.Title != null) cEdit.Title = request.Title.Trim();
+                if (request.Description != null) cEdit.Description = request.Description.Trim();
+                if (!string.IsNullOrWhiteSpace(request.DiscountType)) cEdit.DiscountType = request.DiscountType;
+                if (request.DiscountValue.HasValue) cEdit.DiscountValue = request.DiscountValue.Value;
+                if (request.MinOrderAmount.HasValue) cEdit.MinOrderAmount = request.MinOrderAmount.Value;
+                if (request.MaxDiscount.HasValue) cEdit.MaxDiscount = request.MaxDiscount;
+                if (request.StartDate.HasValue) cEdit.StartDate = request.StartDate.Value;
+                if (request.ExpiryDate.HasValue) cEdit.ExpiryDate = request.ExpiryDate.Value;
+                if (request.TotalUsageLimit.HasValue) cEdit.TotalUsageLimit = request.TotalUsageLimit;
+                if (request.PerUserLimit.HasValue && request.PerUserLimit.Value > 0) cEdit.PerUserLimit = request.PerUserLimit.Value;
+                if (!string.IsNullOrWhiteSpace(request.ApplicableModule)) cEdit.ApplicableModule = CouponEngine.NormalizeModule(request.ApplicableModule);
+                if (request.ApplicableRestaurantId.HasValue) cEdit.ApplicableRestaurantId = request.ApplicableRestaurantId;
+                if (request.IsActive.HasValue) cEdit.IsActive = request.IsActive.Value;
+                cEdit.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse<Coupon>.Ok(cEdit, "Coupon updated successfully"));
+
             case "STATUS":
                 if (!request.Id.HasValue || !request.IsActive.HasValue)
                     return BadRequest(ApiResponse<Coupon>.Fail("ID and IsActive are required"));
@@ -1164,7 +1197,11 @@ public class AdminController : ControllerBase
         var totalOrders = await _db.FoodOrders.CountAsync(o => o.Status == OrderStatus.Delivered);
         var totalRides = await _db.Rides.CountAsync(r => r.Status == RideStatus.Completed);
 
-        decimal platformEarnings = Math.Round(foodSales * 0.15m + rideFares * 0.20m, 2);
+        var reportLedgerCommission = await _db.HotelCommissionLedgers.SumAsync(l => (decimal?)l.CommissionAmount) ?? 0;
+        var reportDriverCutSetting = await _db.AppSettings.AsNoTracking().FirstOrDefaultAsync(s => s.SettingKey == "driver_commission_percent");
+        var reportDriverPercent = (reportDriverCutSetting != null && decimal.TryParse(reportDriverCutSetting.SettingValue, out var rdp)) ? rdp : 20.00m;
+        var reportRideCommission = Math.Round(rideFares * (reportDriverPercent / 100m), 2);
+        decimal platformEarnings = (reportLedgerCommission > 0 ? reportLedgerCommission : Math.Round(foodSales * 0.15m, 2)) + reportRideCommission;
 
         var foodByRestaurant = await _db.FoodOrders
             .Where(o => o.Status == OrderStatus.Delivered)
@@ -1377,5 +1414,297 @@ public class AdminController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(ApiResponse.Ok("Dummy test restaurants removed and real restaurant phone numbers updated successfully."));
+    }
+
+    /// <summary>
+    /// Hotel commission summary and ledger balances for Admin
+    /// </summary>
+    [HttpGet("hotel-commissions")]
+    public async Task<ActionResult<ApiResponse<List<HotelCommissionSummaryDto>>>> GetHotelCommissions()
+    {
+        var defaultRateSetting = await _db.AppSettings.AsNoTracking().FirstOrDefaultAsync(s => s.SettingKey == "platform_commission_percent");
+        var defaultRate = (defaultRateSetting != null && decimal.TryParse(defaultRateSetting.SettingValue, out var dr)) ? dr : 15.00m;
+
+        var restaurants = await _db.Restaurants.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
+        var ledgers = await _db.HotelCommissionLedgers.AsNoTracking().ToListAsync();
+        var deliveredOrders = await _db.FoodOrders.AsNoTracking().Where(o => o.Status == OrderStatus.Delivered).ToListAsync();
+
+        var summaries = new List<HotelCommissionSummaryDto>();
+        foreach (var r in restaurants)
+        {
+            var rLedgers = ledgers.Where(l => l.RestaurantId == r.Id).ToList();
+            var rOrders = deliveredOrders.Where(o => o.RestaurantId == r.Id).ToList();
+            var rate = r.CommissionRatePercent ?? defaultRate;
+            var grossSales = rOrders.Sum(o => o.GrandTotal);
+            var totalCommission = rLedgers.Sum(l => l.CommissionAmount);
+            var settledAmount = rLedgers.Where(l => l.Status == "SETTLED").Sum(l => l.CommissionAmount);
+            var pendingBalance = rLedgers.Where(l => l.Status == "PENDING").Sum(l => l.CommissionAmount);
+
+            summaries.Add(new HotelCommissionSummaryDto
+            {
+                RestaurantId = r.Id,
+                RestaurantName = r.Name,
+                ConfiguredRatePercent = rate,
+                GrossDeliveredSales = grossSales,
+                TotalCommissionEarned = totalCommission,
+                PendingCommissionBalance = pendingBalance,
+                SettledCommissionAmount = settledAmount,
+                DeliveredOrdersCount = rOrders.Count
+            });
+        }
+
+        return Ok(ApiResponse<List<HotelCommissionSummaryDto>>.Ok(summaries));
+    }
+
+    /// <summary>
+    /// Update prospective commission rate for a specific hotel
+    /// </summary>
+    [HttpPut("restaurants/{id:long}/commission-rate")]
+    public async Task<ActionResult<ApiResponse>> UpdateHotelCommissionRate(long id, [FromBody] UpdateHotelCommissionRateRequest request)
+    {
+        if (request.CommissionRatePercent < 0 || request.CommissionRatePercent > 100)
+            return BadRequest(ApiResponse.Fail("Commission rate percentage must be between 0 and 100"));
+
+        var restaurant = await _db.Restaurants.FirstOrDefaultAsync(r => r.Id == id);
+        if (restaurant == null)
+            return NotFound(ApiResponse.Fail("Restaurant not found"));
+
+        restaurant.CommissionRatePercent = Math.Round(request.CommissionRatePercent, 2);
+        restaurant.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(ApiResponse.Ok($"Commission rate for {restaurant.Name} updated to {restaurant.CommissionRatePercent:F2}% (applies prospectively)"));
+    }
+
+    /// <summary>
+    /// Get detailed ledger entries for a hotel
+    /// </summary>
+    [HttpGet("hotel-commissions/{restaurantId:long}/ledger")]
+    public async Task<ActionResult<ApiResponse<List<HotelCommissionLedgerEntryDto>>>> GetHotelLedger(long restaurantId)
+    {
+        var entries = await _db.HotelCommissionLedgers
+            .Include(l => l.Restaurant)
+            .Where(l => l.RestaurantId == restaurantId)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(100)
+            .Select(l => new HotelCommissionLedgerEntryDto
+            {
+                Id = l.Id,
+                RestaurantId = l.RestaurantId,
+                RestaurantName = l.Restaurant.Name,
+                FoodOrderId = l.FoodOrderId,
+                OrderNumber = l.OrderNumber,
+                CommissionBaseAmount = l.CommissionBaseAmount,
+                CommissionRatePercent = l.CommissionRatePercent,
+                CommissionAmount = l.CommissionAmount,
+                NetHotelProceeds = l.NetHotelProceeds,
+                PlatformFundedDiscount = l.PlatformFundedDiscount,
+                Status = l.Status,
+                SettlementBatchId = l.SettlementBatchId,
+                CreatedAt = l.CreatedAt,
+                SettledAt = l.SettledAt
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<HotelCommissionLedgerEntryDto>>.Ok(entries));
+    }
+
+    /// <summary>
+    /// Get settlement batches
+    /// </summary>
+    [HttpGet("settlement-batches")]
+    public async Task<ActionResult<ApiResponse<List<HotelSettlementBatch>>>> GetSettlementBatches([FromQuery] long? restaurantId)
+    {
+        var query = _db.HotelSettlementBatches
+            .Include(b => b.Restaurant)
+            .AsQueryable();
+
+        if (restaurantId.HasValue && restaurantId.Value > 0)
+        {
+            query = query.Where(b => b.RestaurantId == restaurantId.Value);
+        }
+
+        var batches = await query.OrderByDescending(b => b.CreatedAt).Take(50).ToListAsync();
+        return Ok(ApiResponse<List<HotelSettlementBatch>>.Ok(batches));
+    }
+
+    /// <summary>
+    /// Create a collection / settlement batch for pending hotel commission entries
+    /// </summary>
+    [HttpPost("settlement-batches")]
+    public async Task<ActionResult<ApiResponse<HotelSettlementBatch>>> CreateSettlementBatch([FromBody] CreateSettlementBatchRequest request)
+    {
+        if (request.RestaurantId <= 0)
+            return BadRequest(ApiResponse<HotelSettlementBatch>.Fail("Restaurant ID is required"));
+
+        var restaurant = await _db.Restaurants.FindAsync(request.RestaurantId);
+        if (restaurant == null)
+            return NotFound(ApiResponse<HotelSettlementBatch>.Fail("Restaurant not found"));
+
+        var pStart = request.PeriodStart ?? DateTime.UtcNow.AddDays(-7);
+        var pEnd = request.PeriodEnd ?? DateTime.UtcNow;
+
+        var pendingEntries = await _db.HotelCommissionLedgers
+            .Where(l => l.RestaurantId == request.RestaurantId && l.Status == "PENDING" && l.CreatedAt >= pStart && l.CreatedAt <= pEnd)
+            .ToListAsync();
+
+        if (!pendingEntries.Any())
+        {
+            pendingEntries = await _db.HotelCommissionLedgers
+                .Where(l => l.RestaurantId == request.RestaurantId && l.Status == "PENDING")
+                .ToListAsync();
+        }
+
+        if (!pendingEntries.Any())
+            return BadRequest(ApiResponse<HotelSettlementBatch>.Fail("No pending ledger entries found for this hotel to batch"));
+
+        var totalCommission = pendingEntries.Sum(e => e.CommissionAmount);
+        var batch = new HotelSettlementBatch
+        {
+            BatchNumber = "SB-" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant(),
+            RestaurantId = request.RestaurantId,
+            PeriodStart = pStart,
+            PeriodEnd = pEnd,
+            OrderCount = pendingEntries.Count,
+            TotalCommissionAmount = totalCommission,
+            TotalSettledAmount = totalCommission,
+            ReferenceProof = request.ReferenceProof,
+            Status = "PENDING_APPROVAL",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.HotelSettlementBatches.Add(batch);
+        await _db.SaveChangesAsync();
+
+        foreach (var entry in pendingEntries)
+        {
+            entry.SettlementBatchId = batch.Id;
+        }
+        await _db.SaveChangesAsync();
+
+        return Ok(ApiResponse<HotelSettlementBatch>.Ok(batch, "Settlement batch created successfully"));
+    }
+
+    /// <summary>
+    /// Approve settlement batch: transitions batch to APPROVED and ledger entries to SETTLED (deducts from pending balance)
+    /// </summary>
+    [HttpPost("settlement-batches/{batchId:long}/approve")]
+    public async Task<ActionResult<ApiResponse<HotelSettlementBatch>>> ApproveSettlementBatch(long batchId, [FromBody] ApproveSettlementBatchRequest? request)
+    {
+        var batch = await _db.HotelSettlementBatches
+            .Include(b => b.Restaurant)
+            .FirstOrDefaultAsync(b => b.Id == batchId);
+
+        if (batch == null)
+            return NotFound(ApiResponse<HotelSettlementBatch>.Fail("Settlement batch not found"));
+
+        if (batch.Status == "APPROVED")
+            return Ok(ApiResponse<HotelSettlementBatch>.Ok(batch, "Batch is already approved"));
+
+        var adminIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        long? adminId = (adminIdClaim != null && long.TryParse(adminIdClaim.Value, out var aid)) ? aid : null;
+        var adminName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Admin";
+
+        batch.Status = "APPROVED";
+        batch.ApprovedByAdminId = adminId;
+        batch.ApprovedByAdminName = adminName;
+        batch.ApprovedAt = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(request?.ReferenceProof))
+            batch.ReferenceProof = request.ReferenceProof;
+
+        var entries = await _db.HotelCommissionLedgers
+            .Where(l => l.SettlementBatchId == batch.Id && l.Status == "PENDING")
+            .ToListAsync();
+
+        foreach (var entry in entries)
+        {
+            entry.Status = "SETTLED";
+            entry.SettledAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(ApiResponse<HotelSettlementBatch>.Ok(batch, "Settlement batch approved. Pending balances updated."));
+    }
+
+    /// <summary>
+    /// Ride Fare Configuration: Get all vehicle fare rules and options
+    /// </summary>
+    [HttpGet("ride-fares")]
+    public async Task<ActionResult<ApiResponse<object>>> GetRideFares()
+    {
+        var rules = await _db.RideFareRules.AsNoTracking().ToListAsync();
+        var options = await _db.RideFareOptions.AsNoTracking().ToListAsync();
+        if (rules.Count == 0) rules = RideFareEngine.DefaultRules();
+        if (options.Count == 0) options = RideFareEngine.DefaultOptions();
+
+        return Ok(ApiResponse<object>.Ok(new { rules, options }));
+    }
+
+    /// <summary>
+    /// Ride Fare Configuration: Update vehicle fare rule (BIKE, AUTO, CAB)
+    /// </summary>
+    [HttpPut("ride-fares/rules/{vehicleType}")]
+    public async Task<ActionResult<ApiResponse<RideFareRule>>> UpdateRideFareRule(string vehicleType, [FromBody] RideFareRule updatedRule)
+    {
+        var typeUpper = vehicleType.Trim().ToUpperInvariant();
+        if (typeUpper is not ("BIKE" or "AUTO" or "CAB"))
+            return BadRequest(ApiResponse<RideFareRule>.Fail("Vehicle type must be BIKE, AUTO, or CAB"));
+
+        if (updatedRule.MinimumFare < 0 || updatedRule.BaseFare < 0 || updatedRule.PerKmRate < 0 ||
+            updatedRule.PerMinuteRate < 0 || updatedRule.BookingFee < 0 || updatedRule.PlatformFee < 0)
+        {
+            return BadRequest(ApiResponse<RideFareRule>.Fail("Fare amounts must be non-negative"));
+        }
+
+        var existing = await _db.RideFareRules.FirstOrDefaultAsync(r => r.VehicleType == typeUpper && r.City == "DEFAULT");
+        if (existing == null)
+        {
+            existing = new RideFareRule
+            {
+                VehicleType = typeUpper,
+                City = "DEFAULT",
+                MinimumFare = updatedRule.MinimumFare,
+                BaseFare = updatedRule.BaseFare,
+                IncludedDistanceKm = updatedRule.IncludedDistanceKm,
+                PerKmRate = updatedRule.PerKmRate,
+                PerMinuteRate = updatedRule.PerMinuteRate,
+                BookingFee = updatedRule.BookingFee,
+                PlatformFee = updatedRule.PlatformFee,
+                NightSurchargePercent = updatedRule.NightSurchargePercent,
+                PeakMultiplier = updatedRule.PeakMultiplier > 0 ? updatedRule.PeakMultiplier : 1.0m,
+                TaxPercentage = updatedRule.TaxPercentage,
+                IsActive = updatedRule.IsActive
+            };
+            _db.RideFareRules.Add(existing);
+        }
+        else
+        {
+            existing.MinimumFare = updatedRule.MinimumFare;
+            existing.BaseFare = updatedRule.BaseFare;
+            existing.IncludedDistanceKm = updatedRule.IncludedDistanceKm;
+            existing.PerKmRate = updatedRule.PerKmRate;
+            existing.PerMinuteRate = updatedRule.PerMinuteRate;
+            existing.BookingFee = updatedRule.BookingFee;
+            existing.PlatformFee = updatedRule.PlatformFee;
+            existing.NightSurchargePercent = updatedRule.NightSurchargePercent;
+            existing.PeakMultiplier = updatedRule.PeakMultiplier > 0 ? updatedRule.PeakMultiplier : 1.0m;
+            existing.TaxPercentage = updatedRule.TaxPercentage;
+            existing.IsActive = updatedRule.IsActive;
+        }
+
+        var prefix = "ride_" + typeUpper.ToLowerInvariant();
+        void SyncKey(string key, decimal val)
+        {
+            var s = _db.AppSettings.FirstOrDefault(a => a.SettingKey == key);
+            if (s != null) { s.SettingValue = val.ToString("G"); s.UpdatedAt = DateTime.UtcNow; }
+            else { _db.AppSettings.Add(new AppSetting { SettingKey = key, SettingValue = val.ToString("G"), UpdatedAt = DateTime.UtcNow }); }
+        }
+
+        SyncKey(prefix + "_base_fare", existing.BaseFare);
+        SyncKey(prefix + "_per_km_rate", existing.PerKmRate);
+        SyncKey(prefix + "_minimum_fare", existing.MinimumFare);
+
+        await _db.SaveChangesAsync();
+        return Ok(ApiResponse<RideFareRule>.Ok(existing, $"{typeUpper} fare rule updated successfully"));
     }
 }

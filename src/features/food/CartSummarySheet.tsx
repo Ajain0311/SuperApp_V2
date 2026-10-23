@@ -22,6 +22,7 @@ interface CartSummarySheetProps {
   visible: boolean;
   onClose: () => void;
   restaurantName: string;
+  restaurantId?: number;
   cartItems: CartItem[];
   deliveryFee?: number;
   onClear: () => void;
@@ -33,6 +34,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   visible,
   onClose,
   restaurantName,
+  restaurantId,
   cartItems,
   deliveryFee = 0,
   onClear,
@@ -68,6 +70,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
         code: couponCode.trim().toUpperCase(),
         orderAmount: itemTotal,
         module: 'FOOD',
+        restaurantId: hotelCount === 1 ? (restaurantId || cartItems[0]?.restaurantId) : undefined,
       });
       const data = res.data?.data || res.data;
       if (data?.isValid) {

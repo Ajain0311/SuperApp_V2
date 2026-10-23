@@ -131,11 +131,11 @@ public class FoodCatalogAndCheckoutTests
 
         var stored = await db.FoodOrders.Include(o => o.Items).ToListAsync();
         Assert.Equal(2, stored.Count);
-        Assert.All(stored, o => Assert.Equal(OrderStatus.Pending, o.Status));
+        Assert.All(stored, o => Assert.Equal(OrderStatus.Accepted, o.Status));
     }
 
     [Fact]
-    public async Task Checkout_MultiRestaurant_Online_IsBlocked()
+    public async Task Checkout_MultiRestaurant_Online_IsSupported()
     {
         var db = CreateDb();
         await SeedTwoRestaurantsAsync(db);
@@ -164,7 +164,14 @@ public class FoodCatalogAndCheckoutTests
             }
         });
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-        Assert.Empty(await db.FoodOrders.ToListAsync());
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var body = Assert.IsType<ApiResponse<FoodCheckoutResultDto>>(ok.Value);
+        Assert.True(body.Success);
+        Assert.Equal(2, body.Data!.RestaurantCount);
+        Assert.False(string.IsNullOrEmpty(body.Data.CheckoutGroupId));
+
+        var stored = await db.FoodOrders.ToListAsync();
+        Assert.Equal(2, stored.Count);
+        Assert.All(stored, o => Assert.Equal("PENDING_PAYMENT", o.PaymentStatus));
     }
 }

@@ -111,6 +111,8 @@ public class FoodOrdersController : ControllerBase
             return BadRequest(ApiResponse<FoodOrderDto>.Fail("Delivery address is incomplete (missing street line or city)"));
         }
 
+        // Auto-accept: For COD, immediately confirm valid order to Accepted. For ONLINE, keep Pending until verified payment.
+        var initialOrderStatus = paymentMethod == "ONLINE" ? OrderStatus.Pending : OrderStatus.Accepted;
         var initialPaymentStatus = paymentMethod == "ONLINE" ? "PENDING_PAYMENT" : "PENDING";
         var orderItems = new List<FoodOrderItem>();
         decimal subTotal = 0;
@@ -207,7 +209,8 @@ public class FoodOrdersController : ControllerBase
             UserId = userId.Value,
             RestaurantId = restaurant.Id,
             AddressId = request.AddressId,
-            Status = OrderStatus.Pending,
+            Status = initialOrderStatus,
+            CommissionRatePercent = await HotelCommissionLedgerService.ResolveCommissionRateAsync(_db, restaurant.Id),
             SubTotal = subTotal,
             DiscountAmount = 0,
             DeliveryFee = deliveryFee,
@@ -341,13 +344,7 @@ public class FoodOrdersController : ControllerBase
             list.Add(line);
         }
 
-        if (groups.Count > 1 && paymentMethod == "ONLINE")
-            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Online payment supports one restaurant per checkout. Use COD for multi-restaurant carts, or checkout each hotel separately."));
-
-        if (groups.Count > 1 && !string.IsNullOrWhiteSpace(request.CouponCode))
-            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Coupons apply to single-restaurant checkouts only. Remove the coupon or checkout one hotel at a time."));
-
-        // Single restaurant: reuse PlaceOrder (coupon + ONLINE supported).
+        // Single restaurant checkout with single PlaceFoodOrderRequest:
         if (groups.Count == 1)
         {
             var only = groups.First();
@@ -363,10 +360,18 @@ public class FoodOrdersController : ControllerBase
             var placed = await PlaceOrder(single);
             if (placed.Result is OkObjectResult ok && ok.Value is ApiResponse<FoodOrderDto> body && body.Success && body.Data != null)
             {
+                PaymentOrderResult? payOrder = null;
+                if (paymentMethod == "ONLINE" && _payments != null)
+                {
+                    var payRes = await _payments.CreatePaymentOrderAsync(body.Data.GrandTotal, "INR", body.Data.Id.ToString(), "FOOD", userId.Value);
+                    if (payRes.Success) payOrder = payRes;
+                }
                 return Ok(ApiResponse<FoodCheckoutResultDto>.Ok(new FoodCheckoutResultDto
                 {
                     Orders = new List<FoodOrderDto> { body.Data },
                     GrandTotal = body.Data.GrandTotal,
+                    CheckoutGroupId = body.Data.CheckoutGroupId,
+                    PaymentOrder = payOrder,
                     RestaurantCount = 1
                 }));
             }
@@ -375,7 +380,7 @@ public class FoodOrdersController : ControllerBase
             return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Checkout failed"));
         }
 
-        // Pre-validate all kitchen groups before writing (no open transaction on 400s).
+        // Multi-restaurant fan-out: Pre-validate all kitchen groups
         var pendingCreates = new List<(Restaurant Restaurant, List<FoodOrderItem> Items, decimal SubTotal)>();
         foreach (var group in groups)
         {
@@ -444,31 +449,105 @@ public class FoodOrdersController : ControllerBase
             pendingCreates.Add((restaurant, orderItems, subTotal));
         }
 
-        // Multi-restaurant COD fan-out in one SaveChanges (atomic unit of work).
-        // Do not BeginTransaction here — NpgsqlRetryingExecutionStrategy rejects user transactions.
+        // Multi-restaurant group identifier linking all child kitchen orders
+        var checkoutGroupId = $"GRP-{Guid.NewGuid():N}";
+        var initialOrderStatus = paymentMethod == "ONLINE" ? OrderStatus.Pending : OrderStatus.Accepted;
+        var initialPaymentStatus = paymentMethod == "ONLINE" ? "PENDING_PAYMENT" : "PENDING";
+
+        // Proportional Coupon Allocation across restaurants:
+        var totalBasket = pendingCreates.Sum(p => p.SubTotal);
+        var discountsByRestaurant = new Dictionary<long, decimal>();
+        long? appliedCouponId = null;
+
+        if (!string.IsNullOrWhiteSpace(request.CouponCode))
+        {
+            var rawCoupon = await _db.Coupons.FirstOrDefaultAsync(c => c.Code.ToUpper() == request.CouponCode.Trim().ToUpper());
+            if (rawCoupon == null || !rawCoupon.IsActive)
+                return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Invalid or inactive coupon code"));
+
+            if (rawCoupon.ApplicableRestaurantId.HasValue)
+            {
+                // Hotel-specific coupon: must target one of the restaurants in cart and meet min order
+                var targetHotel = pendingCreates.FirstOrDefault(p => p.Restaurant.Id == rawCoupon.ApplicableRestaurantId.Value);
+                if (targetHotel.Restaurant == null)
+                    return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Coupon is only valid for items from a specific restaurant not in your basket"));
+
+                var uses = await _db.CouponUsages.CountAsync(u => u.CouponId == rawCoupon.Id && u.UserId == userId.Value);
+                var quote = CouponEngine.Evaluate(rawCoupon, "FOOD", targetHotel.SubTotal, rawCoupon.ApplicableRestaurantId, uses, DateTime.UtcNow);
+                if (!quote.IsValid || quote.Coupon == null)
+                    return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail(quote.Message));
+
+                appliedCouponId = quote.Coupon.Id;
+                foreach (var p in pendingCreates)
+                {
+                    discountsByRestaurant[p.Restaurant.Id] = p.Restaurant.Id == rawCoupon.ApplicableRestaurantId.Value ? quote.DiscountAmount : 0m;
+                }
+            }
+            else
+            {
+                // Global food coupon: evaluate across aggregate basket and allocate proportionally
+                var uses = await _db.CouponUsages.CountAsync(u => u.CouponId == rawCoupon.Id && u.UserId == userId.Value);
+                var quote = CouponEngine.Evaluate(rawCoupon, "FOOD", totalBasket, null, uses, DateTime.UtcNow);
+                if (!quote.IsValid || quote.Coupon == null)
+                    return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail(quote.Message));
+
+                appliedCouponId = quote.Coupon.Id;
+                var restaurantBaskets = pendingCreates.Select(p => (p.Restaurant.Id, p.SubTotal)).ToList();
+                discountsByRestaurant = CouponEngine.AllocateDiscountProportionally(quote.DiscountAmount, restaurantBaskets);
+            }
+        }
+        else
+        {
+            foreach (var p in pendingCreates) discountsByRestaurant[p.Restaurant.Id] = 0m;
+        }
+
+        // Fan out child kitchen orders:
         var created = new List<(FoodOrder Order, Restaurant Restaurant)>();
         foreach (var (restaurant, orderItems, subTotal) in pendingCreates)
         {
+            var hotelDiscount = discountsByRestaurant.GetValueOrDefault(restaurant.Id, 0m);
+            var commissionRate = await HotelCommissionLedgerService.ResolveCommissionRateAsync(_db, restaurant.Id);
+
             var order = new FoodOrder
             {
                 OrderNumber = $"FO-{Guid.NewGuid().ToString("N")[..16]}",
                 UserId = userId.Value,
                 RestaurantId = restaurant.Id,
                 AddressId = request.AddressId,
-                Status = OrderStatus.Pending,
+                CheckoutGroupId = checkoutGroupId,
+                CommissionRatePercent = commissionRate,
+                Status = initialOrderStatus,
                 SubTotal = subTotal,
                 DiscountAmount = 0,
                 DeliveryFee = restaurant.DeliveryFee,
-                PaymentMethod = "COD",
-                PaymentStatus = "PENDING",
+                PaymentMethod = paymentMethod,
+                PaymentStatus = initialPaymentStatus,
                 Notes = SanitizeNotes(request.Notes),
                 EstimatedDeliveryMinutes = restaurant.AvgDeliveryTimeMinutes,
                 CreatedAt = DateTime.UtcNow,
                 Items = orderItems
             };
-            ApplyCouponTotals(order, null, 0, restaurant.DeliveryFee, subTotal);
+
+            ApplyCouponTotals(order, appliedCouponId, hotelDiscount, restaurant.DeliveryFee, subTotal);
             _db.FoodOrders.Add(order);
             created.Add((order, restaurant));
+        }
+
+        // If coupon applied, track usage
+        if (appliedCouponId.HasValue)
+        {
+            var couponEntity = await _db.Coupons.FindAsync(appliedCouponId.Value);
+            if (couponEntity != null)
+            {
+                couponEntity.CurrentUsageCount += 1;
+                couponEntity.UpdatedAt = DateTime.UtcNow;
+                _db.CouponUsages.Add(new CouponUsage
+                {
+                    CouponId = couponEntity.Id,
+                    UserId = userId.Value,
+                    UsedAt = DateTime.UtcNow
+                });
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -479,24 +558,72 @@ public class FoodOrdersController : ControllerBase
         {
             var dto = MapToOrderDto(order, restaurant, validatedAddress, ownerPhone: ownerPhones.GetValueOrDefault(restaurant.Id));
             dtos.Add(dto);
-            try
+            // Notify hotel kitchen immediately if COD or auto-accepted
+            if (paymentMethod == "COD")
             {
-                await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", dto);
+                try
+                {
+                    await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", dto);
+                }
+                catch { /* non-critical */ }
             }
-            catch { /* non-critical */ }
+        }
+
+        var grandTotal = dtos.Sum(o => o.GrandTotal);
+        PaymentOrderResult? groupPaymentOrder = null;
+
+        // If ONLINE payment, initiate single gateway payment order for combined grand total referencing primary child order
+        if (paymentMethod == "ONLINE" && _payments != null && dtos.Count > 0)
+        {
+            var primaryOrder = dtos[0];
+            var payRes = await _payments.CreatePaymentOrderAsync(grandTotal, "INR", primaryOrder.Id.ToString(), "FOOD", userId.Value);
+            if (payRes.Success) groupPaymentOrder = payRes;
         }
 
         return Ok(ApiResponse<FoodCheckoutResultDto>.Ok(new FoodCheckoutResultDto
         {
             Orders = dtos,
-            GrandTotal = dtos.Sum(o => o.GrandTotal),
+            GrandTotal = grandTotal,
+            CheckoutGroupId = checkoutGroupId,
+            PaymentOrder = groupPaymentOrder,
             RestaurantCount = dtos.Count
         }));
     }
 
     /// <summary>
-    /// Get food order history for the current user (strictly user-isolated)
+    /// Consolidated group order progress and child orders for multi-restaurant checkouts
     /// </summary>
+    [HttpGet("group/{groupId}")]
+    public async Task<ActionResult<ApiResponse<FoodCheckoutResultDto>>> GetGroupOrders(string groupId)
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<FoodCheckoutResultDto>.Fail("Authentication required"));
+
+        var orders = await _db.FoodOrders
+            .Include(o => o.Restaurant)
+            .Include(o => o.Address)
+            .Include(o => o.Items)
+            .Include(o => o.Driver).ThenInclude(d => d!.User)
+            .Where(o => o.CheckoutGroupId == groupId && (o.UserId == userId.Value || User.IsInRole(RoleNames.Admin)))
+            .OrderBy(o => o.Id)
+            .ToListAsync();
+
+        if (!orders.Any())
+            return NotFound(ApiResponse<FoodCheckoutResultDto>.Fail("Order group not found"));
+
+        var ownerPhones = await ResolveRestaurantOwnerPhonesAsync(orders.Select(o => o.RestaurantId).Distinct().ToList());
+        var dtos = orders.Select(o => MapToOrderDto(o, o.Restaurant, o.Address, ownerPhone: ownerPhones.GetValueOrDefault(o.RestaurantId))).ToList();
+
+        return Ok(ApiResponse<FoodCheckoutResultDto>.Ok(new FoodCheckoutResultDto
+        {
+            Orders = dtos,
+            GrandTotal = dtos.Sum(o => o.GrandTotal),
+            CheckoutGroupId = groupId,
+            RestaurantCount = dtos.Count
+        }));
+    }
+
     [HttpGet]
     [HttpGet("my-orders")]
     public async Task<ActionResult<ApiResponse<List<FoodOrderDto>>>> GetMyOrders()
@@ -766,6 +893,7 @@ public class FoodOrdersController : ControllerBase
             DeliveryFee = o.DeliveryFee,
             TaxAmount = o.TaxAmount,
             GrandTotal = o.GrandTotal,
+            CheckoutGroupId = o.CheckoutGroupId,
             PaymentMethod = o.PaymentMethod,
             PaymentStatus = o.PaymentStatus,
             DriverId = o.DriverId,
