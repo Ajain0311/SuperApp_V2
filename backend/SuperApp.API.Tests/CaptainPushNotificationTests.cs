@@ -1087,7 +1087,7 @@ public class CaptainPushNotificationTests
     }
 
     [Fact]
-    public async Task ManageUser_AssignRestaurantOwner_RequiresValidExplicitRestaurantId()
+    public async Task ManageUser_AssignRestaurantOwner_AutoCreatesHotelWhenRestaurantIdOmitted()
     {
         var db = CreateDb();
         var admin = new User { Id = 1001, MobileNumber = "9876501001", FullName = "Admin 1001" };
@@ -1108,16 +1108,23 @@ public class CaptainPushNotificationTests
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
         };
 
-        // 1. Omitted RestaurantId -> BadRequest
+        // 1. Omitted RestaurantId -> auto-create placeholder hotel + mapping (checkbox grant path)
         var res1 = await controller.ManageUser(new AdminUserActionRequest
         {
             UserId = citizen.Id,
             Action = "ROLE",
             RoleName = RoleNames.RestaurantOwner
         });
-        Assert.IsType<BadRequestObjectResult>(res1.Result);
+        Assert.IsType<OkObjectResult>(res1.Result);
 
-        // 2. Inactive or nonexistent RestaurantId -> BadRequest
+        var autoMapping = await db.RestaurantUsers
+            .Include(ru => ru.Restaurant)
+            .FirstOrDefaultAsync(ru => ru.UserId == citizen.Id && ru.IsActive);
+        Assert.NotNull(autoMapping);
+        Assert.NotNull(autoMapping.Restaurant);
+        Assert.True(autoMapping.Restaurant.IsActive);
+
+        // 2. Nonexistent RestaurantId -> BadRequest
         var res2 = await controller.ManageUser(new AdminUserActionRequest
         {
             UserId = citizen.Id,
