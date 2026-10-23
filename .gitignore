@@ -72,3 +72,9 @@ e2e/screenshots/
 playwright-report/
 test-results/
 e2e/playwright-results.json
+
+# Local infrastructure, credentials and server notes (NEVER COMMIT)
+LOCAL_INFRA_SECRETS.md
+*.secrets.md
+credentials.local.md
+
