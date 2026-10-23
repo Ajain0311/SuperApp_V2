@@ -309,6 +309,47 @@ describe('NotificationService - Push Permissions, Scheduling & Deep-Link Routing
       });
     });
 
+    it('routes MARKETPLACE_OFFER notifications to ListingDetail using referenceId', () => {
+      const response: any = {
+        notification: {
+          request: {
+            content: {
+              data: {
+                module: 'MARKETPLACE_OFFER',
+                referenceId: '77',
+              },
+            },
+          },
+        },
+      };
+
+      notificationService.handleNotificationResponse(response, mockNavigation);
+      expect(mockNavigation.navigate).toHaveBeenCalledWith('ListingDetail', {
+        listingId: '77',
+      });
+    });
+
+    it('routes MARKETPLACE_CHAT notifications to MarketplaceChat using conversation id', () => {
+      const response: any = {
+        notification: {
+          request: {
+            content: {
+              data: {
+                module: 'MARKETPLACE_CHAT',
+                referenceId: '55',
+              },
+            },
+          },
+        },
+      };
+
+      notificationService.handleNotificationResponse(response, mockNavigation);
+      expect(mockNavigation.navigate).toHaveBeenCalledWith(
+        'MarketplaceChat',
+        expect.objectContaining({ conversationId: 55 })
+      );
+    });
+
     it('routes GENERAL notifications to Notifications screen', () => {
       const response: any = {
         notification: {
