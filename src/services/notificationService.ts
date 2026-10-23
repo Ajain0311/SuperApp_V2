@@ -199,22 +199,18 @@ export class NotificationService {
     if (Platform.OS === 'android' && isRunningInExpoGoClient()) {
       console.warn(
         '[NotificationService] Remote push notifications are disabled in Expo Go on Android (SDK 53+). ' +
-        'Using dev mock token. Build a development client (npx expo run:android) for live remote push.'
+        'Please build a development client (npx expo run:android or EAS Build) for live remote push.'
       );
-      const devToken = `ExponentPushToken[DEV-EXPO-GO-ANDROID-${Date.now()}]`;
-      this.cachedPushToken = devToken;
-      return devToken;
+      return null;
     }
 
     if (!Notifications?.getExpoPushTokenAsync) {
-      const devToken = `ExponentPushToken[DEV-${Platform.OS}-${Date.now()}]`;
-      this.cachedPushToken = devToken;
-      return devToken;
+      console.warn('[NotificationService] Expo Notifications native module is not available in this environment.');
+      return null;
     }
 
     const permission = await this.requestPermission();
     if (permission !== 'granted') {
-      // Permission denied is expected after repeated browser/system denies — avoid noisy warn loops.
       return null;
     }
 
@@ -227,17 +223,17 @@ export class NotificationService {
         projectId ? { projectId } : undefined
       );
 
-      this.cachedPushToken = tokenResponse.data;
-      return this.cachedPushToken;
+      if (tokenResponse?.data) {
+        this.cachedPushToken = tokenResponse.data;
+        return this.cachedPushToken;
+      }
+      return null;
     } catch (error) {
       console.warn(
-        '[NotificationService] Could not retrieve remote Expo push token (expected in local dev simulator):',
+        '[NotificationService] Could not retrieve remote Expo push token (requires real device or EAS development build):',
         error
       );
-      // In local dev without EAS project configured, return a safe identifier
-      const devToken = `ExponentPushToken[DEV-${Platform.OS}-${Date.now()}]`;
-      this.cachedPushToken = devToken;
-      return devToken;
+      return null;
     }
   }
 
@@ -247,8 +243,13 @@ export class NotificationService {
    */
   async registerDeviceTokenWithBackend(token: string): Promise<boolean> {
     try {
+      const trimmedToken = token?.trim();
+      if (!trimmedToken || trimmedToken.startsWith('ExponentPushToken[DEV-')) {
+        return false;
+      }
+
       const payload = {
-        token,
+        token: trimmedToken,
         platform: Platform.OS,
         deviceType: Platform.select({ ios: 'iOS', android: 'Android', default: 'Other' }),
         registeredAt: new Date().toISOString(),

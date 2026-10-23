@@ -286,12 +286,14 @@ else
 // 5. Notification Provider (Mock in development; PushNotificationDispatcher in production or when configured)
 var notificationProvider = Environment.GetEnvironmentVariable("NOTIFICATION_PROVIDER") 
     ?? builder.Configuration["Providers:Notification"] 
-    ?? "Mock";
+    ?? (isProduction ? "Expo" : "Mock");
 builder.Services.AddHttpClient<PushNotificationDispatcherService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<MockNotificationService>();
+
+ProductionSecurityValidator.ValidateNotificationProvider(notificationProvider, isProduction);
 
 if (string.Equals(notificationProvider, "Push", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(notificationProvider, "Fcm", StringComparison.OrdinalIgnoreCase) ||

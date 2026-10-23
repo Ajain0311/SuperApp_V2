@@ -1,37 +1,26 @@
-# SuperApp V2 — Customer Mobile Application
-*A single unified app for small businesses — Food Delivery, Ride Hailing & Community Marketplace.*
+# SuperApp V2 — Multi-Service Platform & Mobile Ecosystem
+*Unified platform for Food Delivery, Ride Hailing, and Community Marketplace.*
 
 [![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020.svg?style=flat&logo=expo)](https://expo.dev/)
 [![React Native](https://img.shields.io/badge/React%20Native-0.86.3-61DAFB.svg?style=flat&logo=react)](https://reactnative.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6.svg?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Backend](https://img.shields.io/badge/Backend-ASP.NET%20Core%2010.0-512BD4.svg?style=flat&logo=dotnet)](https://dotnet.microsoft.com/)
 [![Database](https://img.shields.io/badge/Database-PostgreSQL%2015%2B-3ECF8E.svg?style=flat&logo=postgresql)](https://supabase.com/)
-[![Tests](https://img.shields.io/badge/Unit%20Tests-140%20Passing-brightgreen.svg?style=flat&logo=jest)](https://jestjs.io/)
-[![UAT](https://img.shields.io/badge/UAT%20Scenarios-48%2F48%20Passing-brightgreen.svg?style=flat)](docs/UAT_RESULTS.md)
-[![Live E2E](https://img.shields.io/badge/Playwright%20E2E-15%2F15%20Passing-brightgreen.svg?style=flat)](docs/UAT_RESULTS.md)
 
-A cross-platform mobile ecosystem built with **React Native** and **Expo SDK 57**, integrating Food Delivery, Ride Hailing, and Community Marketplace into a single application.
-
-Powered by an **ASP.NET Core 10** Web API with real-time **SignalR** WebSocket hubs, a pooled **PostgreSQL** database (28 relational tables), and native device push notifications and geolocation.
+A modern, production-ready cross-platform application built with **React Native** and **Expo SDK 57**, powered by an **ASP.NET Core 10** Web API with real-time **SignalR** WebSocket hubs, a pooled **PostgreSQL** relational database, and native Android/iOS push notifications.
 
 ---
 
 ## 📚 Canonical Documentation
 
-Complete architecture, database, API, and deployment documentation is organized under the [`docs/`](docs/) directory:
-
-- [**Documentation Hub & Index**](docs/README.md)
-- [**System Architecture & Zero-Cost Design**](docs/ARCHITECTURE.md)
+- [**Rapid Development Guide**](docs/RAPID_DEVELOPMENT_GUIDE.md) — *Recommended starting guide for AI agents and developers.*
+- [**System Architecture & Data Flow**](docs/ARCHITECTURE.md)
+- [**Configuration & Secrets Manual**](docs/CONFIGURATION_AND_SECRETS.md)
 - [**Database Specification & ER Model**](docs/DATABASE.md)
 - [**REST API & SignalR Reference**](docs/API.md)
 - [**Roles & Permissions Guide**](docs/ROLES_AND_PERMISSIONS.md)
 - [**Developer Onboarding & Local Setup**](docs/DEVELOPMENT_SETUP.md)
-- [**Production Setup & Deployment Manual**](docs/PRODUCTION_SETUP.md)
-- [**Automated Testing & QA Guide**](docs/TESTING.md)
-- [**UAT & Live Browser Test Results**](docs/UAT_RESULTS.md)
 - [**Production Release Checklist**](docs/RELEASE_CHECKLIST.md)
-- [**Project Changelog**](docs/CHANGELOG.md)
-- [**Project Roadmap & Task Tracker**](ROADMAP.md)
 
 ---
 
@@ -41,22 +30,23 @@ Complete architecture, database, API, and deployment documentation is organized 
 - **Restaurant Discovery**: Browsing by cuisine, rating, veg/non-veg tags, and delivery time.
 - **Dynamic Menu & Customizations**: Menu categories, dishes, portion sizes (variants), and addons.
 - **Cart & Checkout**: Multi-restaurant protection, real-time GST tax calculation, and coupon codes (`WELCOME50`).
-- **Kitchen Dispatch & Live Tracking**: Real-time 5-stage order status updates via SignalR WebSocket (`OrderStatusHub`).
+- **Kitchen Dispatch & Live Tracking**: Real-time order status updates via SignalR WebSocket (`OrderStatusHub`).
 
 ### 🚖 Ride Hailing
 - **Real GPS Location**: Customer pickup coordinate acquisition via `expo-location` with street reverse-geocoding.
-- **Haversine Fare Estimation**: Zero-cost urban distance calculations and multi-tier vehicle selection (Bike Taxi, Auto Rickshaw, Economy Cab).
+- **Haversine & Mapbox Fare Estimation**: Accurate urban distance calculations and multi-tier vehicle selection (Bike Taxi, Auto Rickshaw, Economy Cab).
+- **Captain Ride Broadcasting**: Instant push notification dispatch to all registered captains on incoming rides.
 - **Driver Matching & Start OTP**: Instant driver dispatch with 4-digit ride verification OTP.
 - **Real-Time Telemetry**: Live driver location updates streamed via SignalR (`RideTrackingHub`).
 
 ### 🛍️ Community Bazaar (Marketplace)
-- **Classifieds Feed**: Browse listings across 8 categories (Mobiles, Vehicles, Electronics, Furniture, Fashion, etc.).
-- **Listing Details**: Multi-photo galleries, condition badges (`NEW`, `LIKE_NEW`, `USED`, `FAIR`), and seller profiles.
-- **Ad Publishing & Moderation**: Multi-photo ad publisher with condition selector, plus citizen reporting modal for spam/inappropriate ads.
-- **Favorites & Search**: Instant bookmarking and client/server search filtering.
+- **Classifieds Feed**: Browse listings across categories (Mobiles, Vehicles, Electronics, Furniture, Fashion, etc.).
+- **Live Marketplace Chat**: Real-time buyer-seller messaging with SignalR and push notification delivery on new messages.
+- **Listing Details & Offers**: Multi-photo galleries, condition badges, seller profiles, and buyer offer negotiation.
+- **Ad Publishing & Moderation**: Multi-photo ad publisher with condition selector and spam reporting.
 
 ### 🔄 Single-Identity Multi-Role System
-- Single user identity switching dynamically between **Customer**, **Driver**, **Restaurant Vendor**, **Marketplace Seller**, and **Admin**.
+- Single user identity switching dynamically between **Customer**, **Driver (Captain)**, **Restaurant Vendor**, **Marketplace Seller**, and **Admin**.
 - Responsive UI adapts bottom navigation tabs and reachable routes instantaneously via `useRoleStore`.
 
 ---
@@ -64,13 +54,14 @@ Complete architecture, database, API, and deployment documentation is organized 
 ## 🏗️ Architecture & Tech Stack
 
 - **Framework**: React Native 0.86.3 / Expo SDK ~57.0.24
-- **Language**: TypeScript ~6.0.3 (Strict mode)
+- **Language**: TypeScript ~6.0.3 (Strict mode, zero compilation warnings)
 - **State Management**: Zustand 5.0.15
 - **Navigation**: React Navigation v7 (Native Stack + Dynamic Bottom Tabs)
 - **HTTP & Real-Time**: Axios + `@microsoft/signalr` 10.0 (with exponential reconnection)
-- **Backend API**: ASP.NET Core 10.0 (`SuperApp.API`) hosted at `https://makemytree.duckdns.org` (Reverse-proxied via Nginx over TLS)
+- **Push Notifications**: Real Android & iOS push via Expo Push Service (`exp.host/--/api/v2/push/send`) or FCM with dedicated Android notification channels (`ride-requests`, `default`).
+- **Backend API**: ASP.NET Core 10.0 (`SuperApp.API`) hosted with reverse-proxy over TLS
 - **Database**: PostgreSQL 15+ (28 relational tables, schema in `database/SuperApp_Supabase.sql`, migrations in `database/migrations/`)
-- **External Gateways**: BIGB Gateway, Easebuzz Payment Gateway
+- **External Gateways**: BIGB SMS Gateway, Easebuzz Payment Gateway
 
 ---
 
@@ -78,66 +69,61 @@ Complete architecture, database, API, and deployment documentation is organized 
 
 ```text
 HTTP-EXPNAT-NET/
-├── backend/
-│   ├── SuperApp.API/            # ASP.NET Core 10 Web API
-│   └── SuperApp.API.Tests/      # xUnit unit & integration test suite (75 tests)
-├── database/
-│   ├── SuperApp_Supabase.sql    # Idempotent 28-table PostgreSQL schema
-│   └── migrations/              # Incremental database migrations
-├── docs/                        # 11 Canonical documentation files
-├── e2e/
-│   └── agents/                  # Multi-agent live API framework
-├── scripts/
-│   ├── seed-food-all.js         # Food catalog seed script
-│   └── seed-items.js            # Marketplace item seed script
-├── src/                         # React Native application source
-├── __tests__/                   # Frontend Jest test suites (73 tests)
-├── App.tsx                      # Root component
-└── package.json                 # Dependencies & scripts
+├── App.tsx                     # Main application entry point & root providers
+├── app.json                    # Expo configuration & plugins
+├── package.json                # React Native & Expo dependencies
+├── .env.example                # Unified configuration template
+│
+├── src/                        # React Native Mobile App Frontend
+│   ├── components/             # Reusable UI components & layouts
+│   ├── config/                 # Environment configuration (API, Mapbox, SignalR)
+│   ├── constants/              # API endpoints, storage keys, colors
+│   ├── features/               # Domain feature modules
+│   │   ├── auth/               # OTP login, registration, role switcher
+│   │   ├── food/               # Restaurants, menus, cart, order tracking
+│   │   ├── rides/              # Map, fare estimate, booking, active ride
+│   │   ├── driver/             # Captain dashboard, ride acceptance, status
+│   │   ├── marketplace/        # Feed, listing details, ad post, live chat
+│   │   ├── notifications/      # Notification list, read/unread status
+│   │   └── admin/              # Admin portals, analytics, management
+│   ├── navigation/             # RootNavigator, role-based TabNavigator
+│   ├── services/               # API client, SignalR, Push notifications, Mapbox
+│   ├── store/                  # Zustand state stores (auth, cart, role, etc.)
+│   └── theme/                  # Design tokens (colors, typography, spacing)
+│
+├── backend/                    # ASP.NET Core 10.0 Web API
+│   ├── SuperApp.sln            # Visual Studio / .NET Solution
+│   └── SuperApp.API/           # Web API Project
+│       ├── Controllers/        # REST API endpoints (Auth, Food, Rides, Notifications...)
+│       ├── Data/               # AppDbContext (PostgreSQL / EF Core)
+│       ├── DTOs/               # Data Transfer Objects
+│       ├── Hubs/               # SignalR WebSockets (ChatHub, OrderHub, RideHub)
+│       ├── Models/             # Entity Models (28 relational tables)
+│       ├── Services/           # Push notification dispatcher, SMS, Payments
+│       └── appsettings.json    # Backend configuration
+│
+├── database/                   # PostgreSQL DDL schemas & migrations
+└── docs/                       # Canonical project documentation
 ```
 
 ---
 
-## 🚀 Quick Start
+## ⚡ Quick Start & Verification
 
-### 1. Launch Backend (.NET 10)
+### 1. Backend Verification
 ```bash
-dotnet run --project backend/SuperApp.API/SuperApp.API.csproj --launch-profile http
+# Build the ASP.NET Core 10 backend solution
+dotnet build backend/SuperApp.sln
+
+# Run backend locally
+dotnet run --project backend/SuperApp.API/SuperApp.API.csproj
 ```
-- Listens locally on `http://127.0.0.1:5000` (or `http://localhost:80`)
 
-### 2. Launch Frontend (Expo Web / Mobile)
+### 2. Frontend Verification
 ```bash
-npx expo start --clear
-```
-- Press `w` to open in browser (`http://localhost:8081`) or scan QR with **Expo Go**.
-
----
-
-## 🧪 Verification & Testing Pipeline
-
-```bash
-# 1. Backend Unit Tests (75 tests)
-dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj --no-build
-
-# 2. Frontend Unit Tests (73 tests)
-npm test -- --watchAll=false
-
-# 3. TypeScript Compilation (0 errors)
+# Verify TypeScript strict type-checking
 npx tsc --noEmit
 
-# 4. Expo Diagnostics (18/18 checks)
-npx expo-doctor
-
-# 5. Agent framework self-tests (14/14 tests)
-npm run test:agents:self
-
-# 6. Live multi-agent regression against hosted HTTPS API (90/90 pass)
-npm run test:agents:full -- --base-url https://makemytree.duckdns.org
+# Start Expo development server
+npx expo start
 ```
-
----
-
-## 📄 License
-
-This project is proprietary and confidential. Licensed under the [MIT License](LICENSE).

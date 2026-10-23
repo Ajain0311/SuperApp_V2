@@ -54,4 +54,14 @@ public static class ProductionSecurityValidator
             throw new InvalidOperationException("CRITICAL: Mapbox map provider is configured for Production but MAPBOX_ACCESS_TOKEN is missing.");
         }
     }
+
+    public static void ValidateNotificationProvider(string? provider, bool isProduction)
+    {
+        if (!isProduction) return;
+
+        if (string.Equals(provider, "Mock", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("CRITICAL: MockNotificationService cannot be used in a Production environment. Configure NOTIFICATION_PROVIDER=Push, Expo, or Fcm.");
+        }
+    }
 }
