@@ -675,7 +675,8 @@ public class MarketplaceController : ControllerBase
                 Title = $"New Offer on {listing.Title}!",
                 Body = $"{buyer?.FullName ?? "A buyer"} offered ₹{request.OfferedPrice:F0} for \"{listing.Title}\". Tap to review offer in Bazaar.",
                 Type = "MARKETPLACE_OFFER",
-                ReferenceId = offer.Id.ToString(),
+                // ListingId (not offer.Id) so notification tap opens the listing/offers UI
+                ReferenceId = listing.Id.ToString(),
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             });
@@ -828,7 +829,8 @@ public class MarketplaceController : ControllerBase
                     Title = status == OfferStatus.Accepted ? "Offer Accepted! 🎉" : "Offer Declined",
                     Body = $"Your offer of ₹{offer.OfferedPrice:F0} for \"{offer.Listing?.Title}\" was {status.ToLower()} by the seller.",
                     Type = "MARKETPLACE_OFFER",
-                    ReferenceId = offer.Id.ToString(),
+                    // ListingId so buyer tap opens the listing, not a fake conversation id
+                    ReferenceId = offer.ListingId.ToString(),
                     IsRead = false,
                     CreatedAt = DateTime.UtcNow
                 });
@@ -867,29 +869,39 @@ public class MarketplaceController : ControllerBase
     }
 
     /// <summary>
-    /// Report a listing for moderation
+    /// Report a listing for moderation. Requires auth. Never auto-removes the listing.
+    /// Serious reasons mark the listing FLAGGED for admin review while keeping it active.
     /// </summary>
     [HttpPost("listings/{id:long}/report")]
     public async Task<ActionResult<ApiResponse>> ReportListing(long id, [FromBody] ReportListingRequest request)
     {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required to report a listing"));
+
         var listing = await _db.MarketplaceListings.FirstOrDefaultAsync(l => l.Id == id);
         if (listing == null)
             return NotFound(ApiResponse.Fail("Listing not found"));
 
-        if (string.IsNullOrWhiteSpace(request.Reason))
+        if (listing.UserId == currentUserId.Value)
+            return BadRequest(ApiResponse.Fail("You cannot report your own listing"));
+
+        if (string.IsNullOrWhiteSpace(request?.Reason))
             return BadRequest(ApiResponse.Fail("Reason is required to report a listing"));
 
-        // In minimum cost design, flag the listing if flagged as offensive
-        if (request.Reason.Equals("SPAM", StringComparison.OrdinalIgnoreCase) ||
-            request.Reason.Equals("OFFENSIVE", StringComparison.OrdinalIgnoreCase) ||
-            request.Reason.Equals("FRAUD", StringComparison.OrdinalIgnoreCase))
+        var reason = request.Reason.Trim().ToUpperInvariant();
+        var isSerious =
+            reason is "SPAM" or "OFFENSIVE" or "FRAUD";
+
+        // Queue for moderation only — reporters must not be able to take listings offline.
+        if (isSerious && listing.Status != ListingStatus.Removed && listing.Status != ListingStatus.Sold)
         {
-            // Auto-flag for admin review and deactivate
-            listing.IsActive = false;
-            listing.Status = "REMOVED";
+            listing.Status = ListingStatus.Flagged;
             listing.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            // Keep IsActive true so the listing stays discoverable until an admin decides.
         }
+
+        await _db.SaveChangesAsync();
 
         return Ok(ApiResponse.Ok("Listing reported successfully. Our moderation team will review it shortly."));
     }
