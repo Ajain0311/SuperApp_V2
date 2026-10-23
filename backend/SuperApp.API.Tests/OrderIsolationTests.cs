@@ -391,10 +391,11 @@ public class OrderIsolationTests
         Assert.Equal(85000m, offerDto.OfferedPrice);
         Assert.Equal("PENDING", offerDto.Status);
 
-        // Verify seller received a real notification
+        // Verify seller received a real notification pointing at the listing (not offer id)
         var sellerNotification = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == seller.Id && n.Type == "MARKETPLACE_OFFER");
         Assert.NotNull(sellerNotification);
         Assert.Contains("Offer", sellerNotification.Title);
+        Assert.Equal(listing.Id.ToString(), sellerNotification.ReferenceId);
 
         // 2. Stranger tries to accept/reject buyer's offer -> 403 Forbidden
         SetUserContext(controller, stranger.Id, RoleNames.Customer);
@@ -408,10 +409,11 @@ public class OrderIsolationTests
         var acceptedDto = Assert.IsType<ApiResponse<OfferDto>>(acceptOk.Value).Data!;
         Assert.Equal("ACCEPTED", acceptedDto.Status);
 
-        // Verify buyer received acceptance notification
+        // Verify buyer received acceptance notification pointing at the listing
         var buyerNotification = await db.Notifications.FirstOrDefaultAsync(n => n.UserId == buyer.Id && n.Type == "MARKETPLACE_OFFER");
         Assert.NotNull(buyerNotification);
         Assert.Contains("Accepted", buyerNotification.Title);
+        Assert.Equal(listing.Id.ToString(), buyerNotification.ReferenceId);
     }
 
     [Fact]

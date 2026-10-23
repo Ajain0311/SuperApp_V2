@@ -32,7 +32,7 @@ public class BigBSmsService : ISmsService
         _logger = logger;
         _apiUrl = Environment.GetEnvironmentVariable("SMS_API_URL")
             ?? configuration["Sms:ApiUrl"]
-            ?? "https://api.bigb.in/sms/send";
+            ?? "https://eapi.punjab.gov.in/smapi/sms";
         _serverKey = Environment.GetEnvironmentVariable("SMS_SERVER_KEY")
             ?? configuration["Sms:ServerKey"]
             ?? "r6JKjqXoUXbLpT4nGXTafB6wDjBAKovyQ4t7uOsMnOvtTEPoNCO43KE3edWeXSmb";

@@ -330,15 +330,30 @@ export const NotificationsScreen: React.FC = () => {
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => {
-              if (item.type?.startsWith('MARKETPLACE') && item.referenceId) {
-                const convId = parseInt(item.referenceId, 10);
+              if (!item.referenceId) return;
+              const refId = parseInt(item.referenceId, 10);
+              if (isNaN(refId)) return;
+
+              // Chat notifications store conversation id; offer/listing store listing id
+              if (item.type === 'MARKETPLACE_CHAT') {
                 (navigation as any).navigate('MarketplaceChat', {
-                  conversationId: !isNaN(convId) ? convId : undefined,
+                  conversationId: refId,
                   listingId: '0',
                   sellerId: 0,
                   sellerName: 'Chat',
                   listingTitle: 'Marketplace Item',
                   listingPrice: 0,
+                });
+                return;
+              }
+
+              if (
+                item.type === 'MARKETPLACE_OFFER' ||
+                item.type === 'MARKETPLACE' ||
+                item.type?.startsWith('MARKETPLACE')
+              ) {
+                (navigation as any).navigate('ListingDetail', {
+                  listingId: String(refId),
                 });
               }
             }}

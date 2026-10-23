@@ -91,7 +91,7 @@ public class BigBOtpService : IOtpService
         }
 
         // 4. Construct registered DLT message with dynamic OTP
-        var message = $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. BIGB Secure";
+        var message = $"Your login OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. BIGB Secure";
 
         // 5. Dispatch SMS via BIGB Gateway
         var sent = await _smsService.SendSmsAsync(cleanMobile, message, _templateId);

@@ -24,9 +24,9 @@ interface AdminUserManageModalProps {
 
 const AVAILABLE_ROLES = [
   { key: 'CUSTOMER', label: 'Customer', icon: 'person-outline' as const },
-  { key: 'DRIVER', label: 'Driver / Captain', icon: 'car-outline' as const },
-  { key: 'RESTAURANT_OWNER', label: 'Restaurant Owner', icon: 'restaurant-outline' as const },
-  { key: 'MARKETPLACE_SELLER', label: 'Marketplace Seller', icon: 'pricetag-outline' as const },
+  { key: 'RESTAURANT_OWNER', label: 'Restaurant Owner / Chef', icon: 'restaurant-outline' as const },
+  { key: 'DRIVER', label: 'Delivery Partner / Rider', icon: 'bicycle-outline' as const },
+  { key: 'MARKETPLACE_SELLER', label: 'Seller', icon: 'pricetag-outline' as const },
   { key: 'ADMIN', label: 'Admin', icon: 'shield-checkmark-outline' as const },
 ];
 
@@ -181,19 +181,26 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
               </View>
             </View>
 
-            {/* Roles Management Card */}
+            {/* Roles Management Card — checkboxes, save immediately */}
             <View style={styles.sectionCard}>
               <Text style={styles.sectionHeader}>ASSIGNED ROLES</Text>
               <Text style={styles.sectionNote}>
-                Toggle user roles below. Users will instantly gain access to the respective mode in the SuperApp.
+                Check or uncheck a role to assign or remove it immediately.
               </Text>
               <View style={styles.rolesList}>
                 {AVAILABLE_ROLES.map((role) => {
                   const isAssigned = currentRoles.includes(role.key);
                   const isLoading = loadingRole === role.key;
+                  const lockedCustomer = role.key === 'CUSTOMER' && isAssigned;
 
                   return (
-                    <View key={role.key} style={styles.roleItem}>
+                    <TouchableOpacity
+                      key={role.key}
+                      style={styles.roleItem}
+                      onPress={() => !isLoading && handleToggleRole(role.key)}
+                      disabled={isLoading || lockedCustomer}
+                      activeOpacity={0.7}
+                    >
                       <View style={styles.roleLeft}>
                         <Ionicons
                           name={role.icon}
@@ -204,28 +211,22 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
                           {role.label}
                         </Text>
                       </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.roleToggleBtn,
-                          isAssigned ? styles.roleToggleActive : styles.roleToggleInactive,
-                        ]}
-                        onPress={() => handleToggleRole(role.key)}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <Text
-                            style={[
-                              styles.roleToggleText,
-                              isAssigned ? styles.roleToggleTextActive : styles.roleToggleTextInactive,
-                            ]}
-                          >
-                            {isAssigned ? 'Active' : 'Grant'}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color={AppColors.primary} />
+                      ) : (
+                        <View
+                          style={[
+                            styles.checkbox,
+                            isAssigned && styles.checkboxChecked,
+                            lockedCustomer && styles.checkboxLocked,
+                          ]}
+                        >
+                          {isAssigned ? (
+                            <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                          ) : null}
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -377,32 +378,22 @@ const styles = StyleSheet.create({
     color: AppColors.textPrimary,
     fontWeight: '600',
   },
-  roleToggleBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    minWidth: 70,
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: AppColors.border,
+    backgroundColor: AppColors.surfaceLight,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  roleToggleActive: {
-    backgroundColor: AppColors.primary + '25',
-    borderWidth: 1,
+  checkboxChecked: {
+    backgroundColor: AppColors.primary,
     borderColor: AppColors.primary,
   },
-  roleToggleInactive: {
-    backgroundColor: AppColors.surfaceLight,
-    borderWidth: 1,
-    borderColor: AppColors.border,
-  },
-  roleToggleText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  roleToggleTextActive: {
-    color: AppColors.primary,
-  },
-  roleToggleTextInactive: {
-    color: AppColors.textSecondary,
+  checkboxLocked: {
+    opacity: 0.55,
   },
   input: {
     backgroundColor: AppColors.surfaceLight,

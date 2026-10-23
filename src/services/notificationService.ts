@@ -438,8 +438,10 @@ export class NotificationService {
         }
         break;
 
+      case 'MARKETPLACE_OFFER':
       case 'MARKETPLACE':
       case 'BAZAAR':
+        // Offer + listing notifications store listing id in referenceId / listingId
         if (data.listingId || data.referenceId) {
           navigation.navigate('ListingDetail', {
             listingId: String(data.listingId || data.referenceId),

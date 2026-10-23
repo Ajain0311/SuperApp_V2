@@ -199,6 +199,21 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({ navigati
 
         <TouchableOpacity
           style={styles.navCard}
+          onPress={() => navigation.navigate('AdminListings')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.navIconBox, { backgroundColor: '#F9731620' }]}>
+            <Ionicons name="list-outline" size={24} color="#F97316" />
+          </View>
+          <View style={styles.navCardInfo}>
+            <Text style={styles.navCardTitle}>Food & Marketplace Listings</Text>
+            <Text style={styles.navCardSubtitle}>Search, edit, activate or delete on one page</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={AppColors.textSecondary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navCard}
           onPress={() => navigation.navigate('AdminRestaurants')}
           activeOpacity={0.8}
         >

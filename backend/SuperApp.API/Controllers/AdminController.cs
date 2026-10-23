@@ -304,15 +304,44 @@ public class AdminController : ControllerBase
                     // Provision RestaurantUser mapping if assigning RESTAURANT_OWNER
                     if (role.Name == RoleNames.RestaurantOwner)
                     {
-                        if (!request.RestaurantId.HasValue || request.RestaurantId.Value <= 0)
+                        Restaurant? targetRestaurant = null;
+                        if (request.RestaurantId.HasValue && request.RestaurantId.Value > 0)
                         {
-                            return BadRequest(ApiResponse.Fail("Explicit and valid RestaurantId is required when assigning RESTAURANT_OWNER role."));
+                            targetRestaurant = await _db.Restaurants.FirstOrDefaultAsync(r => r.Id == request.RestaurantId.Value && r.IsActive);
+                            if (targetRestaurant == null)
+                                return BadRequest(ApiResponse.Fail("Specified restaurant does not exist or is inactive."));
                         }
-
-                        var targetRestaurant = await _db.Restaurants.FirstOrDefaultAsync(r => r.Id == request.RestaurantId.Value && r.IsActive);
-                        if (targetRestaurant == null)
+                        else
                         {
-                            return BadRequest(ApiResponse.Fail("Specified restaurant does not exist or is inactive."));
+                            // Reuse an existing active mapping, otherwise auto-create a placeholder restaurant
+                            var existingMapping = await _db.RestaurantUsers
+                                .Include(ru => ru.Restaurant)
+                                .FirstOrDefaultAsync(ru => ru.UserId == user.Id && ru.IsActive && ru.Restaurant != null && ru.Restaurant.IsActive);
+                            if (existingMapping?.Restaurant != null)
+                            {
+                                targetRestaurant = existingMapping.Restaurant;
+                            }
+                            else
+                            {
+                                targetRestaurant = new Restaurant
+                                {
+                                    Name = string.IsNullOrWhiteSpace(user.FullName)
+                                        ? $"Hotel {user.MobileNumber}"
+                                        : $"{user.FullName.Trim()}'s Kitchen",
+                                    Description = "Pending menu setup",
+                                    Phone = user.MobileNumber,
+                                    City = "DEFAULT",
+                                    AddressLine = "Update address in restaurant settings",
+                                    MinOrderAmount = 100,
+                                    DeliveryFee = 30,
+                                    AvgDeliveryTimeMinutes = 35,
+                                    IsActive = true,
+                                    IsFeatured = false,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                _db.Restaurants.Add(targetRestaurant);
+                                await _db.SaveChangesAsync();
+                            }
                         }
 
                         var restMapping = await _db.RestaurantUsers.FirstOrDefaultAsync(ru => ru.UserId == user.Id && ru.RestaurantId == targetRestaurant.Id);
@@ -329,7 +358,6 @@ public class AdminController : ControllerBase
                         else
                         {
                             restMapping.IsActive = true;
-                            // restMapping updated
                         }
                     }
 
@@ -1014,11 +1042,12 @@ public class AdminController : ControllerBase
     /// Marketplace Listings for Admin Moderation
     /// </summary>
     [HttpGet("marketplace/listings")]
-    public async Task<ActionResult<ApiResponse<List<ListingSummaryDto>>>> GetMarketplaceListings([FromQuery] string? status, [FromQuery] string? search)
+    public async Task<ActionResult<ApiResponse<List<AdminMarketplaceListingDto>>>> GetMarketplaceListings([FromQuery] string? status, [FromQuery] string? search)
     {
         var query = _db.MarketplaceListings
             .Include(l => l.Category)
             .Include(l => l.Images)
+            .Include(l => l.User)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
@@ -1029,35 +1058,40 @@ public class AdminController : ControllerBase
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
-            query = query.Where(l => l.Title.Contains(term) || (l.Location != null && l.Location.Contains(term)));
+            query = query.Where(l =>
+                l.Title.Contains(term) ||
+                (l.Location != null && l.Location.Contains(term)) ||
+                (l.User != null && ((l.User.FullName != null && l.User.FullName.Contains(term)) || l.User.MobileNumber.Contains(term))));
         }
 
         var listings = await query
             .OrderByDescending(l => l.CreatedAt)
-            .Take(50)
-            .Select(l => new ListingSummaryDto
+            .Take(100)
+            .Select(l => new AdminMarketplaceListingDto
             {
                 Id = l.Id,
                 Title = l.Title,
+                Description = l.Description,
                 Price = l.Price,
-                Condition = l.Condition,
-                Location = l.Location,
-                PrimaryImageUrl = l.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).FirstOrDefault(),
-                IsFeatured = l.IsFeatured,
-                ViewCount = l.ViewCount,
                 Status = l.Status,
-                CreatedAt = l.CreatedAt,
+                IsActive = l.IsActive,
+                IsFeatured = l.IsFeatured,
                 CategoryId = l.CategoryId,
                 CategoryName = l.Category != null ? l.Category.Name : "General",
-                IsFavorite = false
+                SellerId = l.UserId,
+                SellerName = l.User != null ? (l.User.FullName ?? "Seller") : "Seller",
+                SellerPhone = l.User != null ? l.User.MobileNumber : null,
+                PrimaryImageUrl = l.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).FirstOrDefault(),
+                Location = l.Location,
+                CreatedAt = l.CreatedAt
             })
             .ToListAsync();
 
-        return Ok(ApiResponse<List<ListingSummaryDto>>.Ok(listings));
+        return Ok(ApiResponse<List<AdminMarketplaceListingDto>>.Ok(listings));
     }
 
     /// <summary>
-    /// Marketplace Listing Action for Admin Moderation: STATUS, FEATURED, DELETE
+    /// Marketplace Listing Action for Admin Moderation: STATUS, FEATURED, EDIT, DELETE
     /// </summary>
     [HttpPost("marketplace/listings")]
     public async Task<ActionResult<ApiResponse>> ManageMarketplaceListing([FromBody] AdminListingActionRequest request)
@@ -1072,6 +1106,7 @@ public class AdminController : ControllerBase
                 if (string.IsNullOrWhiteSpace(request.Status))
                     return BadRequest(ApiResponse.Fail("Status is required"));
                 listing.Status = request.Status.Trim().ToUpperInvariant();
+                listing.IsActive = listing.Status != ListingStatus.Removed;
                 listing.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
                 return Ok(ApiResponse.Ok($"Listing status set to {listing.Status}"));
@@ -1084,6 +1119,26 @@ public class AdminController : ControllerBase
                 await _db.SaveChangesAsync();
                 return Ok(ApiResponse.Ok($"Listing featured set to {listing.IsFeatured}"));
 
+            case "EDIT":
+                if (!string.IsNullOrWhiteSpace(request.Title))
+                    listing.Title = request.Title.Trim();
+                if (request.Price.HasValue)
+                {
+                    if (request.Price.Value < 0)
+                        return BadRequest(ApiResponse.Fail("Price must be >= 0"));
+                    listing.Price = request.Price.Value;
+                }
+                if (request.Description != null)
+                    listing.Description = request.Description.Trim();
+                if (!string.IsNullOrWhiteSpace(request.Status))
+                {
+                    listing.Status = request.Status.Trim().ToUpperInvariant();
+                    listing.IsActive = listing.Status != ListingStatus.Removed;
+                }
+                listing.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse.Ok("Listing updated"));
+
             case "DELETE":
                 listing.IsActive = false;
                 listing.Status = ListingStatus.Removed;
@@ -1092,7 +1147,137 @@ public class AdminController : ControllerBase
                 return Ok(ApiResponse.Ok("Listing deactivated"));
 
             default:
-                return BadRequest(ApiResponse.Fail($"Unknown action '{request.Action}'. Use STATUS, FEATURED, or DELETE."));
+                return BadRequest(ApiResponse.Fail($"Unknown action '{request.Action}'. Use STATUS, FEATURED, EDIT, or DELETE."));
+        }
+    }
+
+    /// <summary>
+    /// Food items for admin moderation (all restaurants).
+    /// </summary>
+    [HttpGet("food-items")]
+    public async Task<ActionResult<ApiResponse<List<AdminFoodItemDto>>>> GetFoodItems(
+        [FromQuery] string? status,
+        [FromQuery] string? search)
+    {
+        var query = _db.FoodItems
+            .Include(f => f.Restaurant)
+            .Include(f => f.RestaurantCategory)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+        {
+            var s = status.Trim().ToUpperInvariant();
+            if (s == "ACTIVE" || s == "AVAILABLE")
+                query = query.Where(f => f.IsActive && f.IsAvailable);
+            else if (s == "INACTIVE" || s == "UNAVAILABLE")
+                query = query.Where(f => !f.IsAvailable || !f.IsActive);
+            else if (s == "DELETED")
+                query = query.Where(f => !f.IsActive);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(f =>
+                f.Name.Contains(term) ||
+                (f.Restaurant != null && f.Restaurant.Name.Contains(term)) ||
+                (f.Description != null && f.Description.Contains(term)));
+        }
+
+        var items = await query
+            .OrderByDescending(f => f.CreatedAt)
+            .Take(100)
+            .Select(f => new AdminFoodItemDto
+            {
+                Id = f.Id,
+                Name = f.Name,
+                Description = f.Description,
+                BasePrice = f.BasePrice,
+                DiscountPercent = f.DiscountPercent,
+                DiscountedPrice = f.DiscountPercent > 0
+                    ? Math.Round(f.BasePrice * (1 - f.DiscountPercent / 100m), 2)
+                    : f.BasePrice,
+                IsAvailable = f.IsAvailable,
+                IsActive = f.IsActive,
+                IsVeg = f.IsVeg,
+                ImageUrl = f.ImageUrl,
+                RestaurantId = f.RestaurantId,
+                RestaurantName = f.Restaurant != null ? f.Restaurant.Name : "Restaurant",
+                CategoryName = f.RestaurantCategory != null ? f.RestaurantCategory.Name : null,
+                OwnerName = f.Restaurant != null
+                    ? f.Restaurant.RestaurantUsers
+                        .Where(ru => ru.IsActive)
+                        .Select(ru => ru.User.FullName ?? ru.User.MobileNumber)
+                        .FirstOrDefault()
+                    : null,
+                OwnerPhone = f.Restaurant != null
+                    ? f.Restaurant.RestaurantUsers
+                        .Where(ru => ru.IsActive)
+                        .Select(ru => ru.User.MobileNumber)
+                        .FirstOrDefault()
+                    : null,
+                CreatedAt = f.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<List<AdminFoodItemDto>>.Ok(items));
+    }
+
+    /// <summary>
+    /// Admin food item actions: STATUS, EDIT, DELETE
+    /// </summary>
+    [HttpPost("food-items")]
+    public async Task<ActionResult<ApiResponse>> ManageFoodItem([FromBody] AdminFoodItemActionRequest request)
+    {
+        var item = await _db.FoodItems.FindAsync(request.FoodItemId);
+        if (item == null)
+            return NotFound(ApiResponse.Fail("Food item not found"));
+
+        switch (request.Action?.ToUpperInvariant())
+        {
+            case "STATUS":
+                if (request.IsAvailable.HasValue)
+                    item.IsAvailable = request.IsAvailable.Value;
+                if (request.IsActive.HasValue)
+                    item.IsActive = request.IsActive.Value;
+                item.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse.Ok("Food item status updated"));
+
+            case "EDIT":
+                if (!string.IsNullOrWhiteSpace(request.Name))
+                    item.Name = request.Name.Trim();
+                if (request.Description != null)
+                    item.Description = request.Description.Trim();
+                if (request.BasePrice.HasValue)
+                {
+                    if (request.BasePrice.Value < 0)
+                        return BadRequest(ApiResponse.Fail("Price must be >= 0"));
+                    item.BasePrice = request.BasePrice.Value;
+                }
+                if (request.DiscountPercent.HasValue)
+                {
+                    if (request.DiscountPercent.Value < 0 || request.DiscountPercent.Value > 100)
+                        return BadRequest(ApiResponse.Fail("DiscountPercent must be between 0 and 100"));
+                    item.DiscountPercent = request.DiscountPercent.Value;
+                }
+                if (request.IsAvailable.HasValue)
+                    item.IsAvailable = request.IsAvailable.Value;
+                if (request.IsActive.HasValue)
+                    item.IsActive = request.IsActive.Value;
+                item.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse.Ok("Food item updated"));
+
+            case "DELETE":
+                item.IsActive = false;
+                item.IsAvailable = false;
+                item.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse.Ok("Food item deactivated"));
+
+            default:
+                return BadRequest(ApiResponse.Fail($"Unknown action '{request.Action}'. Use STATUS, EDIT, or DELETE."));
         }
     }
 

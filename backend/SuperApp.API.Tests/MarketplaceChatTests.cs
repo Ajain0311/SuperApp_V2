@@ -236,7 +236,7 @@ public class MarketplaceChatTests
         var api1 = Assert.IsType<ApiResponse<ChatMessageDto>>(ok1.Value);
         Assert.True(api1.Success);
 
-        // Immediate retry (same sender, same conversation, same text within 5s window)
+        // Immediate retry (same ClientMessageId) must be idempotent
         var res2 = await controller.SendMessage(conv.Id, req);
         var ok2 = Assert.IsType<OkObjectResult>(res2.Result);
         var api2 = Assert.IsType<ApiResponse<ChatMessageDto>>(ok2.Value);
@@ -248,6 +248,60 @@ public class MarketplaceChatTests
         // Verify only 1 row was stored in DB
         var totalMessages = await db.ChatMessages.Where(m => m.ConversationId == conv.Id).CountAsync();
         Assert.Equal(1, totalMessages);
+    }
+
+    [Fact]
+    public async Task SendMessage_SameTextDifferentClientMessageIds_CreatesTwoMessages()
+    {
+        using var db = GetInMemoryDbContext();
+        var seller = new User { Id = 10, FullName = "Seller User", MobileNumber = "9876543210" };
+        var buyer = new User { Id = 20, FullName = "Buyer User", MobileNumber = "9876543211" };
+        var listing = new MarketplaceListing
+        {
+            Id = 100,
+            UserId = seller.Id,
+            Title = "iPhone 15",
+            Price = 75000m,
+            IsActive = true,
+            Status = ListingStatus.Active
+        };
+        var conv = new ChatConversation
+        {
+            Id = 50,
+            ListingId = listing.Id,
+            BuyerId = buyer.Id,
+            SellerId = seller.Id
+        };
+        db.Users.AddRange(seller, buyer);
+        db.MarketplaceListings.Add(listing);
+        db.ChatConversations.Add(conv);
+        await db.SaveChangesAsync();
+
+        var controller = new MarketplaceController(db);
+        SetUserContext(controller, buyer.Id);
+
+        var res1 = await controller.SendMessage(conv.Id, new SendChatMessageRequest
+        {
+            MessageText = "Hello",
+            ClientMessageId = "client-msg-A"
+        });
+        var ok1 = Assert.IsType<OkObjectResult>(res1.Result);
+        var api1 = Assert.IsType<ApiResponse<ChatMessageDto>>(ok1.Value);
+        Assert.True(api1.Success);
+
+        // Intentional second "Hello" with a new client id must NOT be treated as a retry
+        var res2 = await controller.SendMessage(conv.Id, new SendChatMessageRequest
+        {
+            MessageText = "Hello",
+            ClientMessageId = "client-msg-B"
+        });
+        var ok2 = Assert.IsType<OkObjectResult>(res2.Result);
+        var api2 = Assert.IsType<ApiResponse<ChatMessageDto>>(ok2.Value);
+        Assert.True(api2.Success);
+
+        Assert.NotEqual(api1.Data!.Id, api2.Data!.Id);
+        var totalMessages = await db.ChatMessages.Where(m => m.ConversationId == conv.Id).CountAsync();
+        Assert.Equal(2, totalMessages);
     }
 
     [Fact]

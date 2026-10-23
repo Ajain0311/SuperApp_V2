@@ -66,7 +66,7 @@ public class BigBSmsServiceTests
             Assert.Equal("6375002348", mockSms.LastMobile);
             Assert.Equal("1407177633307627182", mockSms.LastTemplateId);
             Assert.Equal(
-                $"Your Sanwaliya Ji OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. BIGB Secure",
+                $"Your login OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. BIGB Secure",
                 mockSms.LastMessage);
 
             var dbRecord = await db.OtpRequests.FirstOrDefaultAsync(o => o.MobileNumber == "6375002348");

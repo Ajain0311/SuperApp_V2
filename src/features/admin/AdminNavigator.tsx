@@ -12,6 +12,7 @@ import { AdminCouponsScreen } from './AdminCouponsScreen';
 import { AdminHotelCommissionsScreen } from './AdminHotelCommissionsScreen';
 import { AdminRideFaresScreen } from './AdminRideFaresScreen';
 import { AdminRoleApplicationsScreen } from './AdminRoleApplicationsScreen';
+import { AdminListingsScreen } from './AdminListingsScreen';
 
 const Stack = createNativeStackNavigator<AdminStackParamList>();
 
@@ -35,6 +36,7 @@ export const AdminNavigator: React.FC = () => {
       <Stack.Screen name="AdminHotelCommissions" component={AdminHotelCommissionsScreen} />
       <Stack.Screen name="AdminRideFares" component={AdminRideFaresScreen} />
       <Stack.Screen name="AdminRoleApplications" component={AdminRoleApplicationsScreen} />
+      <Stack.Screen name="AdminListings" component={AdminListingsScreen} />
     </Stack.Navigator>
   );
 };
