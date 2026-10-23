@@ -15,10 +15,8 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Fixed overnight multi-agent auth (`verify-otp` 400) against live DuckDNS API.
-  - **Root cause**: B-series `.env` had empty `TEST_OTP=` and no `OTP_TEST_MODE`; overnight sent `123456` while BIGB stored a random SMS OTP. Enabling `OTP_TEST_MODE` alone also broke auth by selecting `MockOtpService` while `OTP_PROVIDER=BIGB`.
-  - **Fix**: Server `OTP_TEST_MODE=true` + `TEST_OTP=123456`; `Program.cs` keeps BIGB when provider is explicit; BIGB test-mode stores TEST_OTP and skips SMS; overnight workflow SSH-tunnels VM Postgres via `OVERNIGHT_DB_URL` + `VM_*` secrets.
-  - **Next**: Confirm scheduled overnight run goes green after merge/deploy; watch DB verifier rows against azuredb tunnel.
-  - **Verification**:
-    - Live probe 2/1/1/1: all citizen + admin logins PASS
-    - `dotnet test` 178/178; Jest 109/109; agents self 14/14; Metro 8081 up; `/health` Healthy
+- **Status**: Food cancel-after-captain-accept shipped on main (PR #25) and live E2E PASS.
+  - **Rule**: cancel through `READY` (captain OK); block after `PICKED_UP`; clears `DriverId` + notifies pool.
+  - **Live proof**: order `2518` accept → customer cancel `200` / `driverId` null / active-food empty; after pickup cancel `400`.
+  - **Still backlog (teammate)**: direct foods feed; multi-hotel one checkout → N kitchen orders.
+  - **Verification**: `dotnet test` 183; Jest 109; agents self 16; overnight earlier `PASS 1121 FAIL 0`; production `v-522c394`.
