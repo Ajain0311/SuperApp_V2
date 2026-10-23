@@ -15,8 +15,8 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Teammate food pack: cancel done earlier; shipping direct-foods + multi-hotel checkout (N kitchen orders).
-  - **Direct foods**: `GET /api/restaurants/foods`; Food tab shows dishes first.
-  - **Multi-hotel**: cart merges restaurants; `POST /api/foodorders/checkout` splits COD into N orders (ONLINE/coupon single-hotel only).
-  - **Cancel rule** (already live): READY cancel OK; PICKED_UP blocked; clears captain.
-  - **Verification**: `dotnet test` 186; Jest 109; tsc clean; live E2E pending post-deploy.
+- **Status**: Teammate food pack COMPLETE on production (`v-ff2efb8`).
+  - Cancel-after-accept: READY cancel OK; PICKED_UP blocked; clears captain (live PASS).
+  - Direct foods: `GET /restaurants/foods` + Food tab dishes (live 200).
+  - Multi-hotel: checkout → N kitchen orders; hotel isolation; ONLINE multi blocked (live orders 2622/2623 PASS).
+  - Git preference: pull before commit/push; direct push to main when user asks (no MR).
