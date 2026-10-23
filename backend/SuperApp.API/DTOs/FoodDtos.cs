@@ -91,6 +91,49 @@ public class PlaceFoodOrderRequest
     public List<OrderItemRequest> Items { get; set; } = new();
 }
 
+/// <summary>
+/// Multi-restaurant checkout: server groups items by FoodItem.RestaurantId and creates N kitchen orders.
+/// </summary>
+public class FoodCheckoutRequest
+{
+    public long? AddressId { get; set; }
+    public string? CouponCode { get; set; }
+    public string PaymentMethod { get; set; } = "COD";
+    public string? Notes { get; set; }
+    [Required]
+    public List<OrderItemRequest> Items { get; set; } = new();
+}
+
+public class FoodCheckoutResultDto
+{
+    public List<FoodOrderDto> Orders { get; set; } = new();
+    public decimal GrandTotal { get; set; }
+    public int RestaurantCount { get; set; }
+}
+
+/// <summary>Cross-restaurant dish card for direct-foods browse.</summary>
+public class FoodCatalogItemDto
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? ImageUrl { get; set; }
+    public decimal BasePrice { get; set; }
+    public decimal DiscountPercent { get; set; }
+    public decimal DiscountedPrice { get; set; }
+    public bool IsVeg { get; set; }
+    public bool IsAvailable { get; set; }
+    public bool IsBestseller { get; set; }
+    public bool IsCustomizable { get; set; }
+    public long RestaurantId { get; set; }
+    public string RestaurantName { get; set; } = string.Empty;
+    public string? RestaurantImageUrl { get; set; }
+    public decimal RestaurantRating { get; set; }
+    public int AvgDeliveryTimeMinutes { get; set; }
+    public string? CategoryName { get; set; }
+    public string? Cuisines { get; set; }
+}
+
 public class OrderItemRequest
 {
     [Required]

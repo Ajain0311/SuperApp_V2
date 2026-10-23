@@ -51,6 +51,13 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
   const discountedSubtotal = Math.max(0, itemTotal - discountAmount);
   const taxesAndPackaging = Math.round(discountedSubtotal * 0.05 * 100) / 100; // 5% GST
   const grandTotal = discountedSubtotal + deliveryFee + taxesAndPackaging;
+  const hotelCount = Array.from(
+    new Set(cartItems.map((c) => c.restaurantId).filter((id): id is number => typeof id === 'number' && id > 0))
+  ).length;
+  const cartSubtitle =
+    hotelCount > 1
+      ? `Ordering from ${hotelCount} hotels (split into separate kitchen orders)`
+      : `Ordering from ${restaurantName}`;
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -96,7 +103,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
           <View style={styles.header}>
             <View style={styles.headerTitles}>
               <Text style={styles.title}>Your Cart Summary</Text>
-              <Text style={styles.subtitle}>Ordering from {restaurantName}</Text>
+              <Text style={styles.subtitle}>{cartSubtitle}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={AppColors.textSecondary} />

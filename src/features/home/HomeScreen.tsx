@@ -81,8 +81,7 @@ const CUISINE_RECOMMENDATIONS = [
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const user = useAuthStore((state) => state.user);
   const addItemToCart = useCartStore((state) => state.addItem);
-  const cartRestaurantId = useCartStore((state) => state.restaurantId);
-  const cartRestaurantName = useCartStore((state) => state.restaurantName);
+
 
   const [activeRide, setActiveRide] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
@@ -355,33 +354,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
 
     // Guard against silent mixed restaurant cart corruption
-    if (cartRestaurantId !== null && cartRestaurantId !== deal.restaurantId) {
-      Alert.alert(
-        'Replace Cart?',
-        `Your cart contains items from "${cartRestaurantName}". Do you want to discard them and add this deal from "${deal.restaurantName}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Yes, Replace',
-            style: 'destructive',
-            onPress: () => {
-              addItemToCart(deal.restaurantId, deal.restaurantName, {
-                id: Date.now(),
-                foodItemId: deal.id,
-                name: deal.name,
-                basePrice: deal.discountedPrice,
-                quantity: 1,
-                addons: [],
-                totalPrice: deal.discountedPrice,
-              });
-              Alert.alert('Added to Cart', `${deal.name} added to your cart.`);
-            },
-          },
-        ]
-      );
-      return;
-    }
-
     addItemToCart(deal.restaurantId, deal.restaurantName, {
       id: Date.now(),
       foodItemId: deal.id,

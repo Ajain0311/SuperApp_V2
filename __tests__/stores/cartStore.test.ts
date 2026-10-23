@@ -40,7 +40,7 @@ describe('CartStore - Order Price Calculation & Multi-Restaurant Logic', () => {
     expect(state.getGrandTotal()).toBe(882); // 840 + 42
   });
 
-  it('should reset cart when adding an item from a different restaurant', () => {
+  it('should keep items from multiple restaurants in one cart', () => {
     const item1: CartItem = {
       id: 1,
       foodItemId: 101,
@@ -64,10 +64,10 @@ describe('CartStore - Order Price Calculation & Multi-Restaurant Logic', () => {
     useCartStore.getState().addItem(2, 'Burger King', item2);
 
     const state = useCartStore.getState();
-    expect(state.items).toHaveLength(1);
-    expect(state.restaurantId).toBe(2);
-    expect(state.restaurantName).toBe('Burger King');
-    expect(state.getItemTotal()).toBe(150);
+    expect(state.items).toHaveLength(2);
+    expect(state.getRestaurantIds().sort()).toEqual([1, 2]);
+    expect(state.getItemTotal()).toBe(450);
+    expect(Object.keys(state.getItemsByRestaurant()).map(Number).sort()).toEqual([1, 2]);
   });
 
   it('should remove item and clear cart when last item removed', () => {

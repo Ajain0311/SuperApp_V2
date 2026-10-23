@@ -276,6 +276,235 @@ public class FoodOrdersController : ControllerBase
     }
 
     /// <summary>
+    /// Multi-restaurant checkout: groups cart lines by FoodItem.RestaurantId and creates N kitchen orders.
+    /// ONLINE + coupon are single-restaurant only (safe). COD supports multiple hotels in one request.
+    /// </summary>
+    [HttpPost("checkout")]
+    public async Task<ActionResult<ApiResponse<FoodCheckoutResultDto>>> Checkout([FromBody] FoodCheckoutRequest request)
+    {
+        if (request.Items == null || !request.Items.Any())
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("At least one food item is required"));
+
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse<FoodCheckoutResultDto>.Fail("Authentication required"));
+
+        var paymentMethod = (request.PaymentMethod ?? "COD").Trim().ToUpperInvariant();
+        if (paymentMethod == "CASH") paymentMethod = "COD";
+        if (paymentMethod != "COD" && paymentMethod != "ONLINE")
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Invalid payment method. Supported methods: COD, ONLINE"));
+
+        if (!request.AddressId.HasValue || request.AddressId.Value <= 0)
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Delivery address is required for placing a food order"));
+
+        var validatedAddress = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == request.AddressId.Value);
+        if (validatedAddress == null)
+            return NotFound(ApiResponse<FoodCheckoutResultDto>.Fail("Specified delivery address not found"));
+        if (!validatedAddress.IsActive)
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Specified delivery address is inactive"));
+        if (validatedAddress.UserId != userId.Value)
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<FoodCheckoutResultDto>.Fail("Unauthorized: Delivery address belongs to another customer"));
+        if (string.IsNullOrWhiteSpace(validatedAddress.AddressLine1) || string.IsNullOrWhiteSpace(validatedAddress.City))
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Delivery address is incomplete (missing street line or city)"));
+
+        if (request.Items.Count > 50)
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Cart size exceeds maximum limit of 50 items"));
+
+        var foodIds = request.Items.Select(i => i.FoodItemId).Distinct().ToList();
+        var foodRows = await _db.FoodItems
+            .Include(f => f.Variants)
+            .Include(f => f.Addons)
+            .Include(f => f.Restaurant)
+            .Where(f => foodIds.Contains(f.Id) && f.IsActive)
+            .ToListAsync();
+
+        var byId = foodRows.ToDictionary(f => f.Id);
+        var groups = new Dictionary<long, List<OrderItemRequest>>();
+        foreach (var line in request.Items)
+        {
+            if (!byId.TryGetValue(line.FoodItemId, out var food) || food.Restaurant == null || !food.Restaurant.IsActive)
+                return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail($"Food item #{line.FoodItemId} not found or restaurant inactive"));
+            if (!groups.TryGetValue(food.RestaurantId, out var list))
+            {
+                list = new List<OrderItemRequest>();
+                groups[food.RestaurantId] = list;
+            }
+            list.Add(line);
+        }
+
+        if (groups.Count > 1 && paymentMethod == "ONLINE")
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Online payment supports one restaurant per checkout. Use COD for multi-restaurant carts, or checkout each hotel separately."));
+
+        if (groups.Count > 1 && !string.IsNullOrWhiteSpace(request.CouponCode))
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Coupons apply to single-restaurant checkouts only. Remove the coupon or checkout one hotel at a time."));
+
+        // Single restaurant: reuse PlaceOrder (coupon + ONLINE supported).
+        if (groups.Count == 1)
+        {
+            var only = groups.First();
+            var single = new PlaceFoodOrderRequest
+            {
+                RestaurantId = only.Key,
+                AddressId = request.AddressId,
+                CouponCode = request.CouponCode,
+                PaymentMethod = paymentMethod,
+                Notes = request.Notes,
+                Items = only.Value
+            };
+            var placed = await PlaceOrder(single);
+            if (placed.Result is OkObjectResult ok && ok.Value is ApiResponse<FoodOrderDto> body && body.Success && body.Data != null)
+            {
+                return Ok(ApiResponse<FoodCheckoutResultDto>.Ok(new FoodCheckoutResultDto
+                {
+                    Orders = new List<FoodOrderDto> { body.Data },
+                    GrandTotal = body.Data.GrandTotal,
+                    RestaurantCount = 1
+                }));
+            }
+            if (placed.Result is ObjectResult err && err.Value is ApiResponse<FoodOrderDto> fail)
+                return StatusCode(err.StatusCode ?? 400, ApiResponse<FoodCheckoutResultDto>.Fail(fail.Message ?? "Checkout failed"));
+            return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Checkout failed"));
+        }
+
+        // Pre-validate all kitchen groups before writing (no open transaction on 400s).
+        var pendingCreates = new List<(Restaurant Restaurant, List<FoodOrderItem> Items, decimal SubTotal)>();
+        foreach (var group in groups)
+        {
+            var restaurant = group.Value
+                .Select(i => byId[i.FoodItemId].Restaurant!)
+                .First(r => r.Id == group.Key);
+
+            var orderItems = new List<FoodOrderItem>();
+            decimal subTotal = 0;
+            int totalQuantity = 0;
+            foreach (var itemReq in group.Value)
+            {
+                if (itemReq.Quantity <= 0 || itemReq.Quantity > 30)
+                    return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail($"Invalid quantity for item #{itemReq.FoodItemId}"));
+                totalQuantity += itemReq.Quantity;
+                if (totalQuantity > 100)
+                    return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail("Total order item quantity exceeds maximum limit of 100"));
+
+                var foodItem = byId[itemReq.FoodItemId];
+                if (!foodItem.IsAvailable)
+                    return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail($"Item '{foodItem.Name}' is currently out of stock"));
+
+                decimal unitPrice = foodItem.DiscountedPrice;
+                string? variantName = null;
+                decimal variantPrice = 0;
+                if (itemReq.VariantId.HasValue)
+                {
+                    var variant = foodItem.Variants.FirstOrDefault(v => v.Id == itemReq.VariantId.Value && v.IsActive);
+                    if (variant == null)
+                        return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail($"Variant #{itemReq.VariantId.Value} is invalid for '{foodItem.Name}'"));
+                    variantName = variant.Name;
+                    variantPrice = variant.AdditionalPrice;
+                }
+
+                var selectedAddonNames = new List<string>();
+                decimal addonsTotal = 0;
+                if (itemReq.SelectedAddonIds != null && itemReq.SelectedAddonIds.Any())
+                {
+                    var distinctAddonIds = itemReq.SelectedAddonIds.Distinct().ToList();
+                    var addons = foodItem.Addons.Where(a => distinctAddonIds.Contains(a.Id) && a.IsActive).ToList();
+                    if (addons.Count != distinctAddonIds.Count)
+                        return BadRequest(ApiResponse<FoodCheckoutResultDto>.Fail($"Invalid add-ons for '{foodItem.Name}'"));
+                    foreach (var addon in addons)
+                    {
+                        selectedAddonNames.Add($"{addon.Name} (+₹{addon.Price:F0})");
+                        addonsTotal += addon.Price;
+                    }
+                }
+
+                var lineItemPrice = (unitPrice + variantPrice + addonsTotal) * itemReq.Quantity;
+                subTotal += lineItemPrice;
+                orderItems.Add(new FoodOrderItem
+                {
+                    FoodItemId = foodItem.Id,
+                    ItemName = foodItem.Name,
+                    Quantity = itemReq.Quantity,
+                    UnitPrice = unitPrice,
+                    VariantName = variantName,
+                    VariantPrice = variantPrice,
+                    AddonsJson = selectedAddonNames.Any() ? JsonSerializer.Serialize(selectedAddonNames) : null,
+                    TotalPrice = lineItemPrice,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            pendingCreates.Add((restaurant, orderItems, subTotal));
+        }
+
+        // Multi-restaurant COD fan-out (transaction when provider supports it; InMemory tests skip).
+        var created = new List<(FoodOrder Order, Restaurant Restaurant)>();
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
+        try
+        {
+            if (_db.Database.IsRelational())
+                tx = await _db.Database.BeginTransactionAsync();
+
+            foreach (var (restaurant, orderItems, subTotal) in pendingCreates)
+            {
+                var order = new FoodOrder
+                {
+                    OrderNumber = $"FO-{Guid.NewGuid().ToString("N")[..16]}",
+                    UserId = userId.Value,
+                    RestaurantId = restaurant.Id,
+                    AddressId = request.AddressId,
+                    Status = OrderStatus.Pending,
+                    SubTotal = subTotal,
+                    DiscountAmount = 0,
+                    DeliveryFee = restaurant.DeliveryFee,
+                    PaymentMethod = "COD",
+                    PaymentStatus = "PENDING",
+                    Notes = request.Notes,
+                    EstimatedDeliveryMinutes = restaurant.AvgDeliveryTimeMinutes,
+                    CreatedAt = DateTime.UtcNow,
+                    Items = orderItems
+                };
+                ApplyCouponTotals(order, null, 0, restaurant.DeliveryFee, subTotal);
+                _db.FoodOrders.Add(order);
+                created.Add((order, restaurant));
+            }
+
+            await _db.SaveChangesAsync();
+            if (tx != null)
+                await tx.CommitAsync();
+        }
+        catch
+        {
+            if (tx != null)
+                await tx.RollbackAsync();
+            throw;
+        }
+        finally
+        {
+            if (tx != null)
+                await tx.DisposeAsync();
+        }
+
+        var ownerPhones = await ResolveRestaurantOwnerPhonesAsync(created.Select(c => c.Restaurant.Id).Distinct().ToList());
+        var dtos = new List<FoodOrderDto>();
+        foreach (var (order, restaurant) in created)
+        {
+            var dto = MapToOrderDto(order, restaurant, validatedAddress, ownerPhone: ownerPhones.GetValueOrDefault(restaurant.Id));
+            dtos.Add(dto);
+            try
+            {
+                await _orderHub.Clients.Group($"restaurant-{restaurant.Id}").SendAsync("NewIncomingOrder", dto);
+            }
+            catch { /* non-critical */ }
+        }
+
+        return Ok(ApiResponse<FoodCheckoutResultDto>.Ok(new FoodCheckoutResultDto
+        {
+            Orders = dtos,
+            GrandTotal = dtos.Sum(o => o.GrandTotal),
+            RestaurantCount = dtos.Count
+        }));
+    }
+
+    /// <summary>
     /// Get food order history for the current user (strictly user-isolated)
     /// </summary>
     [HttpGet]

@@ -90,6 +90,30 @@ export interface CartItem {
   addons: string[];
   totalPrice: number;
   cartLineKey?: string;
+  /** Per-line restaurant for multi-hotel carts */
+  restaurantId?: number;
+  restaurantName?: string;
+}
+
+export interface FoodCatalogItem {
+  id: number;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  basePrice: number;
+  discountPercent?: number;
+  discountedPrice: number;
+  isVeg: boolean;
+  isAvailable: boolean;
+  isBestseller: boolean;
+  isCustomizable: boolean;
+  restaurantId: number;
+  restaurantName: string;
+  restaurantImageUrl?: string;
+  restaurantRating: number;
+  avgDeliveryTimeMinutes: number;
+  categoryName?: string;
+  cuisines?: string;
 }
 
 export interface PlaceFoodOrderRequest {

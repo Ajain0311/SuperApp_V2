@@ -86,6 +86,108 @@ public class RestaurantsController : ControllerBase
     }
 
     /// <summary>
+    /// Cross-restaurant foods feed (direct dishes — hotel-first browse alternative).
+    /// Must be declared before {id:long} so "foods" is not parsed as an id.
+    /// </summary>
+    [HttpGet("foods")]
+    public async Task<ActionResult<ApiResponse<PagedResult<FoodCatalogItemDto>>>> GetFoods(
+        [FromQuery] string? search,
+        [FromQuery] string? category,
+        [FromQuery] bool? isVegOnly,
+        [FromQuery] bool? isBestseller,
+        [FromQuery] long? restaurantId,
+        [FromQuery] string? city,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 50) pageSize = 50;
+
+        var query = _db.FoodItems
+            .AsNoTracking()
+            .Include(f => f.Restaurant)
+            .Include(f => f.RestaurantCategory)
+            .Where(f => f.IsActive && f.IsAvailable && f.Restaurant != null && f.Restaurant.IsActive);
+
+        if (restaurantId.HasValue && restaurantId.Value > 0)
+            query = query.Where(f => f.RestaurantId == restaurantId.Value);
+
+        if (isVegOnly == true)
+            query = query.Where(f => f.IsVeg);
+
+        if (isBestseller == true)
+            query = query.Where(f => f.IsBestseller);
+
+        if (!string.IsNullOrWhiteSpace(city))
+        {
+            var cityTerm = city.Trim();
+            query = query.Where(f => f.Restaurant!.City != null && f.Restaurant.City.Contains(cityTerm));
+        }
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var cat = category.Trim().ToLower();
+            query = query.Where(f =>
+                (f.RestaurantCategory != null && f.RestaurantCategory.Name.ToLower().Contains(cat)) ||
+                f.Name.ToLower().Contains(cat) ||
+                (f.Description != null && f.Description.ToLower().Contains(cat)) ||
+                (f.Restaurant!.Description != null && f.Restaurant.Description.ToLower().Contains(cat)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(f =>
+                f.Name.Contains(term) ||
+                (f.Description != null && f.Description.Contains(term)) ||
+                f.Restaurant!.Name.Contains(term) ||
+                (f.RestaurantCategory != null && f.RestaurantCategory.Name.Contains(term)));
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(f => f.IsBestseller)
+            .ThenByDescending(f => f.Restaurant!.Rating)
+            .ThenBy(f => f.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(f => new FoodCatalogItemDto
+            {
+                Id = f.Id,
+                Name = f.Name,
+                Description = f.Description,
+                ImageUrl = f.ImageUrl,
+                BasePrice = f.BasePrice,
+                DiscountPercent = f.DiscountPercent,
+                DiscountedPrice = f.DiscountPercent > 0
+                    ? Math.Round(f.BasePrice * (1 - f.DiscountPercent / 100m), 2)
+                    : f.BasePrice,
+                IsVeg = f.IsVeg,
+                IsAvailable = f.IsAvailable,
+                IsBestseller = f.IsBestseller,
+                IsCustomizable = f.IsCustomizable,
+                RestaurantId = f.RestaurantId,
+                RestaurantName = f.Restaurant!.Name,
+                RestaurantImageUrl = f.Restaurant.ImageUrl,
+                RestaurantRating = f.Restaurant.Rating,
+                AvgDeliveryTimeMinutes = f.Restaurant.AvgDeliveryTimeMinutes,
+                CategoryName = f.RestaurantCategory != null ? f.RestaurantCategory.Name : null,
+                Cuisines = f.Restaurant.Description
+            })
+            .ToListAsync();
+
+        return Ok(ApiResponse<PagedResult<FoodCatalogItemDto>>.Ok(new PagedResult<FoodCatalogItemDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        }));
+    }
+
+    /// <summary>
     /// Get restaurant detail with categories, food items, variants, and add-ons
     /// </summary>
     [HttpGet("{id:long}")]
