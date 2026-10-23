@@ -36,6 +36,8 @@ public class AppDbContext : DbContext
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<UserDeviceToken> UserDeviceTokens => Set<UserDeviceToken>();
     public DbSet<MarketplaceOffer> MarketplaceOffers => Set<MarketplaceOffer>();
+    public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<AppDocument> Documents => Set<AppDocument>();
     public DbSet<RideFareRule> RideFareRules => Set<RideFareRule>();
     public DbSet<RideFareOption> RideFareOptions => Set<RideFareOption>();
@@ -407,6 +409,38 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.Seller)
                 .WithMany()
                 .HasForeignKey(e => e.SellerId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // ChatConversation
+        modelBuilder.Entity<ChatConversation>(entity =>
+        {
+            entity.HasIndex(e => new { e.ListingId, e.BuyerId }).IsUnique();
+            entity.HasOne(e => e.Listing)
+                .WithMany()
+                .HasForeignKey(e => e.ListingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Buyer)
+                .WithMany()
+                .HasForeignKey(e => e.BuyerId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.Seller)
+                .WithMany()
+                .HasForeignKey(e => e.SellerId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // ChatMessage
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasIndex(e => e.ConversationId);
+            entity.HasOne(e => e.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(e => e.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Sender)
+                .WithMany()
+                .HasForeignKey(e => e.SenderId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
         

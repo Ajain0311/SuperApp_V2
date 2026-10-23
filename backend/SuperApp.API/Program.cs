@@ -529,6 +529,23 @@ ALTER TABLE banners ADD COLUMN IF NOT EXISTS cta_text VARCHAR(80) NULL;
 ALTER TABLE coupons DROP CONSTRAINT IF EXISTS chk_coupons_module;
 ALTER TABLE coupons ADD CONSTRAINT chk_coupons_module CHECK (applicable_module IN ('FOOD', 'RIDE', 'MARKETPLACE', 'ALL'));
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id BIGSERIAL PRIMARY KEY,
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+    buyer_id BIGINT NOT NULL REFERENCES users(id),
+    seller_id BIGINT NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_chat_conversations_listing_buyer UNIQUE (listing_id, buyer_id)
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id BIGSERIAL PRIMARY KEY,
+    conversation_id BIGINT NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+    sender_id BIGINT NOT NULL REFERENCES users(id),
+    message_text VARCHAR(2000) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ix_chat_messages_conversation_id ON chat_messages(conversation_id);
 ");
         }
         catch (Exception ex)

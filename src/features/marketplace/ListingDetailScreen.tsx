@@ -27,6 +27,8 @@ import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { OfflineBanner } from '../../components/common/OfflineBanner';
+import { useAuthStore } from '../../store/authStore';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +46,8 @@ export const ListingDetailScreen: React.FC = () => {
   const [reportDetails, setReportDetails] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [offerPrice, setOfferPrice] = useState('50000');
+  const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const idNum = parseInt(listingId, 10) || 101;
   const isFav = favorites.includes(idNum);

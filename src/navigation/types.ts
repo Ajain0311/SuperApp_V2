@@ -50,6 +50,15 @@ export type RootStackParamList = {
   ListingDetail: {
     listingId: string;
   };
+  MarketplaceChat: {
+    conversationId?: number;
+    listingId: string | number;
+    sellerId: number;
+    sellerName: string;
+    listingTitle: string;
+    listingPrice: number;
+    listingImageUrl?: string;
+  };
   AddListing: undefined;
   Profile: undefined;
   SavedAddresses: undefined;

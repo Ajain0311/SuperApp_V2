@@ -10,6 +10,7 @@ import { RestaurantDetailScreen } from '../features/food/RestaurantDetailScreen'
 import { FoodOrderTrackingScreen } from '../features/food/FoodOrderTrackingScreen';
 import { ActiveRideScreen } from '../features/ride/ActiveRideScreen';
 import { ListingDetailScreen } from '../features/marketplace/ListingDetailScreen';
+import { MarketplaceChatScreen } from '../features/marketplace/MarketplaceChatScreen';
 import { AddListingScreen } from '../features/marketplace/AddListingScreen';
 import { ProfileScreen } from '../features/profile/ProfileScreen';
 import { SavedAddressesScreen } from '../features/profile/SavedAddressesScreen';
@@ -42,6 +43,7 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen name="FoodOrderTracking" component={FoodOrderTrackingScreen} />
       <Stack.Screen name="ActiveRide" component={ActiveRideScreen} />
       <Stack.Screen name="ListingDetail" component={ListingDetailScreen} />
+      <Stack.Screen name="MarketplaceChat" component={MarketplaceChatScreen} />
       <Stack.Screen name="AddListing" component={AddListingScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="SavedAddresses" component={SavedAddressesScreen} />

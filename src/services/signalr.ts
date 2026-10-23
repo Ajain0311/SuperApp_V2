@@ -26,6 +26,7 @@ export interface OrderStatusEvent {
 }
 
 export interface ChatMessageEvent {
+  id?: number;
   conversationId: string;
   senderId: number;
   senderName: string;
@@ -363,6 +364,23 @@ class SignalRService {
     }
     this.chatHubConnection.on('MessageReceived', callback);
     return () => this.chatHubConnection?.off('MessageReceived', callback);
+  }
+
+
+  async reconnectAll(): Promise<void> {
+    try {
+      if (this.rideHubConnection && this.rideHubConnection.state === signalR.HubConnectionState.Disconnected) {
+        await this.rideHubConnection.start().catch(() => {});
+      }
+      if (this.orderHubConnection && this.orderHubConnection.state === signalR.HubConnectionState.Disconnected) {
+        await this.orderHubConnection.start().catch(() => {});
+      }
+      if (this.chatHubConnection && this.chatHubConnection.state === signalR.HubConnectionState.Disconnected) {
+        await this.chatHubConnection.start().catch(() => {});
+      }
+    } catch (e) {
+      // Quiet reconnect failure
+    }
   }
 
   async disconnectAll(): Promise<void> {

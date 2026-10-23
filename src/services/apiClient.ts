@@ -6,6 +6,8 @@ export interface AppError {
   message: string;
   statusCode?: number;
   isNetworkError?: boolean;
+  isOffline?: boolean;
+  isServerDown?: boolean;
   isTimeout?: boolean;
   isUnauthorized?: boolean;
   errors?: string[];
@@ -14,6 +16,8 @@ export interface AppError {
 export class ApiError extends Error implements AppError {
   statusCode?: number;
   isNetworkError?: boolean;
+  isOffline?: boolean;
+  isServerDown?: boolean;
   isTimeout?: boolean;
   isUnauthorized?: boolean;
   errors?: string[];
@@ -23,6 +27,8 @@ export class ApiError extends Error implements AppError {
     this.name = 'ApiError';
     this.statusCode = options?.statusCode;
     this.isNetworkError = options?.isNetworkError;
+    this.isOffline = options?.isOffline;
+    this.isServerDown = options?.isServerDown;
     this.isTimeout = options?.isTimeout;
     this.isUnauthorized = options?.isUnauthorized;
     this.errors = options?.errors;
@@ -32,6 +38,7 @@ export class ApiError extends Error implements AppError {
 class ApiClient {
   private client: AxiosInstance;
   private onUnauthorizedCallback: (() => void) | null = null;
+  private isDeviceOnline: boolean = true;
 
   constructor() {
     this.client = axios.create({
@@ -46,6 +53,14 @@ class ApiClient {
     this.setupInterceptors();
   }
 
+  public setDeviceOnline(online: boolean) {
+    this.isDeviceOnline = online;
+  }
+
+  public getDeviceOnline(): boolean {
+    return this.isDeviceOnline;
+  }
+
   public registerUnauthorizedHandler(callback: () => void) {
     this.onUnauthorizedCallback = callback;
   }
@@ -54,6 +69,14 @@ class ApiClient {
     // Request interceptor: attach bearer token and log
     this.client.interceptors.request.use(
       async (config) => {
+        // Fast pre-check: if device is confirmed offline, reject immediately with clear offline message
+        if (!this.isDeviceOnline) {
+          throw new ApiError('No internet connection. Please check your network and try again.', {
+            isNetworkError: true,
+            isOffline: true,
+          });
+        }
+
         // Dynamically ensure baseURL matches environment in case of runtime change
         config.baseURL = AppEnvironment.baseUrl;
 
@@ -95,6 +118,7 @@ class ApiClient {
       (error: AxiosError) => {
         const normalized = this.normalizeError(error);
 
+        // Ordinary network errors should NEVER trigger logout
         if (normalized.isUnauthorized) {
           if (this.onUnauthorizedCallback) {
             this.onUnauthorizedCallback();
@@ -110,11 +134,15 @@ class ApiClient {
     );
   }
 
-  private normalizeError(error: any): ApiError {
+  public normalizeError(error: any): ApiError {
+    if (error instanceof ApiError) {
+      return error;
+    }
+
     if (axios.isAxiosError(error)) {
       const axiosErr = error as AxiosError<any>;
 
-      // Network errors / server unavailable
+      // Network timeout
       if (axiosErr.code === 'ECONNABORTED' || axiosErr.message.includes('timeout')) {
         return new ApiError('Request timed out. Please check your connection and try again.', {
           isTimeout: true,
@@ -122,10 +150,17 @@ class ApiClient {
         });
       }
 
+      // No HTTP response received from server
       if (!axiosErr.response) {
+        if (!this.isDeviceOnline) {
+          return new ApiError(
+            'No internet connection. Please verify your device is connected to Wi-Fi or mobile data.',
+            { isNetworkError: true, isOffline: true }
+          );
+        }
         return new ApiError(
-          'Unable to connect to the backend server. Please verify the API server is running.',
-          { isNetworkError: true }
+          'Unable to reach the SuperApp server. Please verify your network or try again in a few moments.',
+          { isNetworkError: true, isServerDown: true }
         );
       }
 
@@ -153,7 +188,7 @@ class ApiClient {
       }
 
       if (status === 403) {
-        return new ApiError('You do not have permission to perform this action.', { statusCode: 403 });
+        return new ApiError(message || 'You do not have permission to perform this action.', { statusCode: 403 });
       }
 
       if (status === 404) {
@@ -161,7 +196,7 @@ class ApiClient {
       }
 
       if (status >= 500) {
-        return new ApiError('Server encountered an error. Please try again shortly.', {
+        return new ApiError(message || 'Server encountered an error. Please try again shortly.', {
           statusCode: status,
         });
       }
@@ -170,10 +205,6 @@ class ApiClient {
         statusCode: status,
         errors,
       });
-    }
-
-    if (error instanceof ApiError) {
-      return error;
     }
 
     return new ApiError(error?.message || 'An unexpected application error occurred.');

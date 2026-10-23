@@ -100,3 +100,34 @@ public class OfferDto
     public DateTime CreatedAt { get; set; }
 }
 
+public class ChatConversationDto
+{
+    public long Id { get; set; }
+    public long ListingId { get; set; }
+    public string ListingTitle { get; set; } = string.Empty;
+    public decimal ListingPrice { get; set; }
+    public string? ListingImageUrl { get; set; }
+    public long BuyerId { get; set; }
+    public string BuyerName { get; set; } = string.Empty;
+    public long SellerId { get; set; }
+    public string SellerName { get; set; } = string.Empty;
+    public string? LastMessageText { get; set; }
+    public DateTime? LastMessageTimestamp { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<ChatMessageDto> Messages { get; set; } = new();
+}
+
+public class ChatMessageDto
+{
+    public long Id { get; set; }
+    public long ConversationId { get; set; }
+    public long SenderId { get; set; }
+    public string SenderName { get; set; } = string.Empty;
+    public string MessageText { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public class SendChatMessageRequest
+{
+    public string MessageText { get; set; } = string.Empty;
+}

@@ -6,3 +6,4 @@ export * from './StatusBadge';
 export * from './PriceDisplay';
 export * from './EmptyState';
 export * from './AppAlert';
+export * from './OfflineBanner';

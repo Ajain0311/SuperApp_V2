@@ -41,6 +41,14 @@ export const ApiEndpoints = {
     myListings: '/marketplace/my-listings',
     toggleFavorite: (id: string | number) => `/marketplace/favorites/${id}`,
     favorites: '/marketplace/favorites',
+    openChat: (id: string | number) => '/marketplace/listings/' + id + '/chat',
+    conversation: (id: string | number) => '/marketplace/conversations/' + id,
+    sendMessage: (id: string | number) => '/marketplace/conversations/' + id + '/messages',
+    myConversations: '/marketplace/conversations',
+    makeOffer: (id: string | number) => '/marketplace/listings/' + id + '/offer',
+    listingOffers: (id: string | number) => '/marketplace/listings/' + id + '/offers',
+    myOffers: '/marketplace/my-offers',
+    updateOfferStatus: (id: string | number) => '/marketplace/offers/' + id + '/status',
   },
 
   // Common

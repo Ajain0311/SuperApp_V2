@@ -5,6 +5,8 @@ using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 using SuperApp.API.Services;
+using Microsoft.AspNetCore.SignalR;
+using SuperApp.API.Hubs;
 
 namespace SuperApp.API.Controllers;
 
@@ -13,10 +15,12 @@ namespace SuperApp.API.Controllers;
 public class MarketplaceController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<ChatHub>? _chatHub;
 
-    public MarketplaceController(AppDbContext db)
+    public MarketplaceController(AppDbContext db, IHubContext<ChatHub>? chatHub = null)
     {
         _db = db;
+        _chatHub = chatHub;
     }
 
     private long? GetCurrentUserId()
@@ -1051,4 +1055,231 @@ public class MarketplaceController : ControllerBase
             IsFavorite = userFavorites.Contains(106)
         }
     };
+
+
+    // --- Chat Endpoints ---
+
+    /// <summary>
+    /// Open or get conversation for a listing between buyer (current user) and seller
+    /// </summary>
+    [HttpPost("listings/{id:long}/chat")]
+    public async Task<ActionResult<ApiResponse<ChatConversationDto>>> OpenChat(long id)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<ChatConversationDto>.Fail("Authentication required"));
+
+        var buyerId = currentUserId.Value;
+
+        var listing = await _db.MarketplaceListings
+            .Include(l => l.User)
+            .Include(l => l.Images)
+            .FirstOrDefaultAsync(l => l.Id == id && l.IsActive);
+
+        if (listing == null)
+            return NotFound(ApiResponse<ChatConversationDto>.Fail("Listing not found"));
+
+        if (listing.UserId == buyerId)
+            return BadRequest(ApiResponse<ChatConversationDto>.Fail("You cannot start a chat with yourself"));
+
+        var conv = await _db.ChatConversations
+            .Include(c => c.Listing)
+                .ThenInclude(l => l.Images)
+            .Include(c => c.Buyer)
+            .Include(c => c.Seller)
+            .Include(c => c.Messages)
+                .ThenInclude(m => m.Sender)
+            .FirstOrDefaultAsync(c => c.ListingId == id && c.BuyerId == buyerId);
+
+        if (conv == null)
+        {
+            conv = new ChatConversation
+            {
+                ListingId = listing.Id,
+                BuyerId = buyerId,
+                SellerId = listing.UserId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _db.ChatConversations.Add(conv);
+            await _db.SaveChangesAsync();
+
+            // Re-fetch with includes
+            conv = await _db.ChatConversations
+                .Include(c => c.Listing)
+                    .ThenInclude(l => l.Images)
+                .Include(c => c.Buyer)
+                .Include(c => c.Seller)
+                .Include(c => c.Messages)
+                    .ThenInclude(m => m.Sender)
+                .FirstAsync(c => c.Id == conv.Id);
+        }
+
+        var dto = MapToConversationDto(conv);
+        return Ok(ApiResponse<ChatConversationDto>.Ok(dto));
+    }
+
+    /// <summary>
+    /// Get chat conversation by conversation ID with history
+    /// </summary>
+    [HttpGet("conversations/{id:long}")]
+    public async Task<ActionResult<ApiResponse<ChatConversationDto>>> GetConversation(long id)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<ChatConversationDto>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
+
+        var conv = await _db.ChatConversations
+            .Include(c => c.Listing)
+                .ThenInclude(l => l.Images)
+            .Include(c => c.Buyer)
+            .Include(c => c.Seller)
+            .Include(c => c.Messages)
+                .ThenInclude(m => m.Sender)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (conv == null)
+            return NotFound(ApiResponse<ChatConversationDto>.Fail("Conversation not found"));
+
+        if (conv.BuyerId != userId && conv.SellerId != userId && !User.IsInRole(RoleNames.Admin))
+            return Forbid();
+
+        var dto = MapToConversationDto(conv);
+        return Ok(ApiResponse<ChatConversationDto>.Ok(dto));
+    }
+
+    /// <summary>
+    /// Send message in a chat conversation
+    /// </summary>
+    [HttpPost("conversations/{id:long}/messages")]
+    public async Task<ActionResult<ApiResponse<ChatMessageDto>>> SendMessage(long id, [FromBody] SendChatMessageRequest request)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<ChatMessageDto>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
+
+        if (string.IsNullOrWhiteSpace(request?.MessageText))
+            return BadRequest(ApiResponse<ChatMessageDto>.Fail("Message cannot be empty"));
+
+        var conv = await _db.ChatConversations
+            .Include(c => c.Listing)
+            .Include(c => c.Buyer)
+            .Include(c => c.Seller)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (conv == null)
+            return NotFound(ApiResponse<ChatMessageDto>.Fail("Conversation not found"));
+
+        if (conv.BuyerId != userId && conv.SellerId != userId && !User.IsInRole(RoleNames.Admin))
+            return Forbid();
+
+        var sender = await _db.Users.FindAsync(userId);
+        if (sender == null)
+            return Unauthorized(ApiResponse<ChatMessageDto>.Fail("User not found"));
+
+        var msg = new ChatMessage
+        {
+            ConversationId = conv.Id,
+            SenderId = userId,
+            MessageText = request.MessageText.Trim(),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.ChatMessages.Add(msg);
+        conv.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        var messageDto = new ChatMessageDto
+        {
+            Id = msg.Id,
+            ConversationId = msg.ConversationId,
+            SenderId = msg.SenderId,
+            SenderName = sender.FullName,
+            MessageText = msg.MessageText,
+            CreatedAt = msg.CreatedAt
+        };
+
+        // Broadcast to SignalR group
+        try
+        {
+            await _chatHub.Clients.Group($"chat-{id}").SendAsync("MessageReceived", new
+            {
+                conversationId = id.ToString(),
+                senderId = messageDto.SenderId,
+                senderName = messageDto.SenderName,
+                messageText = messageDto.MessageText,
+                timestamp = messageDto.CreatedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SignalR Chat Broadcast Error] {ex.Message}");
+        }
+
+        return Ok(ApiResponse<ChatMessageDto>.Ok(messageDto));
+    }
+
+    /// <summary>
+    /// List conversations for current user
+    /// </summary>
+    [HttpGet("conversations")]
+    public async Task<ActionResult<ApiResponse<List<ChatConversationDto>>>> GetMyConversations()
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<List<ChatConversationDto>>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
+
+        var convs = await _db.ChatConversations
+            .Include(c => c.Listing)
+                .ThenInclude(l => l.Images)
+            .Include(c => c.Buyer)
+            .Include(c => c.Seller)
+            .Include(c => c.Messages)
+                .ThenInclude(m => m.Sender)
+            .Where(c => c.BuyerId == userId || c.SellerId == userId)
+            .OrderByDescending(c => c.UpdatedAt)
+            .ToListAsync();
+
+        var dtos = convs.Select(MapToConversationDto).ToList();
+        return Ok(ApiResponse<List<ChatConversationDto>>.Ok(dtos));
+    }
+
+    private static ChatConversationDto MapToConversationDto(ChatConversation conv)
+    {
+        var sortedMessages = conv.Messages.OrderBy(m => m.CreatedAt).ToList();
+        var lastMsg = sortedMessages.LastOrDefault();
+        var primaryImage = conv.Listing?.Images?.OrderBy(i => i.SortOrder).FirstOrDefault()?.ImageUrl;
+
+        return new ChatConversationDto
+        {
+            Id = conv.Id,
+            ListingId = conv.ListingId,
+            ListingTitle = conv.Listing?.Title ?? "Listing",
+            ListingPrice = conv.Listing?.Price ?? 0,
+            ListingImageUrl = primaryImage,
+            BuyerId = conv.BuyerId,
+            BuyerName = conv.Buyer?.FullName ?? "Buyer",
+            SellerId = conv.SellerId,
+            SellerName = conv.Seller?.FullName ?? "Seller",
+            LastMessageText = lastMsg?.MessageText,
+            LastMessageTimestamp = lastMsg?.CreatedAt,
+            CreatedAt = conv.CreatedAt,
+            Messages = sortedMessages.Select(m => new ChatMessageDto
+            {
+                Id = m.Id,
+                ConversationId = m.ConversationId,
+                SenderId = m.SenderId,
+                SenderName = m.Sender?.FullName ?? "User",
+                MessageText = m.MessageText,
+                CreatedAt = m.CreatedAt
+            }).ToList()
+        };
+    }
+
 }

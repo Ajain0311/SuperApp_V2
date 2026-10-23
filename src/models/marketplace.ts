@@ -61,3 +61,46 @@ export interface ListingActionRequest {
   status?: string;
   imageUrls?: string[];
 }
+
+export interface ChatMessage {
+  id: number;
+  conversationId: number;
+  senderId: number;
+  senderName: string;
+  messageText: string;
+  createdAt: string;
+  isSending?: boolean;
+  failed?: boolean;
+}
+
+export interface ChatConversation {
+  id: number;
+  listingId: number;
+  listingTitle: string;
+  listingPrice: number;
+  listingImageUrl?: string | null;
+  buyerId: number;
+  buyerName: string;
+  sellerId: number;
+  sellerName: string;
+  lastMessageText?: string | null;
+  lastMessageTimestamp?: string | null;
+  createdAt: string;
+  messages: ChatMessage[];
+}
+
+export interface MarketplaceOffer {
+  id: number;
+  listingId: number;
+  listingTitle: string;
+  listingPrice: number;
+  listingImageUrl?: string | null;
+  buyerId: number;
+  buyerName: string;
+  sellerId: number;
+  sellerName: string;
+  offeredPrice: number;
+  message?: string | null;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED';
+  createdAt: string;
+}
