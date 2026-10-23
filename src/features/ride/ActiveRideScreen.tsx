@@ -27,6 +27,18 @@ import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
 import { locationService } from '../../services/locationService';
 import { mapboxService } from '../../services/mapboxService';
 import { shadowStyle } from '../../utils/platformStyles';
+import {
+  getRideMapPhase,
+  shouldRevealDestination,
+  resolveRouteEndpoints,
+  shouldRecalculateRoute,
+  isValidLatLng,
+  isTerminalRideStatus,
+  buildLineGeoJson,
+  collectMapPoints,
+  boundsFromPoints,
+  type RouteRecalcSnapshot,
+} from './rideMapUtils';
 
 const canUseNativeMap = Platform.OS === 'ios' || Platform.OS === 'android';
 let MapboxMaps: typeof import('@rnmapbox/maps') | null = null;
@@ -104,8 +116,12 @@ export const ActiveRideScreen: React.FC = () => {
   const [isLocationUpdating, setIsLocationUpdating] = useState(false);
   const [roadRouteCoordinates, setRoadRouteCoordinates] = useState<[number, number][] | null>(null);
   const [roadRouteMeta, setRoadRouteMeta] = useState<{ distanceKm: number; durationMinutes: number } | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [followCamera, setFollowCamera] = useState(true);
   const isMountedRef = useRef(true);
   const cameraRef = useRef<any>(null);
+  const lastRouteFetchRef = useRef<RouteRecalcSnapshot | null>(null);
+  const subscribedRideIdRef = useRef<number | null>(null);
 
   const tokenReady = mapboxService.isConfigured();
   const MapView = MapboxMaps?.MapView;
@@ -227,30 +243,20 @@ export const ActiveRideScreen: React.FC = () => {
     signalRService
       .connectRideHub()
       .then(() => {
+        subscribedRideIdRef.current = rideNumericId;
         signalRService.joinRide(rideNumericId);
 
         unsubLocation = signalRService.onDriverLocationUpdated((data: DriverLocationEvent) => {
-          if (data.rideId === rideNumericId && isMountedRef.current) {
-            setDriverCoords({ latitude: data.latitude, longitude: data.longitude });
-            setIsLocationUpdating(true);
-            setTimeout(() => {
-              if (isMountedRef.current) setIsLocationUpdating(false);
-            }, 2000);
+          // Hard-scope to this ride — never accept another ride's location leak.
+          if (data.rideId !== rideNumericId || !isMountedRef.current) return;
+          if (subscribedRideIdRef.current !== rideNumericId) return;
+          if (!isValidLatLng({ latitude: data.latitude, longitude: data.longitude })) return;
 
-            // Compute distance to pickup if available
-            if (pickupCoords) {
-              const distKm = locationService.calculateDistanceKm(
-                data.latitude,
-                data.longitude,
-                pickupCoords.latitude,
-                pickupCoords.longitude
-              );
-              const mins = locationService.estimateDurationMinutes(distKm);
-              setArrivalEta(`~${mins} mins away (${distKm} km)`);
-            } else {
-              setArrivalEta('Driver is on the way');
-            }
-          }
+          setDriverCoords({ latitude: data.latitude, longitude: data.longitude });
+          setIsLocationUpdating(true);
+          setTimeout(() => {
+            if (isMountedRef.current) setIsLocationUpdating(false);
+          }, 2000);
         });
 
         unsubStatus = signalRService.onRideStatusChanged((data: RideStatusEvent) => {
@@ -308,11 +314,14 @@ export const ActiveRideScreen: React.FC = () => {
       if (rideNumericId) {
         signalRService.leaveRide(rideNumericId);
       }
+      if (subscribedRideIdRef.current === rideNumericId) {
+        subscribedRideIdRef.current = null;
+      }
       if (unsubLocation) unsubLocation();
       if (unsubStatus) unsubStatus();
       if (unsubAssigned) unsubAssigned();
     };
-  }, [rideNumericId, pickupCoords]);
+  }, [rideNumericId]);
 
   const handleCallDriver = () => {
     if (!driverPhone || !driverPhone.trim()) {
@@ -374,118 +383,197 @@ export const ActiveRideScreen: React.FC = () => {
     );
   };
 
-  // Determine if trip is in progress (pickup OTP has been verified)
-  const isTripStarted = rideStatus === 'STARTED';
-  const pickupCoordsValid = Boolean(
-    pickupCoords &&
-    Number.isFinite(pickupCoords.latitude) &&
-    Number.isFinite(pickupCoords.longitude) &&
-    !(pickupCoords.latitude === 0 && pickupCoords.longitude === 0)
-  );
-  const dropoffCoordsValid = Boolean(
-    dropoffCoords &&
-    Number.isFinite(dropoffCoords.latitude) &&
-    Number.isFinite(dropoffCoords.longitude) &&
-    !(dropoffCoords.latitude === 0 && dropoffCoords.longitude === 0)
+  // Authoritative phase from backend status (OTP success ⇒ STARTED).
+  const mapPhase = useMemo(() => getRideMapPhase(rideStatus), [rideStatus]);
+  const isTripStarted = mapPhase === 'to_destination';
+  const revealDestination = shouldRevealDestination(mapPhase);
+  const rideIsTerminal = mapPhase === 'terminal';
+  const pickupCoordsValid = isValidLatLng(pickupCoords);
+  const dropoffCoordsValid = isValidLatLng(dropoffCoords);
+  const driverCoordsValid = isValidLatLng(driverCoords);
+
+  const routeEndpoints = useMemo(
+    () =>
+      resolveRouteEndpoints({
+        phase: mapPhase,
+        driver: driverCoordsValid ? driverCoords : null,
+        pickup: pickupCoordsValid ? pickupCoords : null,
+        dropoff: dropoffCoordsValid ? dropoffCoords : null,
+      }),
+    [mapPhase, driverCoords, driverCoordsValid, pickupCoords, pickupCoordsValid, dropoffCoords, dropoffCoordsValid]
   );
 
-  // Fetch road directions between pickup and destination (or driver and dropoff)
+  // Throttled Mapbox Directions — phase A driver→pickup, phase B driver→destination.
   useEffect(() => {
-    if (!pickupCoordsValid || !dropoffCoordsValid) {
+    if (rideIsTerminal || !routeEndpoints) {
+      setRoadRouteCoordinates(null);
+      setRoadRouteMeta(null);
+      setRouteLoading(false);
+      lastRouteFetchRef.current = null;
+      return;
+    }
+
+    if (!mapboxService.isConfigured()) {
       setRoadRouteCoordinates(null);
       setRoadRouteMeta(null);
       return;
     }
 
-    let isSubscribed = true;
-    const origin = (isTripStarted && driverCoords) ? driverCoords : pickupCoords!;
-    const destination = dropoffCoords!;
+    const now = Date.now();
+    if (!shouldRecalculateRoute(lastRouteFetchRef.current, routeEndpoints, now)) {
+      return;
+    }
 
-    mapboxService.getDirectionsRoute(
-      { latitude: origin.latitude, longitude: origin.longitude },
-      { latitude: destination.latitude, longitude: destination.longitude }
-    ).then((res) => {
-      if (!isSubscribed) return;
-      if (res && res.coordinates.length > 0) {
-        setRoadRouteCoordinates(res.coordinates);
-        setRoadRouteMeta({ distanceKm: res.distanceKm, durationMinutes: res.durationMinutes });
-      } else {
-        setRoadRouteCoordinates(null);
-        setRoadRouteMeta(null);
-      }
-    }).catch(() => {
-      if (isSubscribed) {
-        setRoadRouteCoordinates(null);
-        setRoadRouteMeta(null);
-      }
-    });
+    let isSubscribed = true;
+    setRouteLoading(true);
+    mapboxService
+      .getDirectionsRoute(
+        { latitude: routeEndpoints.origin.latitude, longitude: routeEndpoints.origin.longitude },
+        { latitude: routeEndpoints.destination.latitude, longitude: routeEndpoints.destination.longitude }
+      )
+      .then((res) => {
+        if (!isSubscribed) return;
+        lastRouteFetchRef.current = { ...routeEndpoints, at: Date.now() };
+        if (res && res.coordinates.length > 0) {
+          setRoadRouteCoordinates(res.coordinates);
+          setRoadRouteMeta({ distanceKm: res.distanceKm, durationMinutes: res.durationMinutes });
+        } else {
+          setRoadRouteCoordinates(null);
+          setRoadRouteMeta(null);
+        }
+      })
+      .catch(() => {
+        if (isSubscribed) {
+          setRoadRouteCoordinates(null);
+          setRoadRouteMeta(null);
+        }
+      })
+      .finally(() => {
+        if (isSubscribed) setRouteLoading(false);
+      });
 
     return () => {
       isSubscribed = false;
     };
-  }, [isTripStarted, driverCoords?.latitude, driverCoords?.longitude, pickupCoords?.latitude, pickupCoords?.longitude, dropoffCoords?.latitude, dropoffCoords?.longitude]);
+  }, [
+    rideIsTerminal,
+    routeEndpoints?.origin.latitude,
+    routeEndpoints?.origin.longitude,
+    routeEndpoints?.destination.latitude,
+    routeEndpoints?.destination.longitude,
+    mapPhase,
+  ]);
 
-  const routeGeoJson = useMemo(() => {
-    if (!pickupCoordsValid || !dropoffCoordsValid) return null;
+  const routeGeoJson = useMemo(
+    () => buildLineGeoJson(roadRouteCoordinates, routeEndpoints),
+    [roadRouteCoordinates, routeEndpoints]
+  );
 
-    if (roadRouteCoordinates && roadRouteCoordinates.length > 1) {
-      return {
-        type: 'Feature' as const,
-        properties: {},
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: roadRouteCoordinates,
-        },
-      };
-    }
-
-    // Straight-line fallback between origin and destination
-    const origin = (isTripStarted && driverCoords) ? driverCoords : pickupCoords!;
-    return {
-      type: 'Feature' as const,
-      properties: {},
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: [
-          [origin.longitude, origin.latitude],
-          [dropoffCoords!.longitude, dropoffCoords!.latitude],
-        ],
-      },
-    };
-  }, [pickupCoordsValid, dropoffCoordsValid, roadRouteCoordinates, isTripStarted, driverCoords, pickupCoords, dropoffCoords]);
+  const mapBounds = useMemo(() => {
+    const pts = collectMapPoints({
+      phase: mapPhase,
+      driver: driverCoordsValid ? driverCoords : null,
+      pickup: pickupCoordsValid ? pickupCoords : null,
+      dropoff: dropoffCoordsValid ? dropoffCoords : null,
+    });
+    return boundsFromPoints(pts);
+  }, [mapPhase, driverCoords, driverCoordsValid, pickupCoords, pickupCoordsValid, dropoffCoords, dropoffCoordsValid]);
 
   const mapCenterCoordinate = useMemo<[number, number]>(() => {
-    if (driverCoords && Number.isFinite(driverCoords.longitude)) {
-      return [driverCoords.longitude, driverCoords.latitude];
-    }
-    if (pickupCoordsValid) {
-      return [pickupCoords!.longitude, pickupCoords!.latitude];
-    }
-    if (dropoffCoordsValid) {
+    if (driverCoordsValid) return [driverCoords!.longitude, driverCoords!.latitude];
+    if (pickupCoordsValid) return [pickupCoords!.longitude, pickupCoords!.latitude];
+    if (revealDestination && dropoffCoordsValid) {
       return [dropoffCoords!.longitude, dropoffCoords!.latitude];
     }
-    return [77.2177, 28.6304];
-  }, [driverCoords, pickupCoordsValid, dropoffCoordsValid, pickupCoords, dropoffCoords]);
+    return [75.7873, 26.9124];
+  }, [driverCoords, driverCoordsValid, pickupCoords, pickupCoordsValid, dropoffCoords, dropoffCoordsValid, revealDestination]);
+
+  // Auto-frame when following; skip when user panned the map.
+  useEffect(() => {
+    if (!followCamera || !cameraRef.current || !mapBounds) return;
+    try {
+      cameraRef.current.fitBounds(mapBounds.ne, mapBounds.sw, 56, 600);
+    } catch {
+      try {
+        cameraRef.current.setCamera({
+          centerCoordinate: mapCenterCoordinate,
+          zoomLevel: 13,
+          animationDuration: 400,
+        });
+      } catch {
+        /* camera optional */
+      }
+    }
+  }, [followCamera, mapBounds?.ne[0], mapBounds?.ne[1], mapBounds?.sw[0], mapBounds?.sw[1], mapPhase, mapCenterCoordinate]);
+
+  const handleRecenterMap = () => {
+    setFollowCamera(true);
+    if (cameraRef.current && mapBounds) {
+      try {
+        cameraRef.current.fitBounds(mapBounds.ne, mapBounds.sw, 56, 500);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
 
   const liveDistanceEtaText = useMemo(() => {
-    if (isTripStarted && roadRouteMeta) {
-      const dist = roadRouteMeta.distanceKm < 1 ? `${Math.round(roadRouteMeta.distanceKm * 1000)} m` : `${roadRouteMeta.distanceKm.toFixed(1)} km`;
-      return `${dist} • ~${roadRouteMeta.durationMinutes} min to dropoff`;
+    if (rideIsTerminal) return null;
+    if (roadRouteMeta) {
+      const dist =
+        roadRouteMeta.distanceKm < 1
+          ? `${Math.round(roadRouteMeta.distanceKm * 1000)} m`
+          : `${roadRouteMeta.distanceKm.toFixed(1)} km`;
+      const label = isTripStarted ? 'to dropoff' : 'to pickup';
+      return `${dist} • ~${roadRouteMeta.durationMinutes} min ${label}`;
     }
-    if (isTripStarted && driverCoords && dropoffCoordsValid) {
-      const distKm = locationService.calculateDistanceKm(driverCoords.latitude, driverCoords.longitude, dropoffCoords!.latitude, dropoffCoords!.longitude);
+    if (routeEndpoints) {
+      const distKm = locationService.calculateDistanceKm(
+        routeEndpoints.origin.latitude,
+        routeEndpoints.origin.longitude,
+        routeEndpoints.destination.latitude,
+        routeEndpoints.destination.longitude
+      );
+      if (!Number.isFinite(distKm)) return null;
       const mins = locationService.estimateDurationMinutes(distKm);
-      return `~${mins} mins (${distKm.toFixed(1)} km) to dropoff`;
+      return `~${mins} mins (${distKm.toFixed(1)} km)`;
     }
     return null;
-  }, [isTripStarted, roadRouteMeta, driverCoords, dropoffCoordsValid, dropoffCoords]);
+  }, [rideIsTerminal, roadRouteMeta, isTripStarted, routeEndpoints]);
 
-  // 4-digit OTP split for UI display
+  // Real OTP only — never invent a placeholder code for the passenger.
   const otpDigits = useMemo(() => {
-    const raw = (otpCode || '4289').replace(/\D/g, '');
-    const padded = raw.padEnd(4, '0').slice(0, 4);
-    return padded.split('');
+    const raw = (otpCode || '').replace(/\D/g, '');
+    if (raw.length < 4) return [];
+    return raw.slice(0, 4).split('');
   }, [otpCode]);
+
+  const openExternalNavigationFallback = () => {
+    if (!routeEndpoints) {
+      Alert.alert('Navigation', 'Route coordinates are not available yet.');
+      return;
+    }
+    const { destination } = routeEndpoints;
+    const label = isTripStarted ? dropoffAddress || 'Destination' : pickupAddress || 'Pickup';
+    Alert.alert(
+      'Open external maps?',
+      'In-app live map is the default. External maps is only a fallback.',
+      [
+        { text: 'Stay in app', style: 'cancel' },
+        {
+          text: 'Open Maps',
+          onPress: () => {
+            const url = Platform.select({
+              ios: `maps:0,0?q=${encodeURIComponent(label)}@${destination.latitude},${destination.longitude}`,
+              android: `geo:0,0?q=${destination.latitude},${destination.longitude}(${encodeURIComponent(label)})`,
+              default: `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}`,
+            });
+            if (url) Linking.openURL(url).catch(() => Alert.alert('Maps', 'Could not open external maps.'));
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -536,8 +624,8 @@ export const ActiveRideScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* 4-Digit Pickup OTP Box - Shown ONLY when waiting for or at pickup (ACCEPTED or ARRIVING) */}
-        {!isTripStarted && rideStatus !== 'COMPLETED' && rideStatus !== 'CANCELLED' && rideStatus !== 'EXPIRED' && (
+        {/* OTP — only real backend code, pre-STARTED */}
+        {!isTripStarted && !rideIsTerminal && otpDigits.length === 4 && (
           <View style={styles.otpBox}>
             <Text style={styles.otpTitle}>SHARE START CODE WITH CAPTAIN</Text>
             <View style={styles.otpDigitsRow}>
@@ -548,18 +636,22 @@ export const ActiveRideScreen: React.FC = () => {
               ))}
             </View>
             <Text style={styles.otpSubtitle}>
-              Captain will verify this code to start your trip to destination
+              Captain verifies this code to start the trip — destination unlocks after OTP success
             </Text>
           </View>
         )}
 
-        {/* Interactive Navigation Map (Pickup -> Dropoff with Driver's live location) */}
+        {/* Rapido-style in-app live map */}
         <View style={styles.mapContainer}>
           <View style={styles.mapHeaderRow}>
             <View style={styles.mapHeaderTitleRow}>
               <Ionicons name="map" size={16} color={isTripStarted ? '#10B981' : '#3B82F6'} />
               <Text style={styles.mapSectionTitle}>
-                {isTripStarted ? 'Trip Navigation (In-Progress)' : 'Live Route & Location'}
+                {rideIsTerminal
+                  ? 'Trip ended'
+                  : isTripStarted
+                    ? 'Live route to destination'
+                    : 'Live route to pickup'}
               </Text>
             </View>
             {liveDistanceEtaText && (
@@ -577,21 +669,15 @@ export const ActiveRideScreen: React.FC = () => {
                 styleURL="mapbox://styles/mapbox/navigation-night-v1"
                 logoEnabled={false}
                 attributionEnabled={false}
+                onTouchStart={() => setFollowCamera(false)}
               >
-                <Camera
-                  ref={cameraRef}
-                  zoomLevel={13}
-                  centerCoordinate={mapCenterCoordinate}
-                  animationMode="flyTo"
-                  animationDuration={400}
-                />
+                <Camera ref={cameraRef} zoomLevel={13} centerCoordinate={mapCenterCoordinate} />
 
-                {/* Pickup Location Marker (Green) */}
                 {pickupCoordsValid && (
                   <PointAnnotation
                     id={`active-pickup-marker-${rideNumericId || 'pickup'}`}
                     coordinate={[pickupCoords!.longitude, pickupCoords!.latitude]}
-                    title="Pickup Location"
+                    title="Pickup"
                   >
                     <View style={styles.pickupMarkerWrap}>
                       <View style={styles.pickupPinHead}>
@@ -602,8 +688,8 @@ export const ActiveRideScreen: React.FC = () => {
                   </PointAnnotation>
                 )}
 
-                {/* Destination Dropoff Marker (Red) */}
-                {dropoffCoordsValid && (
+                {/* Destination only after OTP / STARTED */}
+                {revealDestination && dropoffCoordsValid && (
                   <PointAnnotation
                     id={`active-dropoff-marker-${rideNumericId || 'dropoff'}`}
                     coordinate={[dropoffCoords!.longitude, dropoffCoords!.latitude]}
@@ -618,33 +704,28 @@ export const ActiveRideScreen: React.FC = () => {
                   </PointAnnotation>
                 )}
 
-                {/* Captain Live Location Marker (Blue Car) */}
-                {driverCoords &&
-                  Number.isFinite(driverCoords.latitude) &&
-                  Number.isFinite(driverCoords.longitude) &&
-                  driverCoords.latitude !== 0 && (
-                    <PointAnnotation
-                      id={`active-driver-marker-${rideNumericId || 'driver'}`}
-                      coordinate={[driverCoords.longitude, driverCoords.latitude]}
-                      title="Driver Live Position"
-                    >
-                      <View style={styles.captainMarkerWrap}>
-                        <View style={styles.captainMarkerHead}>
-                          <Ionicons name="car" size={14} color="#FFFFFF" />
-                        </View>
-                        <View style={styles.captainMarkerAura} />
+                {driverCoordsValid && (
+                  <PointAnnotation
+                    id={`active-driver-marker-${rideNumericId || 'driver'}`}
+                    coordinate={[driverCoords!.longitude, driverCoords!.latitude]}
+                    title="Driver"
+                  >
+                    <View style={styles.captainMarkerWrap}>
+                      <View style={styles.captainMarkerHead}>
+                        <Ionicons name="car" size={14} color="#FFFFFF" />
                       </View>
-                    </PointAnnotation>
-                  )}
+                      <View style={styles.captainMarkerAura} />
+                    </View>
+                  </PointAnnotation>
+                )}
 
-                {/* Active Navigation Route Line */}
-                {routeGeoJson && ShapeSource && LineLayer ? (
+                {!rideIsTerminal && routeGeoJson && ShapeSource && LineLayer ? (
                   <ShapeSource id="customerRouteSource" shape={routeGeoJson}>
                     <LineLayer
                       id="customerRouteLineLayer"
                       style={{
                         lineColor: isTripStarted ? '#10B981' : '#3B82F6',
-                        lineWidth: 4,
+                        lineWidth: 4.5,
                         lineCap: 'round',
                         lineJoin: 'round',
                       }}
@@ -652,6 +733,34 @@ export const ActiveRideScreen: React.FC = () => {
                   </ShapeSource>
                 ) : null}
               </MapView>
+
+              {routeLoading && (
+                <View style={styles.mapOverlayBadge}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.mapOverlayText}>Updating route…</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.recenterBtn}
+                onPress={handleRecenterMap}
+                accessibilityRole="button"
+                accessibilityLabel="Recenter map on route"
+              >
+                <MaterialIcons name="my-location" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              {!rideIsTerminal && routeEndpoints && (
+                <TouchableOpacity
+                  style={styles.externalMapsBtn}
+                  onPress={openExternalNavigationFallback}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open external maps fallback"
+                >
+                  <MaterialIcons name="open-in-new" size={16} color="#E2E8F0" />
+                  <Text style={styles.externalMapsBtnText}>External maps</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <View style={styles.mapFallbackCard}>
@@ -659,25 +768,36 @@ export const ActiveRideScreen: React.FC = () => {
                 <MaterialIcons name="navigation" size={24} color={isTripStarted ? '#10B981' : '#3B82F6'} />
                 <View style={{ flex: 1, marginLeft: spacing.sm }}>
                   <Text style={styles.fallbackPickupTitle}>
-                    {isTripStarted ? `Heading to: ${dropoffAddress || 'Destination'}` : `Pickup at: ${pickupAddress || 'Customer Location'}`}
+                    {!tokenReady
+                      ? 'Mapbox token missing — live map unavailable'
+                      : !canUseNativeMap
+                        ? 'Native live map needs the iOS/Android app (web fallback)'
+                        : isTripStarted
+                          ? `Heading to: ${dropoffAddress || 'Destination'}`
+                          : `Pickup at: ${pickupAddress || 'Customer Location'}`}
                   </Text>
                   {pickupCoordsValid && (
                     <Text style={styles.fallbackCoords}>
-                      Pickup GPS: {pickupCoords!.latitude.toFixed(4)}, {pickupCoords!.longitude.toFixed(4)}
+                      Pickup: {pickupCoords!.latitude.toFixed(4)}, {pickupCoords!.longitude.toFixed(4)}
                     </Text>
                   )}
-                  {dropoffCoordsValid && (
+                  {revealDestination && dropoffCoordsValid && (
                     <Text style={styles.fallbackCoords}>
-                      Dropoff GPS: {dropoffCoords!.latitude.toFixed(4)}, {dropoffCoords!.longitude.toFixed(4)}
+                      Dropoff: {dropoffCoords!.latitude.toFixed(4)}, {dropoffCoords!.longitude.toFixed(4)}
                     </Text>
                   )}
-                  {driverCoords && (
+                  {driverCoordsValid && (
                     <Text style={styles.fallbackCaptainCoords}>
-                      Captain GPS: {driverCoords.latitude.toFixed(4)}, {driverCoords.longitude.toFixed(4)}
+                      Captain: {driverCoords!.latitude.toFixed(4)}, {driverCoords!.longitude.toFixed(4)}
                     </Text>
                   )}
                 </View>
               </View>
+              {routeEndpoints && (
+                <TouchableOpacity style={styles.fallbackExternalBtn} onPress={openExternalNavigationFallback}>
+                  <Text style={styles.fallbackExternalBtnText}>Open external maps (fallback)</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -1281,14 +1401,73 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   nativeMapContainer: {
-    height: 220,
+    height: 280,
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
     marginTop: spacing.xs,
   },
   tripStartedMapContainer: {
-    height: 300,
+    height: 340,
+  },
+  mapOverlayBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  mapOverlayText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  recenterBtn: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadowStyle({ color: '#000', opacity: 0.25, radius: 4, elevation: 4 }),
+  },
+  externalMapsBtn: {
+    position: 'absolute',
+    left: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  externalMapsBtnText: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  fallbackExternalBtn: {
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceLight,
+  },
+  fallbackExternalBtnText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   pickupMarkerWrap: {
     alignItems: 'center',
