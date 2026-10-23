@@ -114,7 +114,9 @@ public class MultiRoleTests
         };
 
         var res = await controller.GetMyRestaurant();
-        Assert.IsType<NotFoundObjectResult>(res.Result);
+        // Missing restaurant mapping is authorization failure (403), not 404
+        var forbid = Assert.IsType<ObjectResult>(res.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, forbid.StatusCode);
     }
 
     [Fact]
