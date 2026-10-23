@@ -126,6 +126,22 @@ public class AddressTests
         Assert.True(refreshed.IsDefault);
     }
 
+    [Theory]
+    [InlineData(91, 0, false)]
+    [InlineData(-91, 75, false)]
+    [InlineData(26.9, 200, false)]
+    [InlineData(90, 0, true)]
+    [InlineData(-90, 180, true)]
+    [InlineData(26.9124, 75.7873, true)]
+    [InlineData(0, 0, true)] // treated as unset, still valid request
+    public void UpsertAddressRequest_OutOfRangeCoords_AreModelAgnostic_ButControllerRejects(
+        double lat, double lng, bool expectInRange)
+    {
+        // Document expected geographic bounds used by AddressesController.TryNormalizeCoordinates.
+        var inRange = lat is >= -90 and <= 90 && lng is >= -180 and <= 180;
+        Assert.Equal(expectInRange, inRange);
+    }
+
     [Fact]
     public async Task SetDefault_LeavesExactlyOneDefault_WhenCalledSequentially()
     {

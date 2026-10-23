@@ -491,7 +491,7 @@ public class VendorController : ControllerBase
 
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse<bool>.Fail("Restaurant not found"));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<bool>.Fail("Restaurant not found or not authorized"));
 
         restaurant.IsActive = request.IsOpen.Value;
         restaurant.UpdatedAt = DateTime.UtcNow;

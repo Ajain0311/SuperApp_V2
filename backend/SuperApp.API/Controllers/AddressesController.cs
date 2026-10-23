@@ -83,7 +83,8 @@ public class AddressesController : ControllerBase
             await ClearDefaultsAsync(userId.Value);
         }
 
-        var (lat, lng) = NormalizeCoordinates(request.Latitude, request.Longitude);
+        if (!TryNormalizeCoordinates(request.Latitude, request.Longitude, out var lat, out var lng, out var coordError))
+            return BadRequest(ApiResponse<AddressDto>.Fail(coordError ?? "Invalid coordinates"));
 
         var address = new Address
         {
@@ -128,7 +129,8 @@ public class AddressesController : ControllerBase
         address.State = request.State.Trim();
         address.PinCode = request.PinCode.Trim();
         // Never wipe existing map pins: only overwrite when the client sends real coordinates.
-        var (lat, lng) = NormalizeCoordinates(request.Latitude, request.Longitude);
+        if (!TryNormalizeCoordinates(request.Latitude, request.Longitude, out var lat, out var lng, out var coordError))
+            return BadRequest(ApiResponse<AddressDto>.Fail(coordError ?? "Invalid coordinates"));
         if (lat.HasValue && lng.HasValue)
         {
             address.Latitude = lat;
@@ -270,20 +272,44 @@ public class AddressesController : ControllerBase
                 .SetProperty(a => a.UpdatedAt, now));
     }
 
-    private static (decimal? Latitude, decimal? Longitude) NormalizeCoordinates(decimal? latitude, decimal? longitude)
+    /// <summary>
+    /// Validates optional map pins. Out-of-range values are rejected (400), not silently dropped.
+    /// Exact (0,0) is treated as unset. Omitting both is fine.
+    /// </summary>
+    private static bool TryNormalizeCoordinates(
+        decimal? latitude,
+        decimal? longitude,
+        out decimal? lat,
+        out decimal? lng,
+        out string? error)
     {
-        if (!latitude.HasValue || !longitude.HasValue)
-            return (null, null);
+        lat = null;
+        lng = null;
+        error = null;
 
-        var lat = latitude.Value;
-        var lng = longitude.Value;
-        if (lat is < -90m or > 90m || lng is < -180m or > 180m)
-            return (null, null);
+        if (!latitude.HasValue && !longitude.HasValue)
+            return true;
+
+        if (!latitude.HasValue || !longitude.HasValue)
+        {
+            error = "Both latitude and longitude are required together";
+            return false;
+        }
+
+        var latVal = latitude.Value;
+        var lngVal = longitude.Value;
+        if (latVal is < -90m or > 90m || lngVal is < -180m or > 180m)
+        {
+            error = "Latitude must be between -90 and 90, longitude between -180 and 180";
+            return false;
+        }
 
         // Treat exact 0,0 as unset (common client placeholder / cleared pin).
-        if (lat == 0m && lng == 0m)
-            return (null, null);
+        if (latVal == 0m && lngVal == 0m)
+            return true;
 
-        return (lat, lng);
+        lat = latVal;
+        lng = lngVal;
+        return true;
     }
 }
