@@ -216,7 +216,10 @@ ProductionSecurityValidator.ValidateOtpProvider(otpProvider, otpTestMode, isProd
 // OTP_TEST_MODE with an explicit live provider (BIGB) must keep that provider.
 // BigBOtpService honors TEST_OTP and skips SMS when OTP_TEST_MODE=true outside Production.
 // Never register MockOtpService when OTP_PROVIDER=BIGB — its ctor throws and 500s all auth.
-var useMockOtp = !string.Equals(otpProvider, "BIGB", StringComparison.OrdinalIgnoreCase)
+// Accept legacy env value "PunjabGov" as an alias so existing B-series .env keeps working.
+var isLiveOtpProvider = string.Equals(otpProvider, "BIGB", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(otpProvider, "PunjabGov", StringComparison.OrdinalIgnoreCase);
+var useMockOtp = !isLiveOtpProvider
     && (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase));
 
 builder.Services.AddScoped<BigBOtpService>();
