@@ -435,53 +435,34 @@ public class FoodOrdersController : ControllerBase
             pendingCreates.Add((restaurant, orderItems, subTotal));
         }
 
-        // Multi-restaurant COD fan-out (transaction when provider supports it; InMemory tests skip).
+        // Multi-restaurant COD fan-out in one SaveChanges (atomic unit of work).
+        // Do not BeginTransaction here — NpgsqlRetryingExecutionStrategy rejects user transactions.
         var created = new List<(FoodOrder Order, Restaurant Restaurant)>();
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
-        try
+        foreach (var (restaurant, orderItems, subTotal) in pendingCreates)
         {
-            if (_db.Database.IsRelational())
-                tx = await _db.Database.BeginTransactionAsync();
-
-            foreach (var (restaurant, orderItems, subTotal) in pendingCreates)
+            var order = new FoodOrder
             {
-                var order = new FoodOrder
-                {
-                    OrderNumber = $"FO-{Guid.NewGuid().ToString("N")[..16]}",
-                    UserId = userId.Value,
-                    RestaurantId = restaurant.Id,
-                    AddressId = request.AddressId,
-                    Status = OrderStatus.Pending,
-                    SubTotal = subTotal,
-                    DiscountAmount = 0,
-                    DeliveryFee = restaurant.DeliveryFee,
-                    PaymentMethod = "COD",
-                    PaymentStatus = "PENDING",
-                    Notes = request.Notes,
-                    EstimatedDeliveryMinutes = restaurant.AvgDeliveryTimeMinutes,
-                    CreatedAt = DateTime.UtcNow,
-                    Items = orderItems
-                };
-                ApplyCouponTotals(order, null, 0, restaurant.DeliveryFee, subTotal);
-                _db.FoodOrders.Add(order);
-                created.Add((order, restaurant));
-            }
+                OrderNumber = $"FO-{Guid.NewGuid().ToString("N")[..16]}",
+                UserId = userId.Value,
+                RestaurantId = restaurant.Id,
+                AddressId = request.AddressId,
+                Status = OrderStatus.Pending,
+                SubTotal = subTotal,
+                DiscountAmount = 0,
+                DeliveryFee = restaurant.DeliveryFee,
+                PaymentMethod = "COD",
+                PaymentStatus = "PENDING",
+                Notes = request.Notes,
+                EstimatedDeliveryMinutes = restaurant.AvgDeliveryTimeMinutes,
+                CreatedAt = DateTime.UtcNow,
+                Items = orderItems
+            };
+            ApplyCouponTotals(order, null, 0, restaurant.DeliveryFee, subTotal);
+            _db.FoodOrders.Add(order);
+            created.Add((order, restaurant));
+        }
 
-            await _db.SaveChangesAsync();
-            if (tx != null)
-                await tx.CommitAsync();
-        }
-        catch
-        {
-            if (tx != null)
-                await tx.RollbackAsync();
-            throw;
-        }
-        finally
-        {
-            if (tx != null)
-                await tx.DisposeAsync();
-        }
+        await _db.SaveChangesAsync();
 
         var ownerPhones = await ResolveRestaurantOwnerPhonesAsync(created.Select(c => c.Restaurant.Id).Distinct().ToList());
         var dtos = new List<FoodOrderDto>();
