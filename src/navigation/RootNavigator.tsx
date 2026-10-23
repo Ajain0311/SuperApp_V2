@@ -25,6 +25,8 @@ import { DriverEarningsScreen } from '../features/driver/DriverEarningsScreen';
 import { AdminCouponsScreen } from '../features/admin/AdminCouponsScreen';
 import { AdminHotelCommissionsScreen } from '../features/admin/AdminHotelCommissionsScreen';
 import { AdminRideFaresScreen } from '../features/admin/AdminRideFaresScreen';
+import { AdminRoleApplicationsScreen } from '../features/admin/AdminRoleApplicationsScreen';
+import { RoleApplicationScreen } from '../features/profile/RoleApplicationScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -61,6 +63,8 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen name="AdminCoupons" component={AdminCouponsScreen} />
       <Stack.Screen name="AdminHotelCommissions" component={AdminHotelCommissionsScreen} />
       <Stack.Screen name="AdminRideFares" component={AdminRideFaresScreen} />
+      <Stack.Screen name="AdminRoleApplications" component={AdminRoleApplicationsScreen} />
+      <Stack.Screen name="RoleApplication" component={RoleApplicationScreen} />
     </Stack.Navigator>
   );
 };

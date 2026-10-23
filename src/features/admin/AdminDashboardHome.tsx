@@ -259,6 +259,21 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({ navigati
 
         <TouchableOpacity
           style={styles.navCard}
+          onPress={() => navigation.navigate('AdminRoleApplications')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.navIconBox, { backgroundColor: '#22D3EE20' }]}>
+            <Ionicons name="people-circle-outline" size={24} color="#22D3EE" />
+          </View>
+          <View style={styles.navCardInfo}>
+            <Text style={styles.navCardTitle}>Role Applications</Text>
+            <Text style={styles.navCardSubtitle}>Approve rider / hotel requests from citizens</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={AppColors.textSecondary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navCard}
           onPress={() => navigation.navigate('AdminCoupons')}
           activeOpacity={0.8}
         >

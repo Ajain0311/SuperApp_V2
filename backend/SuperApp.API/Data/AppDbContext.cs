@@ -43,6 +43,7 @@ public class AppDbContext : DbContext
     public DbSet<RideFareOption> RideFareOptions => Set<RideFareOption>();
     public DbSet<HotelCommissionLedger> HotelCommissionLedgers => Set<HotelCommissionLedger>();
     public DbSet<HotelSettlementBatch> HotelSettlementBatches => Set<HotelSettlementBatch>();
+    public DbSet<RoleApplication> RoleApplications => Set<RoleApplication>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -83,6 +84,16 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.Role)
                 .WithMany(r => r.UserRoles)
                 .HasForeignKey(e => e.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RoleApplication>(entity =>
+        {
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Status);
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
         

@@ -223,6 +223,46 @@ export const ProfileScreen: React.FC = () => {
           />
         </View>
 
+        {/* Grow with SuperApp — role requests */}
+        <Text style={styles.sectionHeader}>Grow with SuperApp</Text>
+        <View style={styles.sectionCard}>
+          <MenuItem
+            icon="two-wheeler"
+            title="Become a Rider / Captain"
+            subtitle="Upload license — admin approves DRIVER role"
+            color={colors.blue}
+            onPress={() => navigation.navigate('RoleApplication', { role: 'DRIVER' })}
+          />
+          <View style={styles.itemDivider} />
+          <MenuItem
+            icon="restaurant"
+            title="Open a Hotel / Restaurant"
+            subtitle="Upload business docs — admin approves"
+            color={colors.secondary}
+            onPress={() => navigation.navigate('RoleApplication', { role: 'RESTAURANT_OWNER' })}
+          />
+          <View style={styles.itemDivider} />
+          <MenuItem
+            icon="storefront"
+            title="Sell on Bazaar"
+            subtitle="Anyone can sell — no admin approval needed"
+            color={colors.primary}
+            onPress={() =>
+              Alert.alert(
+                'Marketplace',
+                'Any citizen can sell on Bazaar. Open the Bazaar tab and tap Post Ad / Add Listing. Seller role is granted automatically when you publish.',
+                [
+                  { text: 'OK', style: 'cancel' },
+                  {
+                    text: 'Go to Bazaar',
+                    onPress: () => navigation.navigate('MainTabs', { screen: 'Bazaar' } as any),
+                  },
+                ]
+              )
+            }
+          />
+        </View>
+
         {/* Section 2: Account Settings */}
         <Text style={styles.sectionHeader}>Account Settings</Text>
         <View style={styles.sectionCard}>
