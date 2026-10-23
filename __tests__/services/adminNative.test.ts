@@ -156,4 +156,46 @@ describe('Admin Native API Contracts & Endpoints', () => {
       targetRole: 'CUSTOMER',
     });
   });
+
+  it('lists admin coupons for Coupons & Promos screen', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValue({
+      data: {
+        success: true,
+        data: [{ id: 1, code: 'WELCOME50', discountType: 'FLAT', discountValue: 50, isActive: true }],
+      },
+    });
+    const res = await apiClient.get('/admin/coupons');
+    expect(res.data.data[0].code).toBe('WELCOME50');
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/coupons');
+  });
+
+  it('loads hotel commission ledger and settlement batches', async () => {
+    (apiClient.get as jest.Mock)
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: [{ restaurantId: 2, restaurantName: 'UNCLE JOHNS', effectiveCommissionRatePercent: 15, totalCommissionEarned: 1200 }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { success: true, data: [{ id: 9, status: 'PENDING', amount: 500 }] },
+      });
+
+    const hotels = await apiClient.get('/admin/hotel-commissions');
+    const batches = await apiClient.get('/admin/settlement-batches');
+    expect(hotels.data.data[0].effectiveCommissionRatePercent).toBe(15);
+    expect(batches.data.data[0].status).toBe('PENDING');
+  });
+
+  it('fetches ride fare configuration rules', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValue({
+      data: {
+        success: true,
+        data: [{ vehicleType: 'BIKE', baseFare: 25, minimumFare: 35, perKmRate: 8 }],
+      },
+    });
+    const res = await apiClient.get('/admin/ride-fares');
+    expect(res.data.data[0].vehicleType).toBe('BIKE');
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/ride-fares');
+  });
 });
