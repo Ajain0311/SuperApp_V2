@@ -15,10 +15,9 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Chaos W10–W12 LIVE; continuous loop W1–W12; API deploy `v-b20c7ac` (W12 suite-only, no new API fix).
-  - W10: fav race 500 + missing driver lng → fixed (`v-fdb2e4a`).
-  - W11: vendor 404→403 + closed restaurant place 400 (`v-b20c7ac`).
-  - W12: `chaos-random-wave12.mjs` — bearer fuzz, unicode/NUL notes, address theft, cancel-then-status, dual accept, report storm. First two seeds FAIL=0.
+- **Status**: Admin broadcast now surfaces on Home; API `v-88f460d`. Chaos W1–W12 still live.
+  - Broadcast gap: Admin wrote `Notification` rows; Home only showed banners. Fix: home announcement strip + bell unread badge; fanout OrderBy+Take(2000); no duplicate persist on push.
+  - CI earlier red (`MultiRoleTests` 404→403) fixed in `c943555`.
   - Actors: cust 7014065979 / 9123456780, owner 9900000004, captain 6375002348, TEST_OTP 123456.
-  - Run: `node e2e/agents/chaos-continuous-loop.mjs [rounds]`. PEM: `C:\Users\admin\.ssh\Bseries.pem`.
-  - Next: wave13+ / multi-seed continuous / stress 100–250 if asked.
+  - PEM: `C:\Users\admin\.ssh\Bseries.pem`. Prefer proper verified commits before next task.
+  - Next: reload Expo Home after admin broadcast to confirm strip; optional wave13/stress.
