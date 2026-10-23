@@ -36,3 +36,4 @@
      - Add any newly identified tasks or blockers.
      - Update the **Last Session Handoff** section with date, status, and what the next agent should do.
   3. **Mandatory Pull-Before-Push & Commit:** Before pushing, ALWAYS run `git pull --rebase origin <branch>` first to ensure local is up to date with remote. Then push cleanly (`git commit -am 'message'` -> `git pull --rebase origin <branch>` -> `git push`). Never push without pulling first.
+  4. **STRICT: NEVER PUSH TESTS (Grok / Antigravity / Gemini):** Do NOT stage or push test folders/files (`__tests__`, `backend/SuperApp.API.Tests/`, `e2e/`, test artifacts, mock files) to remote repositories. Only push actual application/source features and bug fixes.

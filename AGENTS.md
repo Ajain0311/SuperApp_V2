@@ -25,6 +25,7 @@
 - Do not modify Flutter source.
 - Do not overwrite unrelated work or discard user changes.
 - Do not commit or push automatically unless the user explicitly asks.
+- **NEVER Push Test Files / Test Suites (Strict Rule):** Any AI agent (Grok, Antigravity, Gemini, Cursor, etc.) MUST NEVER push test suites, mock test files, `__tests__`, `backend/SuperApp.API.Tests/`, `e2e/`, or test reports to remote. Keep test artifacts strictly local or ignored.
 - **Mandatory Pull-Before-Push Rule:** Any AI agent/tool MUST ALWAYS run `git pull --rebase origin <branch>` before pushing any code to remote to avoid rejected pushes or merge conflicts. Never push without pulling latest remote changes first.
 - Never expose credentials or copy secrets into logs or documentation.
 - Fast execution must never bypass authorization, payment verification, or financial safeguards.
