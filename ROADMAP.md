@@ -15,9 +15,9 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Continuous chaos W4–W6 LIVE GREEN on `v-f20f67a`.
-  - Suites: wave1–3 + `chaos-random-wave4/5/6.mjs` + `chaos-continuous-loop.mjs`.
-  - Bugs found→fixed→deployed: marketplace neg page clamp; notes NUL sanitize; fav toggle `ExecuteDelete` race; vendor `isOpen` required (empty body was closing restaurant).
-  - Verified: W4/W5/W6 FAIL=0; stress N=40 FAIL=0; unit 195/195; health 200.
+- **Status**: Continuous chaos W1–W7 LIVE; deploy `v-1ebfd9f`.
+  - Suites: `chaos-random-suite` + wave2–7 + `chaos-continuous-loop.mjs`.
+  - Bugs found→fixed→deployed: marketplace neg page; notes NUL; fav `ExecuteDelete`; vendor `isOpen` required; listing title >200 → 400 (was 500).
+  - Continuous 3-round W1–W6: 18/18 FAIL=0. Stress N=40 FAIL=0. Unit 195+.
   - Run: `node e2e/agents/chaos-continuous-loop.mjs [rounds]`.
   - Git preference: pull before commit/push; direct push to main when user asks (no MR).
