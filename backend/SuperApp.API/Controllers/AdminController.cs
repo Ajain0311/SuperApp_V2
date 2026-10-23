@@ -15,11 +15,16 @@ public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly INotificationService? _notificationService;
+    private readonly RoleApplicationService _roleApplications;
 
-    public AdminController(AppDbContext db, INotificationService? notificationService = null)
+    public AdminController(
+        AppDbContext db,
+        INotificationService? notificationService = null,
+        RoleApplicationService? roleApplications = null)
     {
         _db = db;
         _notificationService = notificationService;
+        _roleApplications = roleApplications ?? new RoleApplicationService(db);
     }
     /// <summary>
     /// Global Platform Overview KPIs and real-time statistics
@@ -1706,5 +1711,49 @@ public class AdminController : ControllerBase
 
         await _db.SaveChangesAsync();
         return Ok(ApiResponse<RideFareRule>.Ok(existing, $"{typeUpper} fare rule updated successfully"));
+    }
+
+    /// <summary>List citizen role applications (DRIVER / RESTAURANT_OWNER) for admin review.</summary>
+    [HttpGet("role-applications")]
+    public async Task<ActionResult<ApiResponse<List<RoleApplicationDto>>>> ListRoleApplications([FromQuery] string? status = null)
+    {
+        var query = _db.RoleApplications.AsNoTracking().Include(a => a.User).AsQueryable();
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var st = status.Trim().ToUpperInvariant();
+            query = query.Where(a => a.Status == st);
+        }
+
+        var list = await query.OrderByDescending(a => a.CreatedAt).Take(200).ToListAsync();
+        return Ok(ApiResponse<List<RoleApplicationDto>>.Ok(
+            list.Select(a => RoleApplicationService.ToDto(a, a.User)).ToList()));
+    }
+
+    [HttpPost("role-applications/{id:long}/approve")]
+    public async Task<ActionResult<ApiResponse<RoleApplicationDto>>> ApproveRoleApplication(long id)
+    {
+        var adminIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        long.TryParse(adminIdClaim, out var adminId);
+        var adminName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Admin";
+
+        var (app, error) = await _roleApplications.ApproveAsync(id, adminId, adminName);
+        if (error != null || app == null)
+            return BadRequest(ApiResponse<RoleApplicationDto>.Fail(error ?? "Approve failed"));
+
+        return Ok(ApiResponse<RoleApplicationDto>.Ok(RoleApplicationService.ToDto(app, app.User), "Application approved; role granted"));
+    }
+
+    [HttpPost("role-applications/{id:long}/reject")]
+    public async Task<ActionResult<ApiResponse<RoleApplicationDto>>> RejectRoleApplication(long id, [FromBody] RejectRoleApplicationRequest? request)
+    {
+        var adminIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        long.TryParse(adminIdClaim, out var adminId);
+        var adminName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Admin";
+
+        var (app, error) = await _roleApplications.RejectAsync(id, adminId, adminName, request?.AdminNotes);
+        if (error != null || app == null)
+            return BadRequest(ApiResponse<RoleApplicationDto>.Fail(error ?? "Reject failed"));
+
+        return Ok(ApiResponse<RoleApplicationDto>.Ok(RoleApplicationService.ToDto(app), "Application rejected"));
     }
 }

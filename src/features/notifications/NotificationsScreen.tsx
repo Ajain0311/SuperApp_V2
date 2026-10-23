@@ -29,54 +29,6 @@ interface NotificationItem {
   referenceId?: string;
 }
 
-const NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'Raat ko biwi wo de ya na de... 🍕😋',
-    body: 'Par hum khana dene zaroor aayenge! Garma-garam khana order karo, dil khush ho jayega!',
-    time: '2 mins ago',
-    icon: 'restaurant',
-    color: colors.primary,
-    isUnread: true,
-  },
-  {
-    id: '2',
-    title: 'Bhookh lagi hai kya? 🌙🍔',
-    body: 'Kitchen band ho chuka hai, par humara dil aur delivery dono 24/7 khule hain!',
-    time: '15 mins ago',
-    icon: 'fastfood',
-    color: '#F59E0B',
-    isUnread: true,
-  },
-  {
-    id: '3',
-    title: 'Chef ne tadka laga diya hai! 🔥',
-    body: 'Aapka order kitchen me tezi se ban raha hai. Bas plate taiyaar rakho!',
-    time: '45 mins ago',
-    icon: 'local-dining',
-    color: colors.secondary,
-    isUnread: false,
-  },
-  {
-    id: '4',
-    title: 'Ghar baith ke kya karoge? 🚖✨',
-    body: 'Chalo ghoomne! Gaadi darwaze pe khadi hai, seatbelt baandho!',
-    time: '2 hours ago',
-    icon: 'directions-car',
-    color: colors.blue,
-    isUnread: false,
-  },
-  {
-    id: '5',
-    title: 'Dhamaka! 🎉 Bazaar me ad live!',
-    body: 'Puraani cheezon ko kaho bye-bye, jeb me aayegi nayi kamai! 💰📦',
-    time: '5 hours ago',
-    icon: 'storefront',
-    color: '#8B5CF6',
-    isUnread: false,
-  },
-];
-
 export const NotificationsScreen: React.FC = () => {
   const navigation = useNavigation();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);

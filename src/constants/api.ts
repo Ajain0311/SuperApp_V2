@@ -104,6 +104,13 @@ export const ApiEndpoints = {
     earnings: '/vendor/earnings',
   },
 
+  // Role applications (citizen → rider/hotel; admin approves)
+  roleApplications: {
+    submit: '/role-applications',
+    mine: '/role-applications/mine',
+    cancel: (id: string | number) => `/role-applications/${id}/cancel`,
+  },
+
   // Admin Mode
   admin: {
     dashboard: '/admin/dashboard',
@@ -116,6 +123,9 @@ export const ApiEndpoints = {
     marketplaceListings: '/admin/marketplace/listings',
     settings: '/admin/settings',
     broadcastNotification: '/admin/notifications/broadcast',
+    roleApplications: '/admin/role-applications',
+    approveRoleApplication: (id: string | number) => `/admin/role-applications/${id}/approve`,
+    rejectRoleApplication: (id: string | number) => `/admin/role-applications/${id}/reject`,
   },
 
   // SignalR Hub Paths

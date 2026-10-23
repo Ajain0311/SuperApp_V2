@@ -310,6 +310,22 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
           </View>
         </View>
 
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Onboarding</Text>
+        <TouchableOpacity
+          style={styles.quickNavCard}
+          onPress={() => navigation.navigate('AdminRoleApplications')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.quickNavIcon, { backgroundColor: '#22D3EE20' }]}>
+            <Ionicons name="people-circle-outline" size={22} color="#22D3EE" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.quickNavTitle}>Role Applications</Text>
+            <Text style={styles.quickNavSub}>Approve rider / hotel citizen requests</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Finance & Pricing</Text>
         <TouchableOpacity
           style={styles.quickNavCard}

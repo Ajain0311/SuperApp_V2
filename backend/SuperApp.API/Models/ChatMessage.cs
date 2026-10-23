@@ -22,5 +22,9 @@ public class ChatMessage
     [MaxLength(2000)]
     public string MessageText { get; set; } = string.Empty;
 
+    [MaxLength(100)]
+    [Column("client_message_id")]
+    public string? ClientMessageId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

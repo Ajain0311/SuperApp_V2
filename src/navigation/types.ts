@@ -75,4 +75,6 @@ export type RootStackParamList = {
   AdminCoupons: undefined;
   AdminHotelCommissions: undefined;
   AdminRideFares: undefined;
+  AdminRoleApplications: undefined;
+  RoleApplication: { role: 'DRIVER' | 'RESTAURANT_OWNER' };
 };

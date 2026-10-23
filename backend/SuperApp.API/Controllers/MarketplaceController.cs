@@ -1019,20 +1019,33 @@ public class MarketplaceController : ControllerBase
             return Unauthorized(ApiResponse<ChatMessageDto>.Fail("User not found"));
 
         var trimmedText = request.MessageText.Trim();
+        var clientMsgId = !string.IsNullOrWhiteSpace(request.ClientMessageId) ? request.ClientMessageId.Trim() : null;
 
-        // Idempotency check: If an identical message was created within the last 5 seconds by the same sender in this conversation, return it
-        var recentCutoff = DateTime.UtcNow.AddSeconds(-5);
-        var existingRecentMsg = await _db.ChatMessages
-            .Where(m => m.ConversationId == conv.Id && m.SenderId == userId && m.MessageText == trimmedText && m.CreatedAt >= recentCutoff)
-            .OrderByDescending(m => m.CreatedAt)
-            .FirstOrDefaultAsync();
+        // Idempotency check:
+        // 1. If ClientMessageId is provided, check if a message with this unique key was already saved
+        // 2. Otherwise fallback to sliding 5-second identical text check for rapid accidental double-taps
+        ChatMessage? existingMsg = null;
+        if (!string.IsNullOrEmpty(clientMsgId))
+        {
+            existingMsg = await _db.ChatMessages
+                .FirstOrDefaultAsync(m => m.ConversationId == conv.Id && m.ClientMessageId == clientMsgId);
+        }
+
+        if (existingMsg == null && string.IsNullOrEmpty(clientMsgId))
+        {
+            var recentCutoff = DateTime.UtcNow.AddSeconds(-3);
+            existingMsg = await _db.ChatMessages
+                .Where(m => m.ConversationId == conv.Id && m.SenderId == userId && m.MessageText == trimmedText && m.CreatedAt >= recentCutoff)
+                .OrderByDescending(m => m.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
 
         ChatMessage msg;
         bool isNewMessage = false;
 
-        if (existingRecentMsg != null)
+        if (existingMsg != null)
         {
-            msg = existingRecentMsg;
+            msg = existingMsg;
         }
         else
         {
@@ -1042,6 +1055,7 @@ public class MarketplaceController : ControllerBase
                 ConversationId = conv.Id,
                 SenderId = userId,
                 MessageText = trimmedText,
+                ClientMessageId = clientMsgId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -1087,28 +1101,53 @@ public class MarketplaceController : ControllerBase
 
             // Dispatch notification to recipient (the other participant in the conversation)
             var recipientId = (conv.BuyerId == userId) ? conv.SellerId : conv.BuyerId;
-            if (recipientId != userId && _notificationService != null)
+            if (recipientId != userId)
             {
-                try
-                {
-                    var senderDisplayName = !string.IsNullOrWhiteSpace(sender.FullName) ? sender.FullName : "Someone";
-                    var listingName = conv.Listing?.Title ?? "your marketplace item";
-                    var notifTitle = $"New message from {senderDisplayName}";
-                    var preview = messageDto.MessageText.Length > 60
-                        ? messageDto.MessageText.Substring(0, 57) + "..."
-                        : messageDto.MessageText;
-                    var notifBody = $"Re: {listingName}\n\"{preview}\"";
+                var senderDisplayName = !string.IsNullOrWhiteSpace(sender.FullName) ? sender.FullName : "Someone";
+                var listingName = conv.Listing?.Title ?? "your marketplace item";
+                var notifTitle = $"New message from {senderDisplayName}";
+                var preview = messageDto.MessageText.Length > 60
+                    ? messageDto.MessageText.Substring(0, 57) + "..."
+                    : messageDto.MessageText;
+                var notifBody = $"Re: {listingName}\n\"{preview}\"";
 
-                    await _notificationService.SendPushNotificationAsync(
-                        recipientId,
-                        notifTitle,
-                        notifBody,
-                        "MARKETPLACE_CHAT",
-                        id.ToString());
-                }
-                catch (Exception ex)
+                if (_notificationService != null)
                 {
-                    Console.WriteLine($"[Marketplace Chat Notification Error] {ex.Message}");
+                    try
+                    {
+                        await _notificationService.SendPushNotificationAsync(
+                            recipientId,
+                            notifTitle,
+                            notifBody,
+                            "MARKETPLACE_CHAT",
+                            id.ToString());
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Marketplace Chat Push Notification Error] {ex.Message}");
+                    }
+                }
+                else
+                {
+                    // Direct in-app notification persistence fallback if notification service is not registered
+                    try
+                    {
+                        _db.Notifications.Add(new Notification
+                        {
+                            UserId = recipientId,
+                            Title = notifTitle,
+                            Body = notifBody,
+                            Type = "MARKETPLACE_CHAT",
+                            ReferenceId = id.ToString(),
+                            IsRead = false,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        await _db.SaveChangesAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Marketplace Chat In-App Notification Error] {ex.Message}");
+                    }
                 }
             }
         }

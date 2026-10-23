@@ -25,7 +25,9 @@ public class Role
 
 public static class RoleNames
 {
+    /// <summary>Default citizen role assigned to every new account (UI label: Citizen).</summary>
     public const string Customer = "CUSTOMER";
+    public const string Citizen = Customer;
     public const string Admin = "ADMIN";
     public const string RestaurantOwner = "RESTAURANT_OWNER";
     public const string Driver = "DRIVER";
