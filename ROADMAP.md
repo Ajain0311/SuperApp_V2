@@ -15,9 +15,9 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Admin broadcast now surfaces on Home; API `v-88f460d`. Chaos W1–W12 still live.
-  - Broadcast gap: Admin wrote `Notification` rows; Home only showed banners. Fix: home announcement strip + bell unread badge; fanout OrderBy+Take(2000); no duplicate persist on push.
-  - CI earlier red (`MultiRoleTests` 404→403) fixed in `c943555`.
+- **Status**: Help & Support admin-configurable; API `v-0d6ecbb`. Broadcast home strip still on `v-88f460d`+.
+  - Help/Support: Admin Settings editor → `support_*` AppSettings → `GET /api/config/support` → Profile HelpSupportScreen (call/WhatsApp/email/FAQ).
+  - Broadcast: home announcement strip + bell badge.
   - Actors: cust 7014065979 / 9123456780, owner 9900000004, captain 6375002348, TEST_OTP 123456.
-  - PEM: `C:\Users\admin\.ssh\Bseries.pem`. Prefer proper verified commits before next task.
-  - Next: reload Expo Home after admin broadcast to confirm strip; optional wave13/stress.
+  - PEM: `C:\Users\admin\.ssh\Bseries.pem`. Proper verified commits before next task.
+  - Next: admin set real phone/WhatsApp/email; Expo reload to confirm Help screen.
