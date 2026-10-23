@@ -511,6 +511,39 @@ public class MarketplaceController : ControllerBase
 
         var userId = currentUserId.Value;
 
+        // Relational: atomic delete-then-insert avoids concurrent remove/add 500s
+        if (_db.Database.IsRelational())
+        {
+            var deleted = await _db.Favorites
+                .Where(f => f.UserId == userId && f.ListingId == listingId)
+                .ExecuteDeleteAsync();
+            if (deleted > 0)
+                return Ok(ApiResponse<bool>.Ok(false, "Removed from favorites"));
+
+            var listingExists = await _db.MarketplaceListings.AnyAsync(l => l.Id == listingId && l.IsActive);
+            if (!listingExists)
+                return NotFound(ApiResponse<bool>.Fail("Listing not found"));
+
+            try
+            {
+                _db.Favorites.Add(new Favorite
+                {
+                    UserId = userId,
+                    ListingId = listingId,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _db.SaveChangesAsync();
+                return Ok(ApiResponse<bool>.Ok(true, "Added to favorites"));
+            }
+            catch (DbUpdateException)
+            {
+                // Concurrent inserts raced the unique (user_id, listing_id) key
+                _db.ChangeTracker.Clear();
+                return Ok(ApiResponse<bool>.Ok(true, "Already in favorites"));
+            }
+        }
+
+        // InMemory fallback (no ExecuteDelete)
         var existing = await _db.Favorites.FirstOrDefaultAsync(f => f.UserId == userId && f.ListingId == listingId);
         if (existing != null)
         {
@@ -519,8 +552,8 @@ public class MarketplaceController : ControllerBase
             return Ok(ApiResponse<bool>.Ok(false, "Removed from favorites"));
         }
 
-        var listingExists = await _db.MarketplaceListings.AnyAsync(l => l.Id == listingId && l.IsActive);
-        if (!listingExists)
+        var listingOk = await _db.MarketplaceListings.AnyAsync(l => l.Id == listingId && l.IsActive);
+        if (!listingOk)
             return NotFound(ApiResponse<bool>.Fail("Listing not found"));
 
         _db.Favorites.Add(new Favorite
@@ -529,17 +562,7 @@ public class MarketplaceController : ControllerBase
             ListingId = listingId,
             CreatedAt = DateTime.UtcNow
         });
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            // Concurrent toggle race: unique (user_id, listing_id) — treat as already favorited
-            _db.ChangeTracker.Clear();
-            return Ok(ApiResponse<bool>.Ok(true, "Already in favorites"));
-        }
-
+        await _db.SaveChangesAsync();
         return Ok(ApiResponse<bool>.Ok(true, "Added to favorites"));
     }
 
