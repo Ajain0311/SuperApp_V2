@@ -31,7 +31,8 @@ public class VehicleDto
 
 public class ToggleOnlineRequest
 {
-    public bool IsOnline { get; set; }
+    [Required]
+    public bool? IsOnline { get; set; }
 }
 
 public class UpdateDriverLocationRequest

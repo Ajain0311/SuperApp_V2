@@ -576,10 +576,14 @@ public class FoodOrdersController : ControllerBase
         if (order.UserId != userId.Value && !User.IsInRole(RoleNames.Admin))
             return Forbid();
 
+        if (string.Equals(order.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(ApiResponse.Fail("Order is already cancelled"));
+
         if (!FoodOrderCancellation.CanCustomerCancel(order.Status))
             return BadRequest(ApiResponse.Fail("Order cannot be cancelled after the captain has picked it up"));
 
         // If an online payment is already settled, initiate refund and mark order accordingly
+        var nextPaymentStatus = "CANCELLED";
         if (string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
         {
             var paidPayment = await _db.Payments
@@ -590,28 +594,46 @@ public class FoodOrdersController : ControllerBase
             if (paidPayment != null && !string.IsNullOrWhiteSpace(paidPayment.TransactionId) && _payments != null)
             {
                 var refundResult = await _payments.RefundPaymentAsync(paidPayment.TransactionId, order.GrandTotal, "Order cancelled by customer");
-                if (refundResult.Success)
-                {
-                    order.PaymentStatus = "REFUNDED";
-                }
-                else
-                {
-                    order.PaymentStatus = "REFUND_PENDING";
-                }
+                nextPaymentStatus = refundResult.Success ? "REFUNDED" : "REFUND_PENDING";
             }
             else
             {
-                order.PaymentStatus = "REFUND_PENDING";
+                nextPaymentStatus = "REFUND_PENDING";
             }
+        }
+
+        // Atomic claim on relational DBs: only one concurrent cancel wins (dual-cancel → one 200, one 400).
+        // InMemory test provider has no ExecuteUpdate — fall back to tracked SaveChanges.
+        var now = DateTime.UtcNow;
+        int claimed;
+        if (_db.Database.IsRelational())
+        {
+            claimed = await _db.FoodOrders
+                .Where(o => o.Id == id && (
+                    o.Status == OrderStatus.Pending
+                    || o.Status == OrderStatus.Accepted
+                    || o.Status == OrderStatus.Preparing
+                    || o.Status == OrderStatus.Ready))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(o => o.Status, OrderStatus.Cancelled)
+                    .SetProperty(o => o.PaymentStatus, nextPaymentStatus)
+                    .SetProperty(o => o.UpdatedAt, now));
+
+            if (claimed == 0)
+                return BadRequest(ApiResponse.Fail("Order is already cancelled or can no longer be cancelled"));
+
+            order.Status = OrderStatus.Cancelled;
+            order.PaymentStatus = nextPaymentStatus;
+            order.UpdatedAt = now;
         }
         else
         {
-            order.PaymentStatus = "CANCELLED";
+            order.Status = OrderStatus.Cancelled;
+            order.PaymentStatus = nextPaymentStatus;
+            order.UpdatedAt = now;
+            await _db.SaveChangesAsync();
+            claimed = 1;
         }
-
-        order.Status = OrderStatus.Cancelled;
-        order.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
 
         await FoodOrderCancellation.ReleaseCaptainAndNotifyAsync(
             _db, order, _orderHub, _rideHub, cancelledBy: "customer");

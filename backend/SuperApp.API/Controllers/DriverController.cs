@@ -102,11 +102,14 @@ public class DriverController : ControllerBase
     [HttpPost("toggle-online")]
     public async Task<ActionResult<ApiResponse<bool>>> ToggleOnline([FromBody] ToggleOnlineRequest request)
     {
+        if (request?.IsOnline is null)
+            return BadRequest(ApiResponse<bool>.Fail("isOnline is required"));
+
         var driver = await GetAuthorizedDriverAsync();
         if (driver == null)
             return Forbid();
 
-        driver.IsOnline = request.IsOnline;
+        driver.IsOnline = request.IsOnline.Value;
         driver.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
