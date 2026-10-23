@@ -69,8 +69,8 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
     if (s === 'PENDING') return 'Order Placed & Awaiting Confirmation';
     if (s === 'ACCEPTED') return 'Restaurant Confirmed Your Order';
     if (s === 'PREPARING') return 'Chef is Cooking Your Fresh Meal';
-    if (s === 'READY') return 'Order Packed & Ready for Pickup';
-    if (s === 'OUT_FOR_DELIVERY' || s === 'PICKED_UP' || s === 'PICKEDUP') return 'Driver Out for Delivery to Your Door';
+    if (s === 'READY') return 'Order Packed — Restaurant delivering soon';
+    if (s === 'OUT_FOR_DELIVERY' || s === 'PICKED_UP' || s === 'PICKEDUP') return 'Restaurant is on the way to your door';
     if (s === 'DELIVERED') return 'Order Delivered! Enjoy Your Food';
     if (s === 'CANCELLED') return 'Order Cancelled';
     return 'Processing Your Order';
@@ -247,14 +247,14 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
       isCurrent: currentStepIndex === 1,
     },
     {
-      title: 'Ready for Pickup',
-      subtitle: 'Dishes packed & ready at restaurant counter',
+      title: 'Ready',
+      subtitle: 'Dishes packed — restaurant will deliver',
       isCompleted: currentStepIndex > 2,
       isCurrent: currentStepIndex === 2,
     },
     {
       title: 'Out for Delivery',
-      subtitle: deliveryAddress ? `Heading to ${deliveryAddress}` : 'Delivery executive is on the way',
+      subtitle: deliveryAddress ? `Heading to ${deliveryAddress}` : 'Restaurant is on the way',
       isCompleted: currentStepIndex > 3,
       isCurrent: currentStepIndex === 3,
     },

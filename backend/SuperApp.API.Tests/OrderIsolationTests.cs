@@ -330,7 +330,7 @@ public class OrderIsolationTests
         Assert.Equal("ONLINE", onlineData.PaymentMethod);
         Assert.Equal("PENDING_PAYMENT", onlineData.PaymentStatus);
 
-        // 4. Kitchen can ready a COD order. Delivery stays with the captain.
+        // 4. Hotel self-delivery: kitchen can READY -> DELIVERED (PICKED_UP remains invalid from READY).
         var vendorController = new VendorController(db, hub.Object);
         SetUserContext(vendorController, 51, RoleNames.RestaurantOwner);
 
@@ -339,13 +339,14 @@ public class OrderIsolationTests
         var readyRes = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "READY" });
         Assert.IsType<OkObjectResult>(readyRes.Result);
         var picked = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "PICKED_UP" });
-        var delivered = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "DELIVERED" });
         Assert.IsType<BadRequestObjectResult>(picked.Result);
-        Assert.IsType<BadRequestObjectResult>(delivered.Result);
+
+        var delivered = await vendorController.UpdateOrderStatus(codData.Id, new UpdateOrderStatusRequest { Status = "DELIVERED" });
+        Assert.IsType<OkObjectResult>(delivered.Result);
 
         var finalizedOrder = await db.FoodOrders.FindAsync(codData.Id);
-        Assert.Equal(OrderStatus.Ready, finalizedOrder!.Status);
-        Assert.Equal("PENDING", finalizedOrder.PaymentStatus);
+        Assert.Equal(OrderStatus.Delivered, finalizedOrder!.Status);
+        Assert.Equal("PAID", finalizedOrder.PaymentStatus);
     }
 
     [Fact]

@@ -927,6 +927,70 @@ public class CaptainPushNotificationTests
     }
 
     [Fact]
+    public async Task Vendor_ReadyToDelivered_HotelSelfDelivery_Succeeds()
+    {
+        var db = CreateDb();
+        var owner = new User { Id = 951, MobileNumber = "9876500951", FullName = "Owner 951" };
+        var customer = new User { Id = 952, MobileNumber = "9876500952", FullName = "Customer 952" };
+        db.Users.AddRange(owner, customer);
+        db.Restaurants.Add(new Restaurant { Id = 951, Name = "Cafe 951", IsActive = true });
+        db.RestaurantUsers.Add(new RestaurantUser { RestaurantId = 951, UserId = owner.Id, IsActive = true });
+        db.FoodOrders.Add(new FoodOrder
+        {
+            Id = 9951,
+            OrderNumber = "FO-HOTEL-DELIVER",
+            UserId = customer.Id,
+            RestaurantId = 951,
+            PaymentMethod = "COD",
+            PaymentStatus = "PENDING",
+            Status = OrderStatus.Ready,
+            GrandTotal = 220m,
+            SubTotal = 200m
+        });
+        await db.SaveChangesAsync();
+
+        var orderHub = new Mock<IHubContext<OrderStatusHub>>();
+        var orderClients = new Mock<IHubClients>();
+        var orderProxy = new Mock<IClientProxy>();
+        orderClients.Setup(c => c.Group(It.IsAny<string>())).Returns(orderProxy.Object);
+        orderHub.Setup(h => h.Clients).Returns(orderClients.Object);
+
+        var rideHub = new Mock<IHubContext<RideTrackingHub>>();
+        var rideClients = new Mock<IHubClients>();
+        var rideProxy = new Mock<IClientProxy>();
+        rideClients.Setup(c => c.Group(It.IsAny<string>())).Returns(rideProxy.Object);
+        rideHub.Setup(h => h.Clients).Returns(rideClients.Object);
+
+        var vendor = new VendorController(db, orderHub.Object, rideHub.Object);
+        vendor.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, owner.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.RestaurantOwner)
+                }, "TestAuth"))
+            }
+        };
+
+        var result = await vendor.UpdateOrderStatus(9951, new UpdateOrderStatusRequest { Status = OrderStatus.Delivered });
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        var updated = await db.FoodOrders.FindAsync(9951L);
+        Assert.Equal(OrderStatus.Delivered, updated!.Status);
+        Assert.Equal("PAID", updated.PaymentStatus);
+
+        // Hotel self-delivery must not ping the captain food pool.
+        rideProxy.Verify(
+            p => p.SendCoreAsync(
+                "FoodDeliveryAvailable",
+                It.IsAny<object?[]>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task VendorCancel_AfterCaptainAccepted_ClearsDriver()
     {
         var db = CreateDb();

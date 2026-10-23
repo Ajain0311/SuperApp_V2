@@ -296,12 +296,12 @@ public class VendorController : ControllerBase
         var currentStatus = order.Status.Trim().ToUpperInvariant();
         var targetStatus = request.Status?.Trim().ToUpperInvariant() ?? string.Empty;
 
-        // Kitchen only. Pickup and delivery belong to the captain.
+        // Hotel self-delivery: kitchen owns the full lifecycle (no captain food dispatch).
         // PENDING -> ACCEPTED, CANCELLED
         // ACCEPTED -> PREPARING, CANCELLED
         // PREPARING -> READY, CANCELLED
-        // READY -> CANCELLED (even with captain assigned; clears assignment)
-        // PICKED_UP+ cannot be cancelled (food already with rider)
+        // READY -> DELIVERED, CANCELLED
+        // PICKED_UP (legacy) -> DELIVERED, CANCELLED blocked after pickup historically; cancel still blocked after PICKED_UP
         if (targetStatus == OrderStatus.Accepted
             && string.Equals(order.PaymentMethod, "ONLINE", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
@@ -311,7 +311,7 @@ public class VendorController : ControllerBase
 
         if (targetStatus == OrderStatus.Cancelled && !FoodOrderCancellation.CanVendorCancel(currentStatus))
         {
-            return BadRequest(ApiResponse.Fail("Order cannot be cancelled after the captain has picked it up"));
+            return BadRequest(ApiResponse.Fail("Order cannot be cancelled after pickup / out for delivery"));
         }
 
         bool isValidTransition = (currentStatus, targetStatus) switch
@@ -322,7 +322,9 @@ public class VendorController : ControllerBase
             (OrderStatus.Accepted, OrderStatus.Cancelled) => true,
             (OrderStatus.Preparing, OrderStatus.Ready) => true,
             (OrderStatus.Preparing, OrderStatus.Cancelled) => true,
+            (OrderStatus.Ready, OrderStatus.Delivered) => true,
             (OrderStatus.Ready, OrderStatus.Cancelled) => true,
+            (OrderStatus.PickedUp, OrderStatus.Delivered) => true,
             _ => false
         };
 
@@ -413,18 +415,18 @@ public class VendorController : ControllerBase
             updatedAt = DateTime.UtcNow
         });
 
-        if (string.Equals(targetStatus, OrderStatus.Ready, StringComparison.OrdinalIgnoreCase) && _rideHub != null)
+        // Food is hotel-delivered — do not broadcast READY jobs to the captain/drivers pool.
+
+        if (string.Equals(targetStatus, OrderStatus.Delivered, StringComparison.OrdinalIgnoreCase))
         {
-            await _rideHub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAvailable", new
+            try
             {
-                orderId = order.Id,
-                orderNumber = order.OrderNumber,
-                restaurantId = order.RestaurantId,
-                restaurantName = order.Restaurant?.Name,
-                grandTotal = order.GrandTotal,
-                status = targetStatus,
-                updatedAt = DateTime.UtcNow
-            });
+                await HotelCommissionLedgerService.RecordDeliveryCommissionAsync(_db, order.Id);
+            }
+            catch
+            {
+                // Commission must not block delivery confirmation for the kitchen.
+            }
         }
 
         try
@@ -433,8 +435,8 @@ public class VendorController : ControllerBase
             {
                 "ACCEPTED" => "Chef ne tadka laga diya hai! 🔥",
                 "PREPARING" => "Khana bhati par chadh chuka hai! 🍲",
-                "READY" => "Khana pack ho gaya! Bas nikalne wala hai! 🛵",
-                "PICKED_UP" => "Aapka delivery partner hawa se baatein karte hue aa raha hai! 🛵💨",
+                "READY" => "Khana pack ho gaya! Hotel se delivery nikalne wali hai! 🛵",
+                "PICKED_UP" => "Aapka order delivery pe hai! 🛵💨",
                 "DELIVERED" => "Dastak ho chuki hai! 🚪😋 Pet bhar ke khao!",
                 _ => $"Order update: {targetStatus}"
             };
@@ -442,8 +444,8 @@ public class VendorController : ControllerBase
             {
                 "ACCEPTED" => $"{order.Restaurant?.Name ?? "Restaurant"} ne aapka order accept kar liya hai! Masale bhun rahe hain! 😋",
                 "PREPARING" => "Aapka khana ban raha hai, khushbu mast aa rahi hai! Bas thodi der aur!",
-                "READY" => "Garma-garam khana dispatch ke liye ready hai!",
-                "PICKED_UP" => "Rider aapke order ke sath nikal chuka hai. Bas 5-10 minute!",
+                "READY" => "Garma-garam khana ready hai — restaurant khud deliver karega!",
+                "PICKED_UP" => "Order aapki taraf nikal chuka hai. Bas 5-10 minute!",
                 "DELIVERED" => "Khana kaisa laga? Review deke chef ka din bana do! ❤️",
                 _ => $"Aapka order #{order.OrderNumber} ab {targetStatus} hai."
             };
