@@ -277,6 +277,10 @@ public class MarketplaceController : ControllerBase
             case "ADD":
                 if (string.IsNullOrWhiteSpace(request.Title))
                     return BadRequest(ApiResponse<ListingSummaryDto>.Fail("Title is required"));
+                if (request.Title.Trim().Length > 200)
+                    return BadRequest(ApiResponse<ListingSummaryDto>.Fail("Title must be at most 200 characters"));
+                if (request.Description != null && request.Description.Length > 2000)
+                    return BadRequest(ApiResponse<ListingSummaryDto>.Fail("Description must be at most 2000 characters"));
                 if (!request.CategoryId.HasValue || request.CategoryId.Value <= 0)
                     return BadRequest(ApiResponse<ListingSummaryDto>.Fail("Valid category is required"));
                 if (!request.Price.HasValue || request.Price.Value < 0)
