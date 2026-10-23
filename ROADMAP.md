@@ -15,13 +15,9 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Continuous chaos W4/W5 added; new bugs fixed (pending deploy if not yet on VM).
-  - New suites: `chaos-random-wave4.mjs`, `chaos-random-wave5.mjs`, `chaos-continuous-loop.mjs` (all waves × N seeds).
-  - W4/W5 findings → fixes:
-    - Marketplace `page`/`pageSize` negative → clamp (was HTTP 500 on Skip/Take).
-    - Food order notes with U+0000 → `SanitizeNotes` strip (Postgres text 500).
-    - Concurrent fav toggle unique race → catch `DbUpdateException` → 200 already-favorited.
-    - Vendor `toggle-status` `{}` defaulted `IsOpen=false` and closed restaurant → `bool? IsOpen` required (same pattern as driver).
-  - Live: restaurant 2 re-opened via API after W5 accidental close. Unit **195/195**.
-  - Run: `node e2e/agents/chaos-continuous-loop.mjs [rounds]` or per-wave with seed.
+- **Status**: Continuous chaos W4–W6 LIVE GREEN on `v-f20f67a`.
+  - Suites: wave1–3 + `chaos-random-wave4/5/6.mjs` + `chaos-continuous-loop.mjs`.
+  - Bugs found→fixed→deployed: marketplace neg page clamp; notes NUL sanitize; fav toggle `ExecuteDelete` race; vendor `isOpen` required (empty body was closing restaurant).
+  - Verified: W4/W5/W6 FAIL=0; stress N=40 FAIL=0; unit 195/195; health 200.
+  - Run: `node e2e/agents/chaos-continuous-loop.mjs [rounds]`.
   - Git preference: pull before commit/push; direct push to main when user asks (no MR).
