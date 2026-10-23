@@ -86,7 +86,7 @@ export const VendorOrdersScreen: React.FC = () => {
             ) {
               Alert.alert(
                 'Order Cancelled ❌',
-                `Customer ne order #${data.orderNumber || data.orderId} cancel kar diya.`
+                `Order #${data.orderNumber || data.orderId}`
               );
             }
           });
