@@ -15,8 +15,8 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Food cancel-after-captain-accept shipped on main (PR #25) and live E2E PASS.
-  - **Rule**: cancel through `READY` (captain OK); block after `PICKED_UP`; clears `DriverId` + notifies pool.
-  - **Live proof**: order `2518` accept → customer cancel `200` / `driverId` null / active-food empty; after pickup cancel `400`.
-  - **Still backlog (teammate)**: direct foods feed; multi-hotel one checkout → N kitchen orders.
-  - **Verification**: `dotnet test` 183; Jest 109; agents self 16; overnight earlier `PASS 1121 FAIL 0`; production `v-522c394`.
+- **Status**: Teammate food pack: cancel done earlier; shipping direct-foods + multi-hotel checkout (N kitchen orders).
+  - **Direct foods**: `GET /api/restaurants/foods`; Food tab shows dishes first.
+  - **Multi-hotel**: cart merges restaurants; `POST /api/foodorders/checkout` splits COD into N orders (ONLINE/coupon single-hotel only).
+  - **Cancel rule** (already live): READY cancel OK; PICKED_UP blocked; clears captain.
+  - **Verification**: `dotnet test` 186; Jest 109; tsc clean; live E2E pending post-deploy.

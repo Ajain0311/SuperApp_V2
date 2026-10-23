@@ -17,14 +17,21 @@ import { AppSearchBar } from '../../components/common/AppSearchBar';
 import { RatingBadge } from '../../components/common/RatingBadge';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
-import { RestaurantSummary } from '../../models/food';
+import { FoodCatalogItem, RestaurantSummary } from '../../models/food';
 import { useFocusEffect } from '@react-navigation/native';
 import { absoluteImageUrl } from '../../services/documentService';
+import { useCartStore } from '../../store/cartStore';
 
 const DEFAULT_RESTAURANT_IMAGE = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600';
+const DEFAULT_DISH_IMAGE = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600';
 
 export function resolveRestaurantImage(url?: string): string {
   if (!url || !url.trim()) return DEFAULT_RESTAURANT_IMAGE;
+  return absoluteImageUrl(url);
+}
+
+function resolveDishImage(url?: string): string {
+  if (!url || !url.trim()) return DEFAULT_DISH_IMAGE;
   return absoluteImageUrl(url);
 }
 
@@ -128,27 +135,28 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
   const [filterOffers, setFilterOffers] = useState(false);
   const [sortBy, setSortBy] = useState<'rating' | 'deliveryTime' | 'default'>('default');
   const [searchQuery, setSearchQuery] = useState('');
-  const [restaurants, setRestaurants] = useState<RestaurantSummary[]>([]);
+  const [foods, setFoods] = useState<FoodCatalogItem[]>([]);
   const [deliverTo, setDeliverTo] = useState('Add delivery address');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const cartCount = useCartStore((s) => s.items.reduce((n, i) => n + i.quantity, 0));
 
-  const loadRestaurants = () => {
+  const loadFoods = () => {
     setIsLoading(true);
     setLoadError(null);
     apiClient
-      .get<any>(ApiEndpoints.food.restaurants)
+      .get<any>(ApiEndpoints.food.foods, { params: { page: 1, pageSize: 40 } })
       .then((res) => {
-        const payload = res.data?.data || res.data;
+        const payload = res?.data ?? res;
         const items = payload?.items || payload;
         if (Array.isArray(items)) {
-          setRestaurants(items);
+          setFoods(items);
         } else {
-          setRestaurants([]);
+          setFoods([]);
         }
       })
       .catch((err) => {
-        const msg = err?.response?.data?.message || err?.message || 'Unable to load restaurants. Please check your network connection.';
+        const msg = err?.response?.data?.message || err?.message || 'Unable to load dishes. Please check your network connection.';
         setLoadError(msg);
       })
       .finally(() => {
@@ -157,7 +165,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
   };
 
   useEffect(() => {
-    loadRestaurants();
+    loadFoods();
   }, []);
 
   useFocusEffect(
@@ -181,74 +189,36 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
     }, [])
   );
 
-  const filteredRestaurants = restaurants
-    .filter((r) => {
-      if (filterVegOnly && !r.isVeg) return false;
-      if (filterRating4Plus && r.rating < 4.0) return false;
-      if (filterFastDelivery && (r.avgDeliveryTimeMinutes || 30) > 25) return false;
-      if (filterOffers && (!r.offerText || r.offerText.trim().length === 0)) return false;
+  const filteredFoods = foods
+    .filter((f) => {
+      if (filterVegOnly && !f.isVeg) return false;
+      if (filterRating4Plus && (f.restaurantRating || 0) < 4.0) return false;
+      if (filterFastDelivery && (f.avgDeliveryTimeMinutes || 30) > 25) return false;
+      if (filterOffers && !(f.discountPercent && f.discountPercent > 0)) return false;
 
-      // Category / Cuisine Filter
       const activeCategory = CATEGORIES[selectedCategoryIndex];
       if (activeCategory && activeCategory !== 'All') {
         const catNorm = activeCategory.trim().toLowerCase();
-        const rCuisines = (r.cuisines || '').toLowerCase();
-        const rName = (r.name || '').toLowerCase();
-
-        // Check direct cuisine or name match
-        let matchesCategory = rCuisines.includes(catNorm) || rName.includes(catNorm);
-
-        // Category synonyms/keywords
-        if (!matchesCategory) {
-          if (catNorm === 'south indian') {
-            matchesCategory =
-              rCuisines.includes('south indian') ||
-              rCuisines.includes('dosa') ||
-              rCuisines.includes('idli') ||
-              rCuisines.includes('andhra') ||
-              rCuisines.includes('hyderabadi') ||
-              rCuisines.includes('chettinad') ||
-              rCuisines.includes('kerala') ||
-              rCuisines.includes('tamil') ||
-              rCuisines.includes('udupi');
-          } else if (catNorm === 'north indian') {
-            matchesCategory =
-              rCuisines.includes('north indian') ||
-              rCuisines.includes('north indian') ||
-              rCuisines.includes('mughlai') ||
-              rCuisines.includes('thali') ||
-              rCuisines.includes('tandoor') ||
-              rCuisines.includes('roti');
-          } else if (catNorm === 'biryani') {
-            matchesCategory = rCuisines.includes('biryani') || rName.includes('biryani');
-          } else if (catNorm === 'burgers') {
-            matchesCategory = rCuisines.includes('burger') || rName.includes('burger');
-          } else if (catNorm === 'rolls') {
-            matchesCategory = rCuisines.includes('roll') || rCuisines.includes('wrap');
-          } else if (catNorm === 'desserts') {
-            matchesCategory =
-              rCuisines.includes('dessert') ||
-              rCuisines.includes('sweet') ||
-              rCuisines.includes('mithai') ||
-              rCuisines.includes('ice cream');
-          }
+        const hay = `${f.name} ${f.categoryName || ''} ${f.cuisines || ''} ${f.restaurantName || ''}`.toLowerCase();
+        let matchesCategory = hay.includes(catNorm);
+        if (!matchesCategory && catNorm === 'burgers') matchesCategory = hay.includes('burger');
+        if (!matchesCategory && catNorm === 'rolls') matchesCategory = hay.includes('roll') || hay.includes('wrap');
+        if (!matchesCategory && catNorm === 'desserts') {
+          matchesCategory = hay.includes('dessert') || hay.includes('sweet') || hay.includes('mithai') || hay.includes('ice cream');
         }
-
         if (!matchesCategory) return false;
       }
 
-      // Search query filter
       if (searchQuery.trim().length > 0) {
         const q = searchQuery.toLowerCase().trim();
-        const matchName = r.name.toLowerCase().includes(q);
-        const matchCuisine = (r.cuisines || '').toLowerCase().includes(q);
-        if (!matchName && !matchCuisine) return false;
+        const hay = `${f.name} ${f.restaurantName} ${f.categoryName || ''} ${f.cuisines || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
       return true;
     })
     .sort((a, b) => {
       if (sortBy === 'rating') {
-        return (b.rating || 0) - (a.rating || 0);
+        return (b.restaurantRating || 0) - (a.restaurantRating || 0);
       }
       if (sortBy === 'deliveryTime') {
         return (a.avgDeliveryTimeMinutes || 30) - (b.avgDeliveryTimeMinutes || 30);
@@ -405,11 +375,10 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
         {/* Section Header */}
         <View style={styles.sectionRow}>
           <Text style={styles.sectionHeaderTitle}>
-            POPULAR SPOTS NEAR YOU ({filteredRestaurants.length})
+            POPULAR DISHES NEAR YOU ({filteredFoods.length})
           </Text>
           <TouchableOpacity
             onPress={() => {
-              // Cycle through sort options
               if (sortBy === 'default') setSortBy('rating');
               else if (sortBy === 'rating') setSortBy('deliveryTime');
               else setSortBy('default');
@@ -427,7 +396,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
             <ActivityIndicator size="large" color={AppColors.primary} />
             <Text style={{ ...styles.restaurantName, marginTop: 12, color: AppColors.textSecondary }}>
-              Finding great restaurants near you...
+              Finding great dishes near you...
             </Text>
           </View>
         )}
@@ -441,7 +410,7 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
             </Text>
             <TouchableOpacity
               style={[styles.filterChipActive, { marginTop: 14, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 16 }]}
-              onPress={loadRestaurants}
+              onPress={loadFoods}
             >
               <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Retry</Text>
             </TouchableOpacity>
@@ -449,37 +418,36 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
         )}
 
         {/* Empty State */}
-        {!isLoading && !loadError && filteredRestaurants.length === 0 && (
+        {!isLoading && !loadError && filteredFoods.length === 0 && (
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48 }}>
-            <Ionicons name="restaurant-outline" size={48} color={AppColors.textTertiary} />
+            <Ionicons name="fast-food-outline" size={48} color={AppColors.textTertiary} />
             <Text style={{ ...styles.restaurantName, marginTop: 12, color: AppColors.textSecondary }}>
-              No restaurants currently available
+              No dishes currently available
             </Text>
             <Text style={{ fontSize: 13, color: AppColors.textTertiary, marginTop: 4 }}>
-              Please check back soon or try another location.
+              Please check back soon or try another filter.
             </Text>
           </View>
         )}
 
-        {/* Restaurant Cards */}
-        {filteredRestaurants.map((restaurant) => (
+        {/* Food Cards (direct dishes — tap opens that hotel menu) */}
+        {filteredFoods.map((food) => (
           <TouchableOpacity
-            key={restaurant.id}
+            key={`${food.restaurantId}-${food.id}`}
             style={styles.restaurantCard}
             activeOpacity={0.9}
             accessibilityRole="button"
-            accessibilityLabel={`Restaurant ${restaurant.name}`}
-            testID={`restaurant-card-${restaurant.id}`}
+            accessibilityLabel={`Dish ${food.name} from ${food.restaurantName}`}
+            testID={`food-card-${food.id}`}
             onPress={() =>
               navigation.navigate('RestaurantDetail', {
-                restaurantId: restaurant.id.toString(),
+                restaurantId: food.restaurantId.toString(),
               })
             }
           >
-            {/* Image Header with overlays */}
             <View style={styles.imageHeader}>
               <Image
-                source={{ uri: resolveRestaurantImage(restaurant.imageUrl) }}
+                source={{ uri: resolveDishImage(food.imageUrl || food.restaurantImageUrl) }}
                 style={styles.restaurantImage}
                 resizeMode="cover"
               />
@@ -488,50 +456,51 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
                 style={StyleSheet.absoluteFill}
               />
 
-              {/* Delivery Time Badge */}
               <View style={styles.deliveryTimeBadge}>
                 <Ionicons name="time" size={13} color="#FFFFFF" />
                 <Text style={styles.deliveryTimeText}>
-                  {restaurant.avgDeliveryTimeMinutes || 20} mins
+                  {food.avgDeliveryTimeMinutes || 20} mins
                 </Text>
               </View>
 
-              {/* Pure Veg Tag */}
-              {restaurant.isVeg && (
+              {food.isVeg && (
                 <View style={styles.pureVegTag}>
                   <Ionicons name="leaf" size={12} color="#FFFFFF" />
                   <Text style={styles.pureVegTagText}>PURE VEG</Text>
                 </View>
               )}
 
-              {/* Offer Banner */}
               <View style={styles.offerBanner}>
                 <Ionicons name="pricetag" size={12} color="#FFFFFF" />
                 <Text style={styles.offerBannerText}>
-                  {restaurant.offerText || '60% OFF UPTO ₹120'}
+                  {food.discountPercent && food.discountPercent > 0
+                    ? `${food.discountPercent}% OFF`
+                    : food.isBestseller
+                      ? 'BESTSELLER'
+                      : 'ORDER NOW'}
                 </Text>
               </View>
             </View>
 
-            {/* Restaurant Info */}
             <View style={styles.infoSection}>
               <View style={styles.nameRatingRow}>
                 <Text style={styles.restaurantName} numberOfLines={1}>
-                  {restaurant.name}
+                  {food.name}
                 </Text>
-                <RatingBadge rating={restaurant.rating} />
+                <RatingBadge rating={food.restaurantRating} />
               </View>
 
               <Text style={styles.cuisinesText} numberOfLines={1}>
-                {restaurant.cuisines}
+                {food.restaurantName}
+                {food.categoryName ? ` • ${food.categoryName}` : ''}
               </Text>
 
               <View style={styles.bottomInfoRow}>
                 <Text style={styles.priceForTwoText}>
-                  {restaurant.addressLine || '₹500 for two • 1.8 km'}
+                  ₹{Number(food.discountedPrice || food.basePrice || 0).toFixed(0)}
                 </Text>
                 <View style={styles.viewMenuLink}>
-                  <Text style={styles.viewMenuText}>View Menu</Text>
+                  <Text style={styles.viewMenuText}>Add from menu</Text>
                   <Ionicons name="arrow-forward" size={13} color={AppColors.primary} />
                 </View>
               </View>
@@ -539,6 +508,29 @@ export const FoodHomeScreen: React.FC<FoodHomeScreenProps> = ({ navigation }) =>
           </TouchableOpacity>
         ))}
       </ScrollView>
+      {cartCount > 0 && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: 16,
+            backgroundColor: AppColors.primary,
+            borderRadius: 14,
+            paddingVertical: 14,
+            alignItems: 'center',
+          }}
+          onPress={() => {
+            const rid = useCartStore.getState().restaurantId;
+            if (rid) {
+              navigation.navigate('RestaurantDetail', { restaurantId: String(rid) });
+            }
+          }}
+          activeOpacity={0.9}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>View cart ({cartCount})</Text>
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 };

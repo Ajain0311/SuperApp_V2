@@ -84,8 +84,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
   const getItemQuantity = useCartStore((state) => state.getItemQuantity);
   const clearCart = useCartStore((state) => state.clearCart);
   const getItemTotal = useCartStore((state) => state.getItemTotal);
-  const cartRestaurantId = useCartStore((state) => state.restaurantId);
-  const cartRestaurantName = useCartStore((state) => state.restaurantName);
+
 
   const loadRestaurantData = () => {
     if (!restaurantNumericId) {
@@ -174,16 +173,27 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
 
   const handlePlaceOrder = async (couponCode?: string, paymentMethod: 'COD' | 'ONLINE' = 'COD') => {
     if (isPlacingOrder) return;
-    if (!restaurantNumericId) {
-      Alert.alert('Invalid Restaurant', 'Cannot place order for an invalid restaurant.');
-      return;
-    }
-    if (cartRestaurantId !== null && cartRestaurantId !== restaurantNumericId) {
-      Alert.alert('Restaurant Mismatch', 'Your cart contains items from a different restaurant. Please clear your cart or switch back to continue.');
-      return;
-    }
     if (cartItems.length === 0) {
       Alert.alert('Empty Cart', 'Please add items to your cart before proceeding to checkout.');
+      return;
+    }
+    const restaurantIds = Array.from(
+      new Set(
+        cartItems
+          .map((c) => c.restaurantId)
+          .filter((id): id is number => typeof id === 'number' && id > 0)
+          .concat(restaurantNumericId ? [restaurantNumericId] : [])
+      )
+    );
+    if (paymentMethod === 'ONLINE' && restaurantIds.length > 1) {
+      Alert.alert(
+        'Online payment',
+        'Online payment works for one hotel at a time. Use COD for multi-hotel carts, or remove other hotels from the cart.'
+      );
+      return;
+    }
+    if (couponCode && restaurantIds.length > 1) {
+      Alert.alert('Coupon', 'Coupons apply to single-hotel checkouts only. Remove the coupon or keep one hotel in the cart.');
       return;
     }
     setIsPlacingOrder(true);
@@ -200,7 +210,6 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       }
 
       const payload = {
-        restaurantId: restaurantNumericId,
         items: cartItems.map((c) => ({
           foodItemId: c.foodItemId,
           quantity: c.quantity,
@@ -210,27 +219,27 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         addressId,
         couponCode: couponCode || null,
         paymentMethod,
-        deliveryInstructions: 'Leave at front door',
+        notes: 'Leave at front door',
       };
-      const res = await apiClient.post<any>(ApiEndpoints.food.orders, payload);
+      const res = await apiClient.post<any>(ApiEndpoints.food.checkout, payload);
       const data = res.data?.data || res.data;
-      if (!data || !data.id) {
+      const orders = Array.isArray(data?.orders) ? data.orders : data?.id ? [data] : [];
+      if (!orders.length || !orders[0]?.id) {
         throw new Error(data?.message || 'Order could not be confirmed by the server.');
       }
-      const orderId = data.orderNumber || `FO-${data.id}`;
-      const orderNumericId = data.id;
+      const primary = orders[0];
+      const orderId = primary.orderNumber || `FO-${primary.id}`;
+      const orderNumericId = primary.id;
       if (paymentMethod === 'ONLINE') {
         let pay: any = null;
         try {
           const payRes = await apiClient.post<any>(ApiEndpoints.food.payOrder(orderNumericId), {});
           pay = payRes.data?.data || payRes.data;
         } catch (payErr: any) {
-          // Only fallback if the dedicated endpoint is completely unavailable (404 / 501).
-          // Business rejections (400, 403, 409) must fail immediately without blindly retrying.
           const status = payErr?.response?.status;
           if (status === 404 || status === 501) {
             const created = await apiClient.post<any>(ApiEndpoints.common.paymentsCreate, {
-              amount: Number(data.grandTotal) || 1,
+              amount: Number(primary.grandTotal) || 1,
               currency: 'INR',
               receiptId: String(orderNumericId),
               module: 'FOOD',
@@ -257,6 +266,12 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       }
       clearCart();
       setIsCartVisible(false);
+      if (orders.length > 1) {
+        Alert.alert(
+          'Orders placed',
+          `${orders.length} kitchen orders created (one per hotel). Tracking the first order now.`
+        );
+      }
       navigation.navigate('FoodOrderTracking', { orderId, orderNumericId });
     } catch (err: any) {
       console.error('[PlaceOrder Error]', err);
@@ -272,26 +287,6 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       Alert.alert('Invalid Restaurant', 'Cannot add items from an invalid restaurant.');
       return;
     }
-    if (cartRestaurantId !== null && cartRestaurantId !== restaurantNumericId && cartItems.length > 0) {
-      Alert.alert(
-        'Replace Cart?',
-        `Your cart already contains items from "${cartRestaurantName || 'another restaurant'}". Would you like to clear your cart and start a new order from "${restaurantName}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Yes, Start Fresh',
-            style: 'destructive',
-            onPress: () => {
-              clearCart();
-              addItemToCart(restaurantNumericId, restaurantName, cartItem);
-              Alert.alert('Cart Updated', `${cartItem.name} added to your cart.`);
-            },
-          },
-        ]
-      );
-      return;
-    }
-
     addItemToCart(restaurantNumericId, restaurantName, cartItem);
   };
 

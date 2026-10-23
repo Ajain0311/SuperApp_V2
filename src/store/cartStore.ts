@@ -6,16 +6,19 @@ export const getCartLineKey = (item: {
   variantId?: number | null;
   selectedAddonIds?: number[];
   cartLineKey?: string;
+  restaurantId?: number | null;
 }): string => {
   if (item.cartLineKey && item.cartLineKey.length > 0) {
     return item.cartLineKey;
   }
+  const restaurant = item.restaurantId != null ? String(item.restaurantId) : '';
   const variant = item.variantId !== undefined && item.variantId !== null ? String(item.variantId) : '';
   const addons = (item.selectedAddonIds || []).slice().sort((a, b) => a - b).join(',');
-  return `${item.foodItemId}-${variant}-${addons}`;
+  return `${restaurant}-${item.foodItemId}-${variant}-${addons}`;
 };
 
 interface CartState {
+  /** Primary restaurant for UI; null when empty. Multi-hotel carts still set this to last-added. */
   restaurantId: number | null;
   restaurantName: string;
   items: CartItem[];
@@ -24,15 +27,26 @@ interface CartState {
   updateQuantity: (target: string | number, delta: number) => void;
   updateLineQuantity: (lineKey: string, delta: number) => void;
   getItemQuantity: (foodItemId: number) => number;
-  getLineQuantity: (target: string | { foodItemId: number; variantId?: number | null; selectedAddonIds?: number[] }) => number;
+  getLineQuantity: (target: string | { foodItemId: number; variantId?: number | null; selectedAddonIds?: number[]; restaurantId?: number }) => number;
   removeItem: (index: number) => void;
   clearCart: () => void;
+  getRestaurantIds: () => number[];
+  getItemsByRestaurant: () => Record<number, CartItem[]>;
 
   getItemTotal: () => number;
   getDeliveryFee: () => number;
   getTaxesAndPackaging: () => number;
   getGrandTotal: () => number;
 }
+
+const syncPrimaryRestaurant = (items: CartItem[]): { restaurantId: number | null; restaurantName: string } => {
+  if (items.length === 0) return { restaurantId: null, restaurantName: '' };
+  const last = items[items.length - 1];
+  return {
+    restaurantId: last.restaurantId ?? null,
+    restaurantName: last.restaurantName ?? '',
+  };
+};
 
 export const useCartStore = create<CartState>((set, get) => ({
   restaurantId: null,
@@ -41,19 +55,15 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   addItem: (restaurantId: number, restaurantName: string, item: CartItem) => {
     const state = get();
-    // If ordering from a different restaurant, start fresh
-    if (state.restaurantId !== null && state.restaurantId !== restaurantId) {
-      const lineKey = getCartLineKey(item);
-      set({
-        restaurantId,
-        restaurantName,
-        items: [{ ...item, cartLineKey: lineKey }],
-      });
-      return;
-    }
+    const tagged: CartItem = {
+      ...item,
+      restaurantId,
+      restaurantName,
+    };
+    const lineKey = getCartLineKey(tagged);
+    tagged.cartLineKey = lineKey;
 
-    const lineKey = getCartLineKey(item);
-    const existingIndex = state.items.findIndex((i) => getCartLineKey(i) === lineKey);
+    const existingIndex = state.items.findIndex((i) => getCartLineKey({ ...i, restaurantId: i.restaurantId ?? restaurantId }) === lineKey);
 
     if (existingIndex > -1) {
       const updated = [...state.items];
@@ -63,15 +73,35 @@ export const useCartStore = create<CartState>((set, get) => ({
       existing.quantity = newQty;
       existing.totalPrice = Math.round(unitPrice * newQty * 100) / 100;
       existing.cartLineKey = lineKey;
+      existing.restaurantId = restaurantId;
+      existing.restaurantName = restaurantName;
       updated[existingIndex] = existing;
-      set({ items: updated, restaurantId, restaurantName });
+      const primary = syncPrimaryRestaurant(updated);
+      set({ items: updated, ...primary });
     } else {
-      set({
-        restaurantId,
-        restaurantName,
-        items: [...state.items, { ...item, cartLineKey: lineKey }],
-      });
+      const items = [...state.items, tagged];
+      const primary = syncPrimaryRestaurant(items);
+      set({ items, ...primary });
     }
+  },
+
+  getRestaurantIds: () => {
+    const ids = new Set<number>();
+    for (const item of get().items) {
+      if (item.restaurantId != null) ids.add(item.restaurantId);
+    }
+    return Array.from(ids);
+  },
+
+  getItemsByRestaurant: () => {
+    const map: Record<number, CartItem[]> = {};
+    for (const item of get().items) {
+      const rid = item.restaurantId;
+      if (rid == null) continue;
+      if (!map[rid]) map[rid] = [];
+      map[rid].push(item);
+    }
+    return map;
   },
 
   getItemQuantity: (foodItemId: number) => {
@@ -79,7 +109,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     return items.reduce((sum, item) => sum + item.quantity, 0);
   },
 
-  getLineQuantity: (target: string | { foodItemId: number; variantId?: number | null; selectedAddonIds?: number[] }) => {
+  getLineQuantity: (target) => {
     const lineKey = typeof target === 'string' ? target : getCartLineKey(target);
     const match = get().items.find((i) => getCartLineKey(i) === lineKey);
     return match ? match.quantity : 0;
@@ -94,10 +124,8 @@ export const useCartStore = create<CartState>((set, get) => ({
     let existingIndex = -1;
 
     if (typeof target === 'string') {
-      // Exact cartLineKey match
       existingIndex = state.items.findIndex((i) => getCartLineKey(i) === target);
     } else {
-      // Number passed: could be cart item id, or foodItemId
       existingIndex = state.items.findIndex((i) => i.id === target);
       if (existingIndex === -1) {
         existingIndex = state.items.findIndex((i) => i.foodItemId === target);
@@ -122,7 +150,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     if (items.length === 0) {
       set({ items: [], restaurantId: null, restaurantName: '' });
     } else {
-      set({ items });
+      set({ items, ...syncPrimaryRestaurant(items) });
     }
   },
 
@@ -132,7 +160,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     if (items.length === 0) {
       set({ items: [], restaurantId: null, restaurantName: '' });
     } else {
-      set({ items });
+      set({ items, ...syncPrimaryRestaurant(items) });
     }
   },
 
@@ -145,12 +173,12 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   getDeliveryFee: () => {
-    return 0; // Free delivery matching Flutter
+    return 0;
   },
 
   getTaxesAndPackaging: () => {
     const itemTotal = get().getItemTotal();
-    return Math.round(itemTotal * 0.05 * 100) / 100; // 5% GST
+    return Math.round(itemTotal * 0.05 * 100) / 100;
   },
 
   getGrandTotal: () => {

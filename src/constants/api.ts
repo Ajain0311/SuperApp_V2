@@ -10,8 +10,10 @@ export const ApiEndpoints = {
   // Food
   food: {
     restaurants: '/restaurants',
+    foods: '/restaurants/foods',
     restaurantDetail: (id: string | number) => `/restaurants/${id}`,
     orders: '/foodorders',
+    checkout: '/foodorders/checkout',
     orderDetail: (id: string | number) => `/foodorders/${id}`,
     payOrder: (id: string | number) => `/foodorders/${id}/pay`,
     cancelOrder: (id: string | number) => `/foodorders/${id}/cancel`,
