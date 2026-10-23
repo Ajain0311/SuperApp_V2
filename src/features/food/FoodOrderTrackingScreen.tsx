@@ -565,7 +565,7 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
         ) : null}
 
         {/* Cancel Order Button */}
-        {!isCancelled && currentStepIndex <= 1 && (
+        {!isCancelled && currentStepIndex <= 2 && (
           <TouchableOpacity
             style={styles.cancelOrderButton}
             onPress={handleCancelOrder}

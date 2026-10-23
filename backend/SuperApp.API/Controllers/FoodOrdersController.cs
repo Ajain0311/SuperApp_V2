@@ -20,13 +20,19 @@ public class FoodOrdersController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<OrderStatusHub> _orderHub;
+    private readonly IHubContext<RideTrackingHub>? _rideHub;
     private readonly IPaymentService? _payments;
 
-    public FoodOrdersController(AppDbContext db, IHubContext<OrderStatusHub> orderHub, IPaymentService? payments = null)
+    public FoodOrdersController(
+        AppDbContext db,
+        IHubContext<OrderStatusHub> orderHub,
+        IPaymentService? payments = null,
+        IHubContext<RideTrackingHub>? rideHub = null)
     {
         _db = db;
         _orderHub = orderHub;
         _payments = payments;
+        _rideHub = rideHub;
     }
 
     private static void ApplyCouponTotals(FoodOrder order, long? couponId, decimal couponDiscount, decimal deliveryFee, decimal subTotal)
@@ -343,7 +349,8 @@ public class FoodOrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Cancel order if it is still pending
+    /// Customer cancel through READY (including after captain accept). Blocked once PICKED_UP.
+    /// Clears captain assignment and notifies drivers-pool.
     /// </summary>
     [HttpPost("{id:long}/cancel")]
     public async Task<ActionResult<ApiResponse>> CancelOrder(long id)
@@ -359,8 +366,8 @@ public class FoodOrdersController : ControllerBase
         if (order.UserId != userId.Value && !User.IsInRole(RoleNames.Admin))
             return Forbid();
 
-        if (order.Status != OrderStatus.Pending && order.Status != OrderStatus.Accepted)
-            return BadRequest(ApiResponse.Fail("Order cannot be cancelled once it is being prepared or delivered"));
+        if (!FoodOrderCancellation.CanCustomerCancel(order.Status))
+            return BadRequest(ApiResponse.Fail("Order cannot be cancelled after the captain has picked it up"));
 
         // If an online payment is already settled, initiate refund and mark order accordingly
         if (string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
@@ -394,6 +401,11 @@ public class FoodOrdersController : ControllerBase
 
         order.Status = OrderStatus.Cancelled;
         order.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await FoodOrderCancellation.ReleaseCaptainAndNotifyAsync(
+            _db, order, _orderHub, _rideHub, cancelledBy: "customer");
+
         await _db.SaveChangesAsync();
 
         return Ok(ApiResponse.Ok("Order cancelled successfully"));

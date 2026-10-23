@@ -695,6 +695,175 @@ public class CaptainPushNotificationTests
     }
 
     [Fact]
+    public async Task CancelOrder_AfterCaptainAccepted_ClearsDriverAndSucceeds()
+    {
+        var db = CreateDb();
+        var customer = new User { Id = 911, MobileNumber = "9876500911", FullName = "Customer 911" };
+        var captainUser = new User { Id = 912, MobileNumber = "9876500912", FullName = "Captain 912" };
+        var restaurant = new Restaurant { Id = 911, Name = "Cafe 911", IsActive = true };
+        db.Users.AddRange(customer, captainUser);
+        db.Restaurants.Add(restaurant);
+        db.Drivers.Add(new Driver { Id = 911, UserId = captainUser.Id, IsOnline = true, IsActive = true });
+
+        var order = new FoodOrder
+        {
+            Id = 9911,
+            OrderNumber = "FO-CANCEL-READY",
+            UserId = customer.Id,
+            RestaurantId = restaurant.Id,
+            PaymentMethod = "COD",
+            PaymentStatus = "PENDING",
+            Status = OrderStatus.Ready,
+            DriverId = 911,
+            DriverAssignedAt = DateTime.UtcNow.AddMinutes(-2),
+            GrandTotal = 200m
+        };
+        db.FoodOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        var orderHub = new Mock<IHubContext<OrderStatusHub>>();
+        var orderClients = new Mock<IHubClients>();
+        var orderProxy = new Mock<IClientProxy>();
+        orderClients.Setup(c => c.Group(It.IsAny<string>())).Returns(orderProxy.Object);
+        orderHub.Setup(h => h.Clients).Returns(orderClients.Object);
+
+        var rideHub = new Mock<IHubContext<RideTrackingHub>>();
+        var rideClients = new Mock<IHubClients>();
+        var rideProxy = new Mock<IClientProxy>();
+        rideClients.Setup(c => c.Group(It.IsAny<string>())).Returns(rideProxy.Object);
+        rideHub.Setup(h => h.Clients).Returns(rideClients.Object);
+
+        var controller = new FoodOrdersController(db, orderHub.Object, payments: null, rideHub: rideHub.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.Customer)
+                }, "TestAuth"))
+            }
+        };
+
+        var result = await controller.CancelOrder(order.Id);
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        var updated = await db.FoodOrders.FindAsync(order.Id);
+        Assert.NotNull(updated);
+        Assert.Equal(OrderStatus.Cancelled, updated.Status);
+        Assert.Null(updated.DriverId);
+        Assert.Null(updated.DriverAssignedAt);
+        Assert.Equal("CANCELLED", updated.PaymentStatus);
+
+        rideProxy.Verify(
+            p => p.SendCoreAsync(
+                "FoodDeliveryStatusChanged",
+                It.Is<object?[]>(args => args != null && args.Length > 0),
+                It.IsAny<CancellationToken>()),
+            Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task CancelOrder_AfterPickedUp_IsBlocked()
+    {
+        var db = CreateDb();
+        var customer = new User { Id = 921, MobileNumber = "9876500921", FullName = "Customer 921" };
+        db.Users.Add(customer);
+        db.Restaurants.Add(new Restaurant { Id = 921, Name = "Cafe 921", IsActive = true });
+        db.FoodOrders.Add(new FoodOrder
+        {
+            Id = 9921,
+            OrderNumber = "FO-CANCEL-PICKED",
+            UserId = customer.Id,
+            RestaurantId = 921,
+            PaymentMethod = "COD",
+            PaymentStatus = "PENDING",
+            Status = OrderStatus.PickedUp,
+            DriverId = 1,
+            GrandTotal = 150m
+        });
+        await db.SaveChangesAsync();
+
+        var hubMock = new Mock<IHubContext<OrderStatusHub>>();
+        var controller = new FoodOrdersController(db, hubMock.Object);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, customer.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.Customer)
+                }, "TestAuth"))
+            }
+        };
+
+        var result = await controller.CancelOrder(9921);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var still = await db.FoodOrders.FindAsync(9921L);
+        Assert.Equal(OrderStatus.PickedUp, still!.Status);
+        Assert.Equal(1, still.DriverId);
+    }
+
+    [Fact]
+    public async Task VendorCancel_AfterCaptainAccepted_ClearsDriver()
+    {
+        var db = CreateDb();
+        var owner = new User { Id = 931, MobileNumber = "9876500931", FullName = "Owner 931" };
+        db.Users.Add(owner);
+        db.Restaurants.Add(new Restaurant { Id = 931, Name = "Cafe 931", IsActive = true });
+        db.RestaurantUsers.Add(new RestaurantUser { RestaurantId = 931, UserId = owner.Id, IsActive = true });
+        db.FoodOrders.Add(new FoodOrder
+        {
+            Id = 9931,
+            OrderNumber = "FO-VENDOR-CANCEL",
+            UserId = 1,
+            RestaurantId = 931,
+            PaymentMethod = "COD",
+            PaymentStatus = "PENDING",
+            Status = OrderStatus.Ready,
+            DriverId = 77,
+            DriverAssignedAt = DateTime.UtcNow,
+            GrandTotal = 180m
+        });
+        await db.SaveChangesAsync();
+
+        var orderHub = new Mock<IHubContext<OrderStatusHub>>();
+        var orderClients = new Mock<IHubClients>();
+        var orderProxy = new Mock<IClientProxy>();
+        orderClients.Setup(c => c.Group(It.IsAny<string>())).Returns(orderProxy.Object);
+        orderHub.Setup(h => h.Clients).Returns(orderClients.Object);
+
+        var rideHub = new Mock<IHubContext<RideTrackingHub>>();
+        var rideClients = new Mock<IHubClients>();
+        var rideProxy = new Mock<IClientProxy>();
+        rideClients.Setup(c => c.Group(It.IsAny<string>())).Returns(rideProxy.Object);
+        rideHub.Setup(h => h.Clients).Returns(rideClients.Object);
+
+        var vendor = new VendorController(db, orderHub.Object, rideHub.Object);
+        vendor.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, owner.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.RestaurantOwner)
+                }, "TestAuth"))
+            }
+        };
+
+        var result = await vendor.UpdateOrderStatus(9931, new UpdateOrderStatusRequest { Status = OrderStatus.Cancelled });
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        var updated = await db.FoodOrders.FindAsync(9931L);
+        Assert.Equal(OrderStatus.Cancelled, updated!.Status);
+        Assert.Null(updated.DriverId);
+        Assert.Null(updated.DriverAssignedAt);
+    }
+
+    [Fact]
     public async Task FoodPaymentSync_LatePaidCallbackOnCancelledOrder_SetsRefundDue()
     {
         var db = CreateDb();
