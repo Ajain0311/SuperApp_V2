@@ -88,10 +88,48 @@ export const MarketplaceChatScreen: React.FC = () => {
     const unsubscribe = signalRService.onChatMessageReceived((event: ChatMessageEvent) => {
       if (event.conversationId === activeConvIdRef.current?.toString()) {
         setMessages((prev) => {
-          // Avoid duplicate messages
+          // If this incoming message matches a clientMessageId of an optimistic message, reconcile it
+          if (event.clientMessageId) {
+            const optIndex = prev.findIndex((m) => m.clientMessageId === event.clientMessageId);
+            if (optIndex !== -1) {
+              const updated = [...prev];
+              updated[optIndex] = {
+                id: event.id || prev[optIndex].id,
+                conversationId: activeConvIdRef.current || 0,
+                senderId: event.senderId,
+                senderName: event.senderName,
+                messageText: event.messageText,
+                createdAt: event.timestamp || prev[optIndex].createdAt,
+                clientMessageId: event.clientMessageId,
+                isSending: false,
+              };
+              return updated;
+            }
+          }
+
+          // Avoid duplicate messages by server ID
           if (event.id && prev.some((m) => m.id === event.id)) {
             return prev;
           }
+
+          // Also check if an identical sender + message text was added optimistically in sending state
+          const pendingMatchIndex = prev.findIndex(
+            (m) => m.isSending && m.senderId === event.senderId && m.messageText === event.messageText
+          );
+          if (pendingMatchIndex !== -1) {
+            const updated = [...prev];
+            updated[pendingMatchIndex] = {
+              id: event.id || prev[pendingMatchIndex].id,
+              conversationId: activeConvIdRef.current || 0,
+              senderId: event.senderId,
+              senderName: event.senderName,
+              messageText: event.messageText,
+              createdAt: event.timestamp || prev[pendingMatchIndex].createdAt,
+              isSending: false,
+            };
+            return updated;
+          }
+
           const incoming: ChatMessage = {
             id: event.id || Date.now(),
             conversationId: activeConvIdRef.current || 0,
@@ -99,6 +137,7 @@ export const MarketplaceChatScreen: React.FC = () => {
             senderName: event.senderName,
             messageText: event.messageText,
             createdAt: event.timestamp || new Date().toISOString(),
+            clientMessageId: event.clientMessageId,
           };
           return [...prev, incoming];
         });
@@ -121,7 +160,8 @@ export const MarketplaceChatScreen: React.FC = () => {
     setIsSending(true);
     setInputText('');
 
-    // Optimistic UI representation
+    // Assign a unique clientMessageId
+    const clientMsgId = `cmsg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const tempId = Date.now();
     const optimisticMessage: ChatMessage = {
       id: tempId,
@@ -130,6 +170,7 @@ export const MarketplaceChatScreen: React.FC = () => {
       senderName: user?.fullName || 'Me',
       messageText: text,
       createdAt: new Date().toISOString(),
+      clientMessageId: clientMsgId,
       isSending: true,
     };
 
@@ -139,18 +180,26 @@ export const MarketplaceChatScreen: React.FC = () => {
     try {
       const res = await apiClient.post<any>(
         ApiEndpoints.marketplace.sendMessage(activeConvIdRef.current),
-        { messageText: text }
+        { messageText: text, clientMessageId: clientMsgId }
       );
       const saved = res.data?.data || res.data;
       if (saved && saved.id) {
         setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...saved, isSending: false } : m))
+          prev.map((m) =>
+            m.clientMessageId === clientMsgId || m.id === tempId
+              ? { ...saved, isSending: false, clientMessageId: clientMsgId }
+              : m
+          )
         );
       }
     } catch (err: any) {
       // Mark optimistic message as failed and restore text
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, isSending: false, failed: true } : m))
+        prev.map((m) =>
+          m.clientMessageId === clientMsgId || m.id === tempId
+            ? { ...m, isSending: false, failed: true }
+            : m
+        )
       );
       setInputText(text);
     } finally {

@@ -156,4 +156,73 @@ describe('Admin Native API Contracts & Endpoints', () => {
       targetRole: 'CUSTOMER',
     });
   });
+
+  it('lists admin coupons for Coupons & Promos screen', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValue({
+      data: {
+        success: true,
+        data: [{ id: 1, code: 'WELCOME50', discountType: 'FLAT', discountValue: 50, isActive: true }],
+      },
+    });
+    const res = await apiClient.get('/admin/coupons');
+    expect(res.data.data[0].code).toBe('WELCOME50');
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/coupons');
+  });
+
+  it('loads hotel commission ledger and settlement batches', async () => {
+    (apiClient.get as jest.Mock)
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: [{ restaurantId: 2, restaurantName: 'UNCLE JOHNS', effectiveCommissionRatePercent: 15, totalCommissionEarned: 1200 }],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { success: true, data: [{ id: 9, status: 'PENDING', amount: 500 }] },
+      });
+
+    const hotels = await apiClient.get('/admin/hotel-commissions');
+    const batches = await apiClient.get('/admin/settlement-batches');
+    expect(hotels.data.data[0].effectiveCommissionRatePercent).toBe(15);
+    expect(batches.data.data[0].status).toBe('PENDING');
+  });
+
+  it('fetches ride fare configuration as { rules, options } envelope', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          rules: [{ vehicleType: 'BIKE', baseFare: 25, minimumFare: 35, includedDistanceKm: 1.5, perKmRate: 8 }],
+          options: [{ code: 'PRIORITY', additionalAmount: 10 }],
+        },
+      },
+    });
+    const res = await apiClient.get('/admin/ride-fares');
+    expect(Array.isArray(res.data.data)).toBe(false);
+    expect(res.data.data.rules[0].vehicleType).toBe('BIKE');
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/ride-fares');
+  });
+
+  it('lists hotel commissions with configuredRatePercent / pendingCommissionBalance fields', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            restaurantId: 2,
+            restaurantName: 'UNCLE JOHNS',
+            configuredRatePercent: 15,
+            grossDeliveredSales: 1000,
+            totalCommissionEarned: 150,
+            pendingCommissionBalance: 150,
+            settledCommissionAmount: 0,
+            deliveredOrdersCount: 5,
+          },
+        ],
+      },
+    });
+    const res = await apiClient.get('/admin/hotel-commissions');
+    expect(res.data.data[0].configuredRatePercent).toBe(15);
+    expect(res.data.data[0].pendingCommissionBalance).toBe(150);
+  });
 });

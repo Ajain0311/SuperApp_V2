@@ -166,7 +166,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         const latestBroadcast = items.find((n: any) => {
           if (!n) return false;
           const type = String(n.type || n.Type || '').toUpperCase();
-          if (!isUnread(n) || !broadcastTypes.has(type)) return false;
+          if (!broadcastTypes.has(type)) return false;
           return isBroadcastStillVisible(n, nowMs, defaultDisplayHours);
         });
         if (latestBroadcast) {
@@ -528,7 +528,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <View style={styles.headerRightActions}>
             <TouchableOpacity
               style={styles.headerIconButton}
-              onPress={() => navigation.navigate('Notifications')}
+              onPress={() => {
+                setUnreadNotifCount(0);
+                navigation.navigate('Notifications');
+              }}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="View notifications"

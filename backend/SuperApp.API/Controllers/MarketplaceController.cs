@@ -16,11 +16,16 @@ public class MarketplaceController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<ChatHub>? _chatHub;
+    private readonly INotificationService? _notificationService;
 
-    public MarketplaceController(AppDbContext db, IHubContext<ChatHub>? chatHub = null)
+    public MarketplaceController(
+        AppDbContext db,
+        IHubContext<ChatHub>? chatHub = null,
+        INotificationService? notificationService = null)
     {
         _db = db;
         _chatHub = chatHub;
+        _notificationService = notificationService;
     }
 
     private long? GetCurrentUserId()
@@ -1013,43 +1018,99 @@ public class MarketplaceController : ControllerBase
         if (sender == null)
             return Unauthorized(ApiResponse<ChatMessageDto>.Fail("User not found"));
 
-        var msg = new ChatMessage
-        {
-            ConversationId = conv.Id,
-            SenderId = userId,
-            MessageText = request.MessageText.Trim(),
-            CreatedAt = DateTime.UtcNow
-        };
+        var trimmedText = request.MessageText.Trim();
 
-        _db.ChatMessages.Add(msg);
-        conv.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        // Idempotency check: If an identical message was created within the last 5 seconds by the same sender in this conversation, return it
+        var recentCutoff = DateTime.UtcNow.AddSeconds(-5);
+        var existingRecentMsg = await _db.ChatMessages
+            .Where(m => m.ConversationId == conv.Id && m.SenderId == userId && m.MessageText == trimmedText && m.CreatedAt >= recentCutoff)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        ChatMessage msg;
+        bool isNewMessage = false;
+
+        if (existingRecentMsg != null)
+        {
+            msg = existingRecentMsg;
+        }
+        else
+        {
+            isNewMessage = true;
+            msg = new ChatMessage
+            {
+                ConversationId = conv.Id,
+                SenderId = userId,
+                MessageText = trimmedText,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.ChatMessages.Add(msg);
+            conv.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
 
         var messageDto = new ChatMessageDto
         {
             Id = msg.Id,
             ConversationId = msg.ConversationId,
             SenderId = msg.SenderId,
-            SenderName = sender.FullName,
+            SenderName = sender.FullName ?? "User",
             MessageText = msg.MessageText,
-            CreatedAt = msg.CreatedAt
+            CreatedAt = msg.CreatedAt,
+            ClientMessageId = request.ClientMessageId
         };
 
-        // Broadcast to SignalR group
-        try
+        if (isNewMessage)
         {
-            await _chatHub.Clients.Group($"chat-{id}").SendAsync("MessageReceived", new
+            // Broadcast to SignalR group
+            if (_chatHub != null)
             {
-                conversationId = id.ToString(),
-                senderId = messageDto.SenderId,
-                senderName = messageDto.SenderName,
-                messageText = messageDto.MessageText,
-                timestamp = messageDto.CreatedAt
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[SignalR Chat Broadcast Error] {ex.Message}");
+                try
+                {
+                    await _chatHub.Clients.Group($"chat-{id}").SendAsync("MessageReceived", new
+                    {
+                        id = messageDto.Id,
+                        conversationId = id.ToString(),
+                        senderId = messageDto.SenderId,
+                        senderName = messageDto.SenderName,
+                        messageText = messageDto.MessageText,
+                        timestamp = messageDto.CreatedAt,
+                        clientMessageId = messageDto.ClientMessageId
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SignalR Chat Broadcast Error] {ex.Message}");
+                }
+            }
+
+            // Dispatch notification to recipient (the other participant in the conversation)
+            var recipientId = (conv.BuyerId == userId) ? conv.SellerId : conv.BuyerId;
+            if (recipientId != userId && _notificationService != null)
+            {
+                try
+                {
+                    var senderDisplayName = !string.IsNullOrWhiteSpace(sender.FullName) ? sender.FullName : "Someone";
+                    var listingName = conv.Listing?.Title ?? "your marketplace item";
+                    var notifTitle = $"New message from {senderDisplayName}";
+                    var preview = messageDto.MessageText.Length > 60
+                        ? messageDto.MessageText.Substring(0, 57) + "..."
+                        : messageDto.MessageText;
+                    var notifBody = $"Re: {listingName}\n\"{preview}\"";
+
+                    await _notificationService.SendPushNotificationAsync(
+                        recipientId,
+                        notifTitle,
+                        notifBody,
+                        "MARKETPLACE_CHAT",
+                        id.ToString());
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Marketplace Chat Notification Error] {ex.Message}");
+                }
+            }
         }
 
         return Ok(ApiResponse<ChatMessageDto>.Ok(messageDto));

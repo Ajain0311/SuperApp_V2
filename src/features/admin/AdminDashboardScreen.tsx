@@ -310,6 +310,50 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
           </View>
         </View>
 
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Finance & Pricing</Text>
+        <TouchableOpacity
+          style={styles.quickNavCard}
+          onPress={() => navigation.navigate('AdminCoupons')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.quickNavIcon, { backgroundColor: '#EC489920' }]}>
+            <Ionicons name="pricetag-outline" size={22} color="#EC4899" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.quickNavTitle}>Coupons & Promos</Text>
+            <Text style={styles.quickNavSub}>Create and manage discount codes</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickNavCard}
+          onPress={() => navigation.navigate('AdminHotelCommissions')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.quickNavIcon, { backgroundColor: '#F59E0B20' }]}>
+            <Ionicons name="calculator-outline" size={22} color="#F59E0B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.quickNavTitle}>Hotel Commission & Settlement</Text>
+            <Text style={styles.quickNavSub}>Rates, ledger balances & payout batches</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickNavCard}
+          onPress={() => navigation.navigate('AdminRideFares')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.quickNavIcon, { backgroundColor: '#06B6D420' }]}>
+            <Ionicons name="speedometer-outline" size={22} color="#06B6D4" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.quickNavTitle}>Ride Fare Configuration</Text>
+            <Text style={styles.quickNavSub}>Base fare, per-km, surge & vehicle tiers</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Platform Activities</Text>
         {overview.recentActivities?.map((act: any) => (
           <View key={act.id} style={styles.activityRow}>
@@ -1138,6 +1182,34 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     marginTop: 4,
+  },
+  quickNavCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickNavIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickNavTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  quickNavSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   activityRow: {
     flexDirection: 'row',

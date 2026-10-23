@@ -30,6 +30,9 @@ export const AdminNavigator: React.FC = () => {
       <Stack.Screen name="AdminOrders" component={AdminOrdersScreen} />
       <Stack.Screen name="AdminPayments" component={AdminPaymentsScreen} />
       <Stack.Screen name="AdminSettings" component={AdminSettingsScreen} />
+      <Stack.Screen name="AdminCoupons" component={AdminCouponsScreen} />
+      <Stack.Screen name="AdminHotelCommissions" component={AdminHotelCommissionsScreen} />
+      <Stack.Screen name="AdminRideFares" component={AdminRideFaresScreen} />
     </Stack.Navigator>
   );
 };

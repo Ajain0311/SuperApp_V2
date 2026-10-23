@@ -420,6 +420,24 @@ export class NotificationService {
         break;
 
 
+      case 'MARKETPLACE_CHAT':
+      case 'MARKETPLACE_MESSAGE':
+      case 'CHAT':
+        if (data.referenceId || data.conversationId) {
+          const convId = parseInt(String(data.conversationId || data.referenceId), 10);
+          navigation.navigate('MarketplaceChat', {
+            conversationId: !isNaN(convId) ? convId : undefined,
+            listingId: String(data.listingId || '0'),
+            sellerId: 0,
+            sellerName: 'Chat',
+            listingTitle: 'Marketplace Item',
+            listingPrice: 0,
+          });
+        } else {
+          navigation.navigate('MainTabs', { screen: 'Bazaar' });
+        }
+        break;
+
       case 'MARKETPLACE':
       case 'BAZAAR':
         if (data.listingId || data.referenceId) {

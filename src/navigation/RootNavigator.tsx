@@ -22,6 +22,9 @@ import { VendorOrdersScreen } from '../features/vendor/VendorOrdersScreen';
 import { VendorMenuScreen } from '../features/vendor/VendorMenuScreen';
 import { DriverRidesScreen } from '../features/driver/DriverRidesScreen';
 import { DriverEarningsScreen } from '../features/driver/DriverEarningsScreen';
+import { AdminCouponsScreen } from '../features/admin/AdminCouponsScreen';
+import { AdminHotelCommissionsScreen } from '../features/admin/AdminHotelCommissionsScreen';
+import { AdminRideFaresScreen } from '../features/admin/AdminRideFaresScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -55,6 +58,9 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen name="VendorMenu" component={VendorMenuScreen} />
       <Stack.Screen name="DriverRides" component={DriverRidesScreen} />
       <Stack.Screen name="DriverEarnings" component={DriverEarningsScreen} />
+      <Stack.Screen name="AdminCoupons" component={AdminCouponsScreen} />
+      <Stack.Screen name="AdminHotelCommissions" component={AdminHotelCommissionsScreen} />
+      <Stack.Screen name="AdminRideFares" component={AdminRideFaresScreen} />
     </Stack.Navigator>
   );
 };
