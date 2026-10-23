@@ -23,6 +23,7 @@ import { AppColors } from '../../theme/colors';
 import { AppRadius, spacing } from '../../theme/spacing';
 import { AppTypography } from '../../theme/typography';
 import { AppSearchBar } from '../../components/common/AppSearchBar';
+import { MarqueeText } from '../../components/common/MarqueeText';
 import { useAuthStore } from '../../store/authStore';
 import { useCartStore } from '../../store/cartStore';
 import { apiClient } from '../../services/apiClient';
@@ -33,6 +34,29 @@ import { ListingSummary } from '../../models/marketplace';
 import { DEFAULT_RESTAURANTS, resolveRestaurantImage } from '../food/FoodHomeScreen';
 
 const SCREEN_WIDTH = typeof Dimensions !== 'undefined' && Dimensions.get ? (Dimensions.get('window')?.width || 375) : 375;
+
+/** Parse `exp:yyyy-MM-ddTHH:mm:ssZ` from Notification.ReferenceId; null if missing/invalid. */
+function parseBroadcastExpiry(referenceId: unknown): Date | null {
+  const raw = String(referenceId ?? '').trim();
+  if (!raw.toLowerCase().startsWith('exp:')) return null;
+  const iso = raw.slice(4);
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isBroadcastStillVisible(
+  n: any,
+  nowMs: number,
+  defaultDisplayHours: number,
+): boolean {
+  const expiry = parseBroadcastExpiry(n.referenceId ?? n.ReferenceId);
+  if (expiry) return expiry.getTime() > nowMs;
+  const createdRaw = n.createdAt ?? n.CreatedAt;
+  const created = createdRaw ? new Date(createdRaw) : null;
+  if (!created || Number.isNaN(created.getTime())) return true;
+  const fallbackMs = created.getTime() + Math.max(1, defaultDisplayHours) * 3600_000;
+  return fallbackMs > nowMs;
+}
 
 function resolveBannerImage(url: string) {
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -109,15 +133,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const loadHomeData = useCallback(async () => {
     setIsLoadingHome(true);
     try {
-      const [bannersRes, restsRes, listingsRes, ridesRes, notifsRes] = await Promise.allSettled([
+      const [bannersRes, restsRes, listingsRes, ridesRes, notifsRes, supportRes] = await Promise.allSettled([
         apiClient.get<any>(ApiEndpoints.common.banners),
         apiClient.get<any>(ApiEndpoints.food.restaurants),
         apiClient.get<any>(ApiEndpoints.marketplace.listings),
         apiClient.get<any>(ApiEndpoints.ride.myRides),
         apiClient.get<any>(ApiEndpoints.common.notifications),
+        apiClient.get<any>(ApiEndpoints.common.support),
       ]);
 
-      // 0. Admin broadcasts / in-app alerts (home strip + bell badge)
+      let defaultDisplayHours = 24;
+      if (supportRes.status === 'fulfilled') {
+        const supportPayload = supportRes.value?.data?.data || supportRes.value?.data;
+        const hours = Number(
+          supportPayload?.broadcastDefaultDisplayHours ?? supportPayload?.BroadcastDefaultDisplayHours,
+        );
+        if (Number.isFinite(hours) && hours > 0) {
+          defaultDisplayHours = Math.min(168, Math.max(1, Math.round(hours)));
+        }
+      }
+
+      // 0. Admin broadcasts / in-app alerts (home marquee + bell badge)
       if (notifsRes.status === 'fulfilled') {
         const raw = notifsRes.value?.data?.data || notifsRes.value?.data;
         const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
@@ -125,11 +161,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         const unread = items.filter((n: any) => n && isUnread(n)).length;
         setUnreadNotifCount(unread);
 
+        const nowMs = Date.now();
         const broadcastTypes = new Set(['SYSTEM', 'CUSTOMER', 'ANNOUNCEMENT', 'BROADCAST']);
         const latestBroadcast = items.find((n: any) => {
           if (!n) return false;
           const type = String(n.type || n.Type || '').toUpperCase();
-          return isUnread(n) && broadcastTypes.has(type);
+          if (!isUnread(n) || !broadcastTypes.has(type)) return false;
+          return isBroadcastStillVisible(n, nowMs, defaultDisplayHours);
         });
         if (latestBroadcast) {
           const id = String(latestBroadcast.id ?? latestBroadcast.Id);
@@ -524,29 +562,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           />
         </View>
 
-        {/* Admin broadcast announcement (in-app SYSTEM notifications) */}
+        {/* Admin broadcast marquee (glass strip; duration from admin DisplayHours / default) */}
         {homeAnnouncement ? (
-          <TouchableOpacity
-            style={styles.announcementCard}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('Notifications')}
-            accessibilityRole="button"
-            accessibilityLabel="Open broadcast announcement"
-          >
-            <View style={styles.announcementIconWrap}>
-              <Ionicons name="megaphone" size={18} color="#FFFFFF" />
-            </View>
-            <View style={styles.announcementTextCol}>
-              <Text style={styles.announcementEyebrow}>ANNOUNCEMENT</Text>
-              <Text style={styles.announcementTitle} numberOfLines={1}>
-                {homeAnnouncement.title}
-              </Text>
-              {homeAnnouncement.body ? (
-                <Text style={styles.announcementBody} numberOfLines={2}>
-                  {homeAnnouncement.body}
-                </Text>
-              ) : null}
-            </View>
+          <View style={styles.announcementCard}>
+            <TouchableOpacity
+              style={styles.announcementTapArea}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Notifications')}
+              accessibilityRole="button"
+              accessibilityLabel="Open broadcast announcement"
+            >
+              <View style={styles.announcementIconWrap}>
+                <Ionicons name="megaphone" size={14} color="#BE185D" />
+              </View>
+              <MarqueeText
+                text={
+                  homeAnnouncement.body
+                    ? `${homeAnnouncement.title}  ·  ${homeAnnouncement.body}`
+                    : homeAnnouncement.title
+                }
+                speedPxPerSec={38}
+                gap={56}
+                style={styles.announcementMarquee}
+                textStyle={styles.announcementMarqueeText}
+              />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.announcementClose}
               onPress={() => {
@@ -557,9 +597,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               accessibilityRole="button"
               accessibilityLabel="Dismiss announcement"
             >
-              <Ionicons name="close" size={18} color={AppColors.textSecondary} />
+              <Ionicons name="close" size={16} color="#9F1239" />
             </TouchableOpacity>
-          </TouchableOpacity>
+          </View>
         ) : null}
 
         {/* 3. ACTIVE RIDE STATUS CARD (If user has a live ride in transit) */}
@@ -1097,49 +1137,46 @@ const styles = StyleSheet.create({
   },
   announcementCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FFF1F2',
-    borderRadius: AppRadius.lg,
+    alignItems: 'center',
+    backgroundColor: 'rgba(236, 72, 153, 0.10)',
+    borderRadius: AppRadius.md,
     borderWidth: 1,
-    borderColor: '#FECDD3',
-    padding: 12,
-    marginBottom: 16,
+    borderColor: 'rgba(244, 114, 182, 0.28)',
+    paddingVertical: 8,
+    paddingLeft: 10,
+    paddingRight: 6,
+    marginBottom: 14,
+    minHeight: 36,
+  },
+  announcementTapArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
   },
   announcementIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#EC4899',
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: 'rgba(236, 72, 153, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 2,
+    marginRight: 8,
   },
-  announcementTextCol: {
+  announcementMarquee: {
     flex: 1,
-    paddingRight: 4,
+    height: 22,
+    minWidth: 0,
   },
-  announcementEyebrow: {
-    color: '#BE185D',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  announcementTitle: {
-    color: AppColors.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  announcementBody: {
-    color: AppColors.textSecondary,
-    fontSize: 12,
-    lineHeight: 16,
+  announcementMarqueeText: {
+    color: '#9F1239',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
   announcementClose: {
-    padding: 2,
-    marginTop: -2,
+    padding: 4,
+    marginLeft: 2,
   },
   liveRideCard: {
     backgroundColor: AppColors.surface,

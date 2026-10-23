@@ -37,7 +37,9 @@ public class SupportConfigTests
         Assert.False(string.IsNullOrWhiteSpace(body.Data.Email));
         Assert.False(string.IsNullOrWhiteSpace(body.Data.Hours));
         Assert.Contains("Q:", body.Data.Faq, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(24, body.Data.BroadcastDefaultDisplayHours);
         Assert.Equal(5, db.AppSettings.Count(s => s.SettingKey.StartsWith("support_")));
+        Assert.Contains(db.AppSettings, s => s.SettingKey == SupportSettings.BroadcastDefaultHoursKey);
     }
 
     [Fact]

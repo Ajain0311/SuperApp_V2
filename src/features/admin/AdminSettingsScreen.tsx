@@ -27,6 +27,15 @@ const TARGET_ROLES = [
   { key: 'RESTAURANT_OWNER', label: 'Restaurant Owners' },
 ];
 
+const DISPLAY_HOUR_OPTIONS = [
+  { hours: 1, label: '1h' },
+  { hours: 6, label: '6h' },
+  { hours: 12, label: '12h' },
+  { hours: 24, label: '24h' },
+  { hours: 48, label: '48h' },
+  { hours: 168, label: '7d' },
+];
+
 export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ navigation }) => {
   const [settings, setSettings] = useState<AdminSetting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,6 +45,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [targetRole, setTargetRole] = useState('ALL');
+  const [displayHours, setDisplayHours] = useState(24);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
 
   // Edit setting modal
@@ -58,6 +68,11 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
     setSupportEmail(map.get('support_email') || '');
     setSupportHours(map.get('support_hours') || '');
     setSupportFaq(map.get('support_faq') || '');
+    const defaultHoursRaw = map.get('broadcast_default_display_hours');
+    const parsed = defaultHoursRaw ? parseInt(defaultHoursRaw, 10) : NaN;
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 168) {
+      setDisplayHours(parsed);
+    }
   };
 
   const fetchSettings = useCallback(async () => {
@@ -116,11 +131,15 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
         title: broadcastTitle.trim(),
         message: broadcastMessage.trim(),
         targetRole: targetRole === 'ALL' ? null : targetRole,
+        displayHours,
       });
 
       setBroadcastTitle('');
       setBroadcastMessage('');
-      Alert.alert('Broadcast Pushed 📢', 'Push notification successfully dispatched to target users.');
+      Alert.alert(
+        'Broadcast Pushed 📢',
+        `Sent to target users. Home marquee will show for ${displayHours} hour(s).`,
+      );
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not send broadcast notification');
     } finally {
@@ -286,7 +305,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
               <Text style={styles.broadcastTitle}>BROADCAST PUSH ANNOUNCEMENT</Text>
             </View>
             <Text style={styles.broadcastSub}>
-              Push real-time announcements to app users across iOS, Android, and Web.
+              Push announcements to users. Home shows a scrolling marquee for the duration you pick.
             </Text>
 
             <Text style={styles.inputLabel}>Announcement Title</Text>
@@ -327,6 +346,29 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
                     ]}
                   >
                     {r.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.inputLabel}>Home marquee duration</Text>
+            <View style={styles.roleFilterRow}>
+              {DISPLAY_HOUR_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.hours}
+                  style={[
+                    styles.roleChip,
+                    displayHours === opt.hours && styles.roleChipActive,
+                  ]}
+                  onPress={() => setDisplayHours(opt.hours)}
+                >
+                  <Text
+                    style={[
+                      styles.roleChipText,
+                      displayHours === opt.hours && styles.roleChipTextActive,
+                    ]}
+                  >
+                    {opt.label}
                   </Text>
                 </TouchableOpacity>
               ))}

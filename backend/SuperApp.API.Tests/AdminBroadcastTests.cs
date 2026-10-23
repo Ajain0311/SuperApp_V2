@@ -50,10 +50,35 @@ public class AdminBroadcastTests
             Assert.Equal("SYSTEM", n.Type);
             Assert.Equal("Home Promo", n.Title);
             Assert.False(n.IsRead);
+            Assert.StartsWith("exp:", n.ReferenceId);
         });
 
         notif.Verify(
             n => n.SendBroadcastNotificationAsync("Home Promo", "See this on home", "SYSTEM", false),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Broadcast_UsesDisplayHours_InExpiryToken()
+    {
+        await using var db = CreateDb();
+        db.Users.Add(new User { MobileNumber = "9000001510", FullName = "D", IsActive = true, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var before = DateTime.UtcNow;
+        var controller = new AdminController(db, Mock.Of<INotificationService>());
+        var result = await controller.BroadcastNotification(new BroadcastNotificationRequest
+        {
+            Title = "Short Promo",
+            Message = "1 hour only",
+            DisplayHours = 1,
+        });
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        var row = Assert.Single(db.Notifications);
+        Assert.StartsWith("exp:", row.ReferenceId);
+        var iso = row.ReferenceId!["exp:".Length..];
+        var expires = DateTime.Parse(iso, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+        Assert.InRange(expires, before.AddMinutes(55), before.AddHours(1).AddMinutes(10));
     }
 }

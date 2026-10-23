@@ -1246,6 +1246,9 @@ public class AdminController : ControllerBase
         }
 
         var targetUsers = await query.OrderBy(u => u.Id).Take(2000).ToListAsync();
+        var displayHours = await SupportSettings.ResolveBroadcastDisplayHoursAsync(_db, request.DisplayHours);
+        var expiresUtc = DateTime.UtcNow.AddHours(displayHours);
+        var expiryToken = SupportSettings.FormatBroadcastExpiry(expiresUtc);
 
         foreach (var u in targetUsers)
         {
@@ -1255,6 +1258,7 @@ public class AdminController : ControllerBase
                 Title = request.Title.Trim(),
                 Body = request.Message.Trim(),
                 Type = "SYSTEM",
+                ReferenceId = expiryToken,
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             });
@@ -1279,7 +1283,8 @@ public class AdminController : ControllerBase
             }
         }
 
-        return Ok(ApiResponse.Ok($"Notification broadcasted to {targetUsers.Count} recipient(s)"));
+        return Ok(ApiResponse.Ok(
+            $"Notification broadcasted to {targetUsers.Count} recipient(s); home marquee for {displayHours}h (until {expiresUtc:u})"));
     }
 
     /// <summary>
