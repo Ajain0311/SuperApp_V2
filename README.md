@@ -70,7 +70,7 @@ Complete architecture, database, API, and deployment documentation is organized 
 - **HTTP & Real-Time**: Axios + `@microsoft/signalr` 10.0 (with exponential reconnection)
 - **Backend API**: ASP.NET Core 10.0 (`SuperApp.API`) hosted at `https://makemytree.duckdns.org` (Reverse-proxied via Nginx over TLS)
 - **Database**: PostgreSQL 15+ (28 relational tables, schema in `database/SuperApp_Supabase.sql`, migrations in `database/migrations/`)
-- **External Gateways**: Punjab State e-Governance DLT SMS Gateway, Easebuzz Payment Gateway
+- **External Gateways**: BIGB Gateway, Easebuzz Payment Gateway
 
 ---
 

@@ -20,7 +20,7 @@ A fundamental engineering constraint of SuperApp V2 is **Zero Operational Overhe
 | **Map & Geocoding APIs** | Google Maps Platform (always paid) | **Mapbox** maps + Geocoding/Directions via `@rnmapbox/maps` (Expo Dev Client) and optional `MapboxMapService` when `MAP_PROVIDER=Mapbox`. Default remains Haversine `MockMapService` with no network. |
 | **Message Broker / Queue** | RabbitMQ / Apache Kafka / Redis PubSub | ASP.NET Core in-memory SignalR WebSockets with typed group channels (`order-{id}`, `drivers-pool`, `ride-{id}`). |
 | **Background Job Scheduler** | Hangfire / Quartz.NET with Redis storage | ASP.NET Core native `IHostedService` / `BackgroundService` with cancellation tokens. |
-| **SMS Gateway** | Twilio / AWS SNS / MessageBird ($0.05/SMS) | Direct integration with **Punjab State e-Governance DLT SMS Gateway** (`https://eapi.punjab.gov.in/smapi/sms`) with dev-mode secure fallbacks. |
+| **SMS Gateway** | Twilio / AWS SNS / MessageBird ($0.05/SMS) | Direct integration with **BIGB Gateway** (`https://api.bigb.in/sms/send`) with dev-mode secure fallbacks. |
 | **Payment Gateway** | Stripe / Razorpay (with monthly minimums) | Native **Easebuzz Payment Gateway** integration (UPI / NetBanking / Cards) with mock dev fallback. |
 | **Database Architecture** | Multi-database polyglot persistence | Single, unified **PostgreSQL** relational database (28 tables) with foreign key indexing, check constraints, and connection pooling. |
 
@@ -39,7 +39,7 @@ flowchart TD
 
     SuperApp["SuperApp Platform\n(ASP.NET Core 10 Web API)"]
     Database[("PostgreSQL Database\n(28 Tables)")]
-    DLT["Punjab Gov DLT SMS API\n(eapi.punjab.gov.in)"]
+    DLT["BIGB SMS API\n(api.bigb.in)"]
     Easebuzz["Easebuzz Payment Gateway"]
     ExpoPush["Expo Push Notification Service"]
 

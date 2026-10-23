@@ -37,12 +37,12 @@ Date: 2026-09-29. Framework was not rewritten. Backend business rules were not c
 
 ## 1. Root cause of the login failures
 
-`OTP_PROVIDER=PunjabGov` makes `POST /api/auth/send-otp` return `devOtp: null`. The runner treated a missing `devOtp` as a failed login **before** calling `verify-otp`, and recorded HTTP status `0`. Every later call then used no JWT and returned 401.
+`OTP_PROVIDER=BIGB` makes `POST /api/auth/send-otp` return `devOtp: null`. The runner treated a missing `devOtp` as a failed login **before** calling `verify-otp`, and recorded HTTP status `0`. Every later call then used no JWT and returned 401.
 
 The API already accepts a development OTP outside Production:
 
 - `OTP_TEST_MODE=true` selects `MockOtpService` and returns `devOtp`.
-- `PunjabGovOtpService.VerifyOtpAsync` accepts `TEST_OTP` or `123456` when `ASPNETCORE_ENVIRONMENT` is not Production.
+- `BigBOtpService.VerifyOtpAsync` accepts `TEST_OTP` or `123456` when `ASPNETCORE_ENVIRONMENT` is not Production.
 
 The runner now uses `devOtp`, then `TEST_OTP`, then one development probe of `123456`. If that probe is rejected, login is **BLOCKED** with send status, `devOtp available: false`, and the verify message. No JWT is invented. The password hash supplied for admin is not a login password. Admin login still needs `ADMIN_PASSWORD` (the app self-heals `Admin@123`).
 

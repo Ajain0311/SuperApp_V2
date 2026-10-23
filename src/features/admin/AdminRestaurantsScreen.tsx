@@ -248,7 +248,7 @@ export const AdminRestaurantsScreen: React.FC<AdminRestaurantsScreenProps> = ({ 
               <Text style={styles.inputLabel}>Restaurant Name *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Royal Punjab Dhaba"
+                placeholder="e.g. Royal Heritage Dhaba"
                 placeholderTextColor={AppColors.textSecondary}
                 value={name}
                 onChangeText={setName}

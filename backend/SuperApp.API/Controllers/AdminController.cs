@@ -348,7 +348,7 @@ public class AdminController : ControllerBase
 
         if (user == null && !string.IsNullOrWhiteSpace(request.MobileNumber))
         {
-            var cleanMobile = PunjabGovSmsService.NormalizeMobileNumber(request.MobileNumber);
+            var cleanMobile = BigBSmsService.NormalizeMobileNumber(request.MobileNumber);
             user = await _db.Users.Include(u => u.UserRoles)
                 .FirstOrDefaultAsync(u => u.MobileNumber == request.MobileNumber.Trim() || u.MobileNumber == cleanMobile);
         }
