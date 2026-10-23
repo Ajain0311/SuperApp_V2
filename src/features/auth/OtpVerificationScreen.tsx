@@ -42,10 +42,15 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
     devOtp: initialDevOtp,
   } = route.params;
 
-  const showTestOtp = process.env.EXPO_PUBLIC_SHOW_TEST_OTP === 'true';
+  // Never show bypass OTP to end users. Dev hint only when EXPO_PUBLIC_SHOW_TEST_OTP=true
+  // AND we are not pointed at the live DuckDNS API.
+  const apiBase = (process.env.EXPO_PUBLIC_API_BASE_URL || '').toLowerCase();
+  const isLiveApi = apiBase.includes('makemytree.duckdns.org') || apiBase.includes('duckdns.org');
+  const showTestOtp =
+    !isLiveApi && process.env.EXPO_PUBLIC_SHOW_TEST_OTP === 'true';
   const defaultTestOtp = process.env.EXPO_PUBLIC_TEST_OTP;
   const [displayedOtp, setDisplayedOtp] = useState<string | undefined>(
-    initialDevOtp || (showTestOtp ? defaultTestOtp : undefined)
+    showTestOtp ? (initialDevOtp || defaultTestOtp) : undefined
   );
   
   const [isLoading, setIsLoading] = useState(false);
@@ -198,8 +203,8 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       } else {
         response = await sendOtp(mobileNumber);
       }
-      const newOtp = response.devOtp;
-      if (newOtp) setDisplayedOtp(newOtp);
+      if (showTestOtp && response.devOtp) setDisplayedOtp(response.devOtp);
+      else setDisplayedOtp(undefined);
       // Keep existing OTP input intact if user was mid-typing or want to retry
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
       Alert.alert('Success', 'A new OTP has been sent to your mobile number.');
@@ -217,7 +222,8 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
       setIsResettingPassword(true);
       setTimerSeconds(AppConstants.otpTimeoutSeconds);
       setOtp('');
-      if (response.devOtp) setDisplayedOtp(response.devOtp);
+      if (showTestOtp && response.devOtp) setDisplayedOtp(response.devOtp);
+      else setDisplayedOtp(undefined);
       Alert.alert('Password Reset', 'A new OTP has been sent. Please enter it along with your new password.');
     } catch (err: any) {
       setErrorMessage(err.message || 'Could not initiate password reset');

@@ -85,7 +85,11 @@ export class AppEnvironment {
   }
 
   static get showTestOtp(): boolean {
-    // Strictly disable test OTP hint and autofill in real production
+    // Never show bypass OTP on a live/public API host.
+    const apiBase = (process.env.EXPO_PUBLIC_API_BASE_URL || this.baseUrl || '').toLowerCase();
+    if (apiBase.includes('makemytree.duckdns.org') || apiBase.includes('duckdns.org')) {
+      return false;
+    }
     if (this.isProduction) {
       return false;
     }
@@ -93,7 +97,7 @@ export class AppEnvironment {
     if (show !== undefined) {
       return show === 'true' || show === '1';
     }
-    return !this.isProduction;
+    return false;
   }
 
   private static _runtimeMapboxToken: string | null = null;
