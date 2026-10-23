@@ -9,6 +9,9 @@ import {
   StatusBar,
   Alert,
   Platform,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +20,8 @@ import { RootStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { useRoleStore, ROLE_CONFIGS } from '../../store/roleStore';
 import { RoleSwitchModal } from '../../components/RoleSwitchModal';
+import { apiClient } from '../../services/apiClient';
+import { ApiEndpoints } from '../../constants/api';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -46,10 +51,52 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, title, subtitle, color, onPre
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const { activeRole, hasMultipleRoles } = useRoleStore();
   const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const activeConfig = ROLE_CONFIGS[activeRole] || ROLE_CONFIGS.CUSTOMER;
+
+  const openEditName = () => {
+    setEditName(String(user?.fullName || '').trim());
+    setEditVisible(true);
+  };
+
+  const handleSaveName = async () => {
+    const next = editName.trim().replace(/\s+/g, ' ');
+    if (!next) {
+      Alert.alert('Name Required', 'Please enter your name.');
+      return;
+    }
+    if (next.length < 2) {
+      Alert.alert('Too Short', 'Name must be at least 2 characters.');
+      return;
+    }
+    if (next.length > 100) {
+      Alert.alert('Too Long', 'Name must be 100 characters or fewer.');
+      return;
+    }
+    if (next === String(user?.fullName || '').trim()) {
+      setEditVisible(false);
+      return;
+    }
+
+    setSavingName(true);
+    try {
+      const res = await apiClient.put<any>(ApiEndpoints.auth.profile, { fullName: next });
+      const data = res?.data?.data || res?.data || {};
+      const savedName = String(data.fullName || data.FullName || next).trim();
+      updateUser({ fullName: savedName });
+      setEditVisible(false);
+      Alert.alert('Updated', 'Your name has been saved.');
+    } catch (e: any) {
+      Alert.alert('Update Failed', e?.message || 'Could not update your name. Please try again.');
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const performLogout = async () => {
     try {
@@ -116,7 +163,9 @@ export const ProfileScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.editBtn}
-            onPress={() => Alert.alert('Edit Profile', 'Profile editing coming soon')}
+            onPress={openEditName}
+            accessibilityRole="button"
+            accessibilityLabel="Edit name"
           >
             <MaterialIcons name="edit" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -224,6 +273,56 @@ export const ProfileScreen: React.FC = () => {
         visible={roleModalVisible}
         onClose={() => setRoleModalVisible(false)}
       />
+
+      <Modal
+        visible={editVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !savingName && setEditVisible(false)}
+      >
+        <View style={styles.editOverlay}>
+          <View style={styles.editSheet}>
+            <View style={styles.editHeader}>
+              <Text style={styles.editTitle}>Edit name</Text>
+              <TouchableOpacity
+                onPress={() => !savingName && setEditVisible(false)}
+                disabled={savingName}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.editHint}>Only your display name can be changed. Phone number stays fixed.</Text>
+            <Text style={styles.editLabel}>Name</Text>
+            <TextInput
+              style={styles.editInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your name"
+              placeholderTextColor={colors.textTertiary}
+              maxLength={100}
+              autoFocus
+              editable={!savingName}
+            />
+            <Text style={styles.editLabel}>Phone</Text>
+            <View style={styles.editPhoneBox}>
+              <Text style={styles.editPhoneText}>{phone}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.editSaveBtn, savingName && { opacity: 0.7 }]}
+              onPress={() => void handleSaveName()}
+              disabled={savingName}
+              activeOpacity={0.85}
+            >
+              {savingName ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.editSaveText}>Save name</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -421,5 +520,78 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  editOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  editSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
+    borderTopWidth: 1,
+    borderColor: colors.border,
+  },
+  editHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  editTitle: {
+    ...typography.h4,
+    color: colors.textPrimary,
+  },
+  editHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  editLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  editInput: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    color: colors.textPrimary,
+    fontSize: 16,
+    marginBottom: spacing.md,
+  },
+  editPhoneBox: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: spacing.lg,
+    opacity: 0.85,
+  },
+  editPhoneText: {
+    color: colors.textSecondary,
+    fontSize: 15,
+  },
+  editSaveBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editSaveText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 15,
   },
 });

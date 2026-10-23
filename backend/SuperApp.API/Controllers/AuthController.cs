@@ -357,7 +357,14 @@ public class AuthController : ControllerBase
             return NotFound(ApiResponse<UserDto>.Fail("User not found"));
 
         if (request.FullName != null)
-            user.FullName = request.FullName;
+        {
+            var name = request.FullName.Trim();
+            if (string.IsNullOrWhiteSpace(name) || name.Length < 2)
+                return BadRequest(ApiResponse<UserDto>.Fail("Full name must be at least 2 characters"));
+            if (name.Length > 100)
+                return BadRequest(ApiResponse<UserDto>.Fail("Full name must be 100 characters or fewer"));
+            user.FullName = name;
+        }
         if (request.Email != null)
             user.Email = request.Email;
         if (request.ProfileImageUrl != null)
