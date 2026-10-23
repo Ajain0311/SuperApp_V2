@@ -113,4 +113,74 @@ describe('rideMapUtils', () => {
     ]);
     expect(buildLineGeoJson(null, null)).toBeNull();
   });
+
+  it('OTP verification failure keeps to_pickup phase (status still ACCEPTED/ARRIVING)', () => {
+    // UI must derive phase from backend status — failed OTP never flips to STARTED locally.
+    expect(getRideMapPhase('ARRIVING')).toBe('to_pickup');
+    const endpoints = resolveRouteEndpoints({
+      phase: getRideMapPhase('ARRIVING'),
+      driver,
+      pickup,
+      dropoff,
+    });
+    expect(endpoints?.destination).toEqual(pickup);
+    expect(shouldRevealDestination(getRideMapPhase('ARRIVING'))).toBe(false);
+  });
+
+  it('missing pickup or dropoff yields null endpoints without fabricating coords', () => {
+    expect(
+      resolveRouteEndpoints({
+        phase: 'to_pickup',
+        driver,
+        pickup: { latitude: 0, longitude: 0 },
+        dropoff,
+      })
+    ).toBeNull();
+    expect(
+      resolveRouteEndpoints({
+        phase: 'to_destination',
+        driver,
+        pickup,
+        dropoff: null,
+      })
+    ).toBeNull();
+  });
+
+  it('EXPIRED/FAILED terminal statuses clear active routing like CANCELLED', () => {
+    expect(isTerminalRideStatus('FAILED')).toBe(true);
+    expect(getRideMapPhase('FAILED')).toBe('terminal');
+    expect(getRideMapPhase('EXPIRED')).toBe('terminal');
+    expect(
+      resolveRouteEndpoints({ phase: getRideMapPhase('EXPIRED'), driver, pickup, dropoff })
+    ).toBeNull();
+  });
+
+  it('two rides keep independent endpoint snapshots (no cross-ride destination leak)', () => {
+    const rideA = resolveRouteEndpoints({
+      phase: 'to_pickup',
+      driver,
+      pickup,
+      dropoff,
+    });
+    const otherPickup = { latitude: 28.61, longitude: 77.21 };
+    const otherDrop = { latitude: 28.65, longitude: 77.25 };
+    const rideB = resolveRouteEndpoints({
+      phase: 'to_destination',
+      driver: { latitude: 28.6, longitude: 77.2 },
+      pickup: otherPickup,
+      dropoff: otherDrop,
+    });
+    expect(rideA?.destination).toEqual(pickup);
+    expect(rideB?.destination).toEqual(otherDrop);
+    expect(rideA?.destination).not.toEqual(rideB?.destination);
+  });
+
+  it('allows recalculation after throttle window when driver moved enough', () => {
+    const last = { origin: driver, destination: pickup, at: 1_000_000 };
+    const moved = {
+      origin: { latitude: driver.latitude + 0.001, longitude: driver.longitude }, // ~111m
+      destination: pickup,
+    };
+    expect(shouldRecalculateRoute(last, moved, 1_020_000)).toBe(true);
+  });
 });
