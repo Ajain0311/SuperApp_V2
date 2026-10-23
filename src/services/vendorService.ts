@@ -61,8 +61,9 @@ class VendorService {
   }
 
   async getMenu(): Promise<any[]> {
-    const res = await apiClient.get<{ success: boolean; data: any[] }>(ApiEndpoints.vendor.menu);
-    return res.data || [];
+    const res = await apiClient.get<any>(ApiEndpoints.vendor.menu);
+    const payload = res?.data ?? res;
+    return Array.isArray(payload) ? payload : [];
   }
 
   async getOrders(status?: string): Promise<VendorOrderSummary[]> {
@@ -77,6 +78,13 @@ class VendorService {
 
   async manageFoodItem(action: 'ADD' | 'EDIT' | 'DELETE' | 'STATUS', payload: any): Promise<void> {
     await apiClient.post(ApiEndpoints.vendor.manageFoodItems, {
+      action,
+      ...payload,
+    });
+  }
+
+  async manageCategory(action: 'ADD' | 'EDIT' | 'DELETE', payload: any): Promise<void> {
+    await apiClient.post('/vendor/categories', {
       action,
       ...payload,
     });

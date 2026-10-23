@@ -126,6 +126,10 @@ public class VendorController : ControllerBase
             case "ADD":
                 if (string.IsNullOrWhiteSpace(request.Name) || !request.BasePrice.HasValue || !request.RestaurantCategoryId.HasValue)
                     return BadRequest(ApiResponse.Fail("Name, BasePrice, and Category are required"));
+                if (request.BasePrice.Value < 0)
+                    return BadRequest(ApiResponse.Fail("BasePrice must be >= 0"));
+                if (request.DiscountPercent.HasValue && (request.DiscountPercent.Value < 0 || request.DiscountPercent.Value > 100))
+                    return BadRequest(ApiResponse.Fail("DiscountPercent must be between 0 and 100"));
 
                 var category = await _db.RestaurantCategories.FirstOrDefaultAsync(c =>
                     c.Id == request.RestaurantCategoryId.Value && c.RestaurantId == restaurant.Id);
@@ -160,6 +164,19 @@ public class VendorController : ControllerBase
                 var item = await _db.FoodItems.FirstOrDefaultAsync(f => f.Id == request.Id.Value && f.RestaurantId == restaurant.Id);
                 if (item == null)
                     return NotFound(ApiResponse.Fail("Item not found in this restaurant"));
+
+                if (request.BasePrice.HasValue && request.BasePrice.Value < 0)
+                    return BadRequest(ApiResponse.Fail("BasePrice must be >= 0"));
+                if (request.DiscountPercent.HasValue && (request.DiscountPercent.Value < 0 || request.DiscountPercent.Value > 100))
+                    return BadRequest(ApiResponse.Fail("DiscountPercent must be between 0 and 100"));
+                if (request.RestaurantCategoryId.HasValue)
+                {
+                    var moveCat = await _db.RestaurantCategories.AnyAsync(c =>
+                        c.Id == request.RestaurantCategoryId.Value && c.RestaurantId == restaurant.Id);
+                    if (!moveCat)
+                        return BadRequest(ApiResponse.Fail("Category does not belong to this restaurant"));
+                    item.RestaurantCategoryId = request.RestaurantCategoryId.Value;
+                }
 
                 if (!string.IsNullOrWhiteSpace(request.Name)) item.Name = request.Name.Trim();
                 if (request.Description != null) item.Description = request.Description;
