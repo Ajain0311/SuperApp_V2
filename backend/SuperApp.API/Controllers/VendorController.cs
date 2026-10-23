@@ -81,7 +81,7 @@ public class VendorController : ControllerBase
     {
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse<RestaurantDetailDto>.Fail("No restaurant associated with this user"));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<RestaurantDetailDto>.Fail("Restaurant not found or not authorized"));
 
         return Ok(ApiResponse<RestaurantDetailDto>.Ok(new RestaurantDetailDto
         {
@@ -454,7 +454,7 @@ public class VendorController : ControllerBase
     {
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse<VendorDashboardDto>.Fail("Restaurant not found"));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<VendorDashboardDto>.Fail("Restaurant not found or not authorized"));
 
         var today = DateTime.UtcNow.Date;
 
@@ -508,7 +508,7 @@ public class VendorController : ControllerBase
     {
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse<List<RestaurantCategoryDto>>.Fail("Restaurant not found"));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<List<RestaurantCategoryDto>>.Fail("Restaurant not found or not authorized"));
 
         var categories = await _db.RestaurantCategories
             .Include(c => c.FoodItems.Where(f => f.IsActive))
@@ -550,7 +550,7 @@ public class VendorController : ControllerBase
     {
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse<object>.Fail("Restaurant not found"));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<object>.Fail("Restaurant not found or not authorized"));
 
         var deliveredOrders = await _db.FoodOrders
             .Where(o => o.RestaurantId == restaurant.Id && o.Status == OrderStatus.Delivered)
@@ -578,7 +578,7 @@ public class VendorController : ControllerBase
     {
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse.Fail("Restaurant not found or unauthorized"));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Fail("Restaurant not found or not authorized"));
 
         var action = request.Action?.ToUpperInvariant() ?? string.Empty;
         switch (action)

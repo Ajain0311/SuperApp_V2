@@ -68,9 +68,11 @@ public class FoodOrdersController : ControllerBase
         if (request.Items == null || !request.Items.Any())
             return BadRequest(ApiResponse<FoodOrderDto>.Fail("At least one food item is required"));
 
-        var restaurant = await _db.Restaurants.FirstOrDefaultAsync(r => r.Id == request.RestaurantId && r.IsActive);
+        var restaurant = await _db.Restaurants.FirstOrDefaultAsync(r => r.Id == request.RestaurantId);
         if (restaurant == null)
-            return NotFound(ApiResponse<FoodOrderDto>.Fail("Restaurant not found or inactive"));
+            return NotFound(ApiResponse<FoodOrderDto>.Fail("Restaurant not found"));
+        if (!restaurant.IsActive)
+            return BadRequest(ApiResponse<FoodOrderDto>.Fail("Restaurant is currently closed"));
 
         var userId = GetCurrentUserId();
         if (!userId.HasValue)
