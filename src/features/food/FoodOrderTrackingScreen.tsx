@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { AppButton } from '../../components/common/AppButton';
+import { ScreenBackButton } from '../../components/common/ScreenBackButton';
 import { RatingModal } from '../../components/RatingModal';
 import { signalRService, OrderStatusEvent } from '../../services/signalr';
 import { apiClient } from '../../services/apiClient';
@@ -269,15 +270,10 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.appBar}>
-          <TouchableOpacity
-            onPress={() => {
-              if (navigation.canGoBack()) navigation.goBack();
-              else navigation.navigate('MainTabs', { screen: 'Food' });
-            }}
-            style={styles.backButton}
-          >
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <ScreenBackButton
+            fallback={() => navigation.navigate('MainTabs', { screen: 'Food' })}
+            accessibilityLabel="Back to Food"
+          />
           <Text style={styles.appBarTitle}>Live Order Tracker</Text>
         </View>
         <View style={styles.centerContainer}>
@@ -292,15 +288,10 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.appBar}>
-          <TouchableOpacity
-            onPress={() => {
-              if (navigation.canGoBack()) navigation.goBack();
-              else navigation.navigate('MainTabs', { screen: 'Food' });
-            }}
-            style={styles.backButton}
-          >
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <ScreenBackButton
+            fallback={() => navigation.navigate('MainTabs', { screen: 'Food' })}
+            accessibilityLabel="Back to Food"
+          />
           <Text style={styles.appBarTitle}>Order Tracker</Text>
         </View>
         <View style={styles.emptyContainer}>
@@ -331,15 +322,10 @@ export const FoodOrderTrackingScreen: React.FC<FoodOrderTrackingScreenProps> = (
     <SafeAreaView style={styles.safeArea}>
       {/* App Bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity
-          onPress={() => {
-            if (navigation.canGoBack()) navigation.goBack();
-            else navigation.navigate('MainTabs', { screen: 'Food' });
-          }}
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <ScreenBackButton
+          fallback={() => navigation.navigate('MainTabs', { screen: 'Food' })}
+          accessibilityLabel="Back to Food"
+        />
         <View style={{ flex: 1 }}>
           <Text style={styles.appBarTitle} numberOfLines={1}>
             Order #{orderNumber || 'Active'}
@@ -622,9 +608,6 @@ const styles = StyleSheet.create({
     borderBottomColor: AppColors.border,
     backgroundColor: AppColors.surface,
     gap: 12,
-  },
-  backButton: {
-    padding: 6,
   },
   appBarTitle: {
     fontSize: 16,
