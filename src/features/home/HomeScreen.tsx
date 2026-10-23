@@ -166,7 +166,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         const latestBroadcast = items.find((n: any) => {
           if (!n) return false;
           const type = String(n.type || n.Type || '').toUpperCase();
-          if (!isUnread(n) || !broadcastTypes.has(type)) return false;
+          if (!broadcastTypes.has(type)) return false;
           return isBroadcastStillVisible(n, nowMs, defaultDisplayHours);
         });
         if (latestBroadcast) {
