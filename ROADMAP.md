@@ -15,11 +15,11 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Marketplace listing owner UX + no fake fallbacks (in progress / shipping).
+- **Status**: Marketplace owner UX + no fake fallbacks live on API `v-9ab8b51` (PR #31).
   - Own listing: hide Make Offer / Chat / Call; show Remove for publisher + admin.
   - Call: `Linking.openURL(tel:…)` without `canOpenURL` gate (Android dialer).
   - Removed marketplace fake seed listings / unsplash / fake seller phone defaults.
-  - Prior: broadcast marquee `v-55bafe5` (PR #30).
+  - Verified: tsc, 218 backend, agents self; health OK.
   - Actors: cust 7014065979 / 9123456780, owner 9900000004, captain 6375002348, TEST_OTP 123456.
   - PEM: `C:\Users\admin\.ssh\Bseries.pem`.
-  - Next: Expo reload; open own listing (no offer), other listing Call opens dialer.
+  - Next: Expo reload; own listing pe offer hide + Call dialer phone pe confirm.
