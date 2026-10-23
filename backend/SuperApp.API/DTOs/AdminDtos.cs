@@ -199,6 +199,55 @@ public class AdminReportDto
     public List<TopPerformerDto> TopDrivers { get; set; } = new();
 }
 
+public class HotelCommissionSummaryDto
+{
+    public long RestaurantId { get; set; }
+    public string RestaurantName { get; set; } = string.Empty;
+    public decimal ConfiguredRatePercent { get; set; }
+    public decimal GrossDeliveredSales { get; set; }
+    public decimal TotalCommissionEarned { get; set; }
+    public decimal PendingCommissionBalance { get; set; }
+    public decimal SettledCommissionAmount { get; set; }
+    public int DeliveredOrdersCount { get; set; }
+}
+
+public class HotelCommissionLedgerEntryDto
+{
+    public long Id { get; set; }
+    public long RestaurantId { get; set; }
+    public string RestaurantName { get; set; } = string.Empty;
+    public long FoodOrderId { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public decimal CommissionBaseAmount { get; set; }
+    public decimal CommissionRatePercent { get; set; }
+    public decimal CommissionAmount { get; set; }
+    public decimal NetHotelProceeds { get; set; }
+    public decimal PlatformFundedDiscount { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public long? SettlementBatchId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? SettledAt { get; set; }
+}
+
+public class CreateSettlementBatchRequest
+{
+    public long RestaurantId { get; set; }
+    public DateTime? PeriodStart { get; set; }
+    public DateTime? PeriodEnd { get; set; }
+    public string? ReferenceProof { get; set; }
+}
+
+public class ApproveSettlementBatchRequest
+{
+    public string? ReferenceProof { get; set; }
+}
+
+public class UpdateHotelCommissionRateRequest
+{
+    public long RestaurantId { get; set; }
+    public decimal CommissionRatePercent { get; set; }
+}
+
 public class TopPerformerDto
 {
     public long Id { get; set; }

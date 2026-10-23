@@ -1174,6 +1174,7 @@ public class DriverController : ControllerBase
                 .ExecuteUpdateAsync(s => s.SetProperty(o => o.PaymentStatus, "PAID"));
         }
 
+        try { await SuperApp.API.Services.HotelCommissionLedgerService.RecordDeliveryCommissionAsync(_db, id); } catch (Exception ex) { _logger?.LogWarning(ex, "[Commission] Failed to record commission for order {OrderId}", id); }
         await PublishFoodStatus(id, OrderStatus.Delivered, driver);
         return Ok(ApiResponse.Ok("Order delivered"));
     }

@@ -51,6 +51,9 @@ public class Restaurant
     
     [Column(TypeName = "decimal(10,2)")]
     public decimal DeliveryFee { get; set; } = 0;
+
+    [Column(TypeName = "decimal(5,2)")]
+    public decimal? CommissionRatePercent { get; set; }
     
     public int AvgDeliveryTimeMinutes { get; set; } = 30;
     

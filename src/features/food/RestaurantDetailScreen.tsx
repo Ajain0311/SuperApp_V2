@@ -266,13 +266,18 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       }
       clearCart();
       setIsCartVisible(false);
+      const checkoutGroupId = data?.checkoutGroupId;
       if (orders.length > 1) {
         Alert.alert(
-          'Orders placed',
-          `${orders.length} kitchen orders created (one per hotel). Tracking the first order now.`
+          'Orders Placed!',
+          `${orders.length} kitchen orders created (one per hotel) under one coordinated delivery!`
         );
       }
-      navigation.navigate('FoodOrderTracking', { orderId, orderNumericId });
+      navigation.navigate('FoodOrderTracking', {
+        orderId,
+        orderNumericId,
+        checkoutGroupId,
+      });
     } catch (err: any) {
       console.error('[PlaceOrder Error]', err);
       const errMsg = err?.response?.data?.message || err?.message || 'Failed to place order. Please try again.';
@@ -609,6 +614,7 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
         visible={isCartVisible}
         onClose={() => setIsCartVisible(false)}
         restaurantName={restaurantName}
+        restaurantId={restaurantNumericId ?? undefined}
         cartItems={cartItems}
         deliveryFee={restaurantDeliveryFee}
         onClear={clearCart}

@@ -1,3 +1,4 @@
+using SuperApp.API.Services;
 using System.ComponentModel.DataAnnotations;
 
 namespace SuperApp.API.DTOs;
@@ -108,6 +109,8 @@ public class FoodCheckoutResultDto
 {
     public List<FoodOrderDto> Orders { get; set; } = new();
     public decimal GrandTotal { get; set; }
+    public string? CheckoutGroupId { get; set; }
+    public PaymentOrderResult? PaymentOrder { get; set; }
     public int RestaurantCount { get; set; }
 }
 
@@ -161,6 +164,7 @@ public class FoodOrderDto
     public decimal DeliveryFee { get; set; }
     public decimal TaxAmount { get; set; }
     public decimal GrandTotal { get; set; }
+    public string? CheckoutGroupId { get; set; }
     public string? PaymentMethod { get; set; }
     public string PaymentStatus { get; set; } = string.Empty;
     public long? DriverId { get; set; }

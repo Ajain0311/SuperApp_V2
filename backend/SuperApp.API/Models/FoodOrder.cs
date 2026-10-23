@@ -59,6 +59,12 @@ public class FoodOrder
     
     [Column(TypeName = "decimal(10,2)")]
     public decimal GrandTotal { get; set; }
+
+    [MaxLength(40)]
+    public string? CheckoutGroupId { get; set; }
+
+    [Column(TypeName = "decimal(5,2)")]
+    public decimal? CommissionRatePercent { get; set; }
     
     [MaxLength(20)]
     public string? PaymentMethod { get; set; }

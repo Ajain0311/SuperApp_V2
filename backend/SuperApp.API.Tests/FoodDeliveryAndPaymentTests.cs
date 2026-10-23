@@ -189,7 +189,7 @@ public class FoodDeliveryAndPaymentTests
         await FoodPaymentSync.ApplyAsync(db, "txn-food-1", verified: true);
         var paid = await db.FoodOrders.AsNoTracking().SingleAsync(o => o.Id == 80);
         Assert.Equal("PAID", paid.PaymentStatus);
-        Assert.Equal(OrderStatus.Pending, paid.Status);
+        Assert.Equal(OrderStatus.Accepted, paid.Status);
         Assert.Equal(1, await db.FoodOrders.CountAsync(o => o.Id == 80));
     }
 

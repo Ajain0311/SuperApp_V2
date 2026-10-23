@@ -259,6 +259,51 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({ navigati
 
         <TouchableOpacity
           style={styles.navCard}
+          onPress={() => navigation.navigate('AdminCoupons')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.navIconBox, { backgroundColor: '#EC489920' }]}>
+            <Ionicons name="pricetag-outline" size={24} color="#EC4899" />
+          </View>
+          <View style={styles.navCardInfo}>
+            <Text style={styles.navCardTitle}>Coupons & Promos</Text>
+            <Text style={styles.navCardSubtitle}>Create, edit discounts & hotel limits</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={AppColors.textSecondary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navCard}
+          onPress={() => navigation.navigate('AdminHotelCommissions')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.navIconBox, { backgroundColor: '#F59E0B20' }]}>
+            <Ionicons name="calculator-outline" size={24} color="#F59E0B" />
+          </View>
+          <View style={styles.navCardInfo}>
+            <Text style={styles.navCardTitle}>Hotel Commission & Settlement</Text>
+            <Text style={styles.navCardSubtitle}>Ledger balances, rates & payout batches</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={AppColors.textSecondary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navCard}
+          onPress={() => navigation.navigate('AdminRideFares')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.navIconBox, { backgroundColor: '#06B6D420' }]}>
+            <Ionicons name="speedometer-outline" size={24} color="#06B6D4" />
+          </View>
+          <View style={styles.navCardInfo}>
+            <Text style={styles.navCardTitle}>Ride Fare Configuration</Text>
+            <Text style={styles.navCardSubtitle}>Per-km, base fare, surge & vehicle tiers</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={AppColors.textSecondary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navCard}
           onPress={() => navigation.navigate('AdminSettings')}
           activeOpacity={0.8}
         >

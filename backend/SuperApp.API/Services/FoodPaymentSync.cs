@@ -10,6 +10,7 @@ namespace SuperApp.API.Services;
 /// <summary>
 /// Applies a gateway result onto the food order. PAID is written only when the
 /// payment row itself is already PAID after server-side verification.
+/// Supports multi-restaurant checkout groups where one payment covers multiple child orders.
 /// </summary>
 public static class FoodPaymentSync
 {
@@ -22,49 +23,68 @@ public static class FoodPaymentSync
         if (payment == null || !string.Equals(payment.Module, "FOOD", StringComparison.OrdinalIgnoreCase) || payment.OrderId <= 0)
             return;
 
-        var order = await db.FoodOrders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
-        if (order == null || !string.Equals(order.PaymentMethod, "ONLINE", StringComparison.OrdinalIgnoreCase))
+        var primaryOrder = await db.FoodOrders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+        if (primaryOrder == null || !string.Equals(primaryOrder.PaymentMethod, "ONLINE", StringComparison.OrdinalIgnoreCase))
             return;
 
-        if (string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
-            return;
+        List<FoodOrder> affectedOrders;
+        if (!string.IsNullOrEmpty(primaryOrder.CheckoutGroupId))
+        {
+            affectedOrders = await db.FoodOrders
+                .Where(o => o.CheckoutGroupId == primaryOrder.CheckoutGroupId)
+                .ToListAsync();
+        }
+        else
+        {
+            affectedOrders = new List<FoodOrder> { primaryOrder };
+        }
 
         if (verified && string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(order.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+            foreach (var o in affectedOrders)
             {
-                order.PaymentStatus = "REFUND_DUE";
-                order.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync();
-                return;
+                if (string.Equals(o.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+                {
+                    o.PaymentStatus = "REFUND_DUE";
+                }
+                else
+                {
+                    o.PaymentStatus = "PAID";
+                    if (o.Status == OrderStatus.Pending)
+                    {
+                        o.Status = OrderStatus.Accepted; // Auto-confirm on successful payment
+                    }
+                }
+                o.UpdatedAt = DateTime.UtcNow;
             }
-
-            order.PaymentStatus = "PAID";
-            order.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
             if (orderHub != null)
             {
-                try
+                foreach (var o in affectedOrders)
                 {
-                    var fullOrder = await db.FoodOrders
-                        .Include(o => o.Items)
-                        .Include(o => o.Restaurant)
-                        .Include(o => o.Address)
-                        .Include(o => o.User)
-                        .FirstOrDefaultAsync(o => o.Id == order.Id);
+                    if (string.Equals(o.Status, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
+                        continue;
 
-                    if (fullOrder != null && fullOrder.Restaurant != null)
+                    try
                     {
-                        // Keep restaurant.Phone for kitchen SignalR payload; owner-call resolution
-                        // is applied on customer order-detail reads in FoodOrdersController.
-                        var dto = FoodOrdersController.MapToOrderDto(fullOrder, fullOrder.Restaurant, fullOrder.Address, fullOrder.User);
-                        await orderHub.Clients.Group($"restaurant-{fullOrder.RestaurantId}").SendAsync("NewIncomingOrder", dto);
+                        var fullOrder = await db.FoodOrders
+                            .Include(x => x.Items)
+                            .Include(x => x.Restaurant)
+                            .Include(x => x.Address)
+                            .Include(x => x.User)
+                            .FirstOrDefaultAsync(x => x.Id == o.Id);
+
+                        if (fullOrder != null && fullOrder.Restaurant != null)
+                        {
+                            var dto = FoodOrdersController.MapToOrderDto(fullOrder, fullOrder.Restaurant, fullOrder.Address, fullOrder.User);
+                            await orderHub.Clients.Group($"restaurant-{fullOrder.RestaurantId}").SendAsync("NewIncomingOrder", dto);
+                        }
                     }
-                }
-                catch
-                {
-                    // Non-critical notification failure must not rollback payment sync
+                    catch
+                    {
+                        // Non-critical notification failure must not rollback payment sync
+                    }
                 }
             }
             return;
@@ -73,14 +93,20 @@ public static class FoodPaymentSync
         var gateway = (payment.Status ?? "").Trim().ToUpperInvariant();
         if (gateway is "FAILED" or "FAILURE" or "DROPPED" or "BOUNCED")
         {
-            order.PaymentStatus = "FAILED";
-            order.UpdatedAt = DateTime.UtcNow;
+            foreach (var o in affectedOrders)
+            {
+                o.PaymentStatus = "FAILED";
+                o.UpdatedAt = DateTime.UtcNow;
+            }
             await db.SaveChangesAsync();
         }
         else if (gateway is "CANCELLED" or "USERCANCELLED" or "USER_CANCELLED")
         {
-            order.PaymentStatus = "CANCELLED";
-            order.UpdatedAt = DateTime.UtcNow;
+            foreach (var o in affectedOrders)
+            {
+                o.PaymentStatus = "CANCELLED";
+                o.UpdatedAt = DateTime.UtcNow;
+            }
             await db.SaveChangesAsync();
         }
     }

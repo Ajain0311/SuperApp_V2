@@ -524,6 +524,44 @@ WHERE NOT EXISTS (SELECT 1 FROM ride_fare_options WHERE code = 'WAITING');
             db.Database.ExecuteSqlRaw(@"
 ALTER TABLE coupons ADD COLUMN IF NOT EXISTS title VARCHAR(120) NULL;
 ALTER TABLE coupons ADD COLUMN IF NOT EXISTS applicable_restaurant_id BIGINT NULL;
+ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS checkout_group_id VARCHAR(40) NULL;
+ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS commission_rate_percent DECIMAL(5,2) NULL;
+ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS commission_rate_percent DECIMAL(5,2) NULL;
+CREATE INDEX IF NOT EXISTS idx_food_orders_checkout_group ON food_orders (checkout_group_id);
+CREATE TABLE IF NOT EXISTS hotel_settlement_batches (
+    id BIGSERIAL PRIMARY KEY,
+    batch_number VARCHAR(40) NOT NULL,
+    restaurant_id BIGINT NOT NULL REFERENCES restaurants(id),
+    period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+    order_count INT NOT NULL DEFAULT 0,
+    total_commission_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    total_settled_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    reference_proof VARCHAR(100) NULL,
+    approved_by_admin_id BIGINT NULL REFERENCES users(id),
+    approved_by_admin_name VARCHAR(100) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING_APPROVAL',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    approved_at TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE TABLE IF NOT EXISTS hotel_commission_ledgers (
+    id BIGSERIAL PRIMARY KEY,
+    restaurant_id BIGINT NOT NULL REFERENCES restaurants(id),
+    food_order_id BIGINT NOT NULL REFERENCES food_orders(id) ON DELETE CASCADE,
+    order_number VARCHAR(30) NOT NULL,
+    commission_base_amount DECIMAL(10,2) NOT NULL,
+    commission_rate_percent DECIMAL(5,2) NOT NULL,
+    commission_amount DECIMAL(10,2) NOT NULL,
+    net_hotel_proceeds DECIMAL(10,2) NOT NULL,
+    platform_funded_discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    settlement_batch_id BIGINT NULL REFERENCES hotel_settlement_batches(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    settled_at TIMESTAMP WITH TIME ZONE NULL,
+    CONSTRAINT uq_hotel_commission_food_order UNIQUE (food_order_id)
+);
+CREATE INDEX IF NOT EXISTS idx_commission_restaurant ON hotel_commission_ledgers (restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_commission_status ON hotel_commission_ledgers (status);
 ALTER TABLE banners ADD COLUMN IF NOT EXISTS subtitle VARCHAR(300) NULL;
 ALTER TABLE banners ADD COLUMN IF NOT EXISTS cta_text VARCHAR(80) NULL;
 ALTER TABLE coupons DROP CONSTRAINT IF EXISTS chk_coupons_module;

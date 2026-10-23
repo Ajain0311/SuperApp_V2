@@ -41,6 +41,8 @@ public class AppDbContext : DbContext
     public DbSet<AppDocument> Documents => Set<AppDocument>();
     public DbSet<RideFareRule> RideFareRules => Set<RideFareRule>();
     public DbSet<RideFareOption> RideFareOptions => Set<RideFareOption>();
+    public DbSet<HotelCommissionLedger> HotelCommissionLedgers => Set<HotelCommissionLedger>();
+    public DbSet<HotelSettlementBatch> HotelSettlementBatches => Set<HotelSettlementBatch>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

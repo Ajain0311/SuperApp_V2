@@ -23,6 +23,44 @@ public static class CouponEngine
         return value is "BAZAAR" or "MARKETPLACE" ? "MARKETPLACE" : value;
     }
 
+    /// <summary>
+    /// Allocates a global aggregate discount across multi-restaurant sub-orders proportionally based on subtotal.
+    /// Ensures the sum of allocated discounts matches the total discount exactly to the cent.
+    /// </summary>
+    public static Dictionary<long, decimal> AllocateDiscountProportionally(decimal totalDiscount, IReadOnlyList<(long RestaurantId, decimal SubTotal)> restaurantBaskets)
+    {
+        var result = new Dictionary<long, decimal>();
+        if (totalDiscount <= 0 || !restaurantBaskets.Any())
+        {
+            foreach (var b in restaurantBaskets) result[b.RestaurantId] = 0;
+            return result;
+        }
+        var totalBasket = restaurantBaskets.Sum(b => b.SubTotal);
+        if (totalBasket <= 0)
+        {
+            foreach (var b in restaurantBaskets) result[b.RestaurantId] = 0;
+            return result;
+        }
+        decimal allocatedSoFar = 0;
+        for (int i = 0; i < restaurantBaskets.Count; i++)
+        {
+            var b = restaurantBaskets[i];
+            if (i == restaurantBaskets.Count - 1)
+            {
+                var remainder = Math.Max(0, totalDiscount - allocatedSoFar);
+                result[b.RestaurantId] = Math.Min(remainder, b.SubTotal);
+            }
+            else
+            {
+                var share = Math.Round(totalDiscount * (b.SubTotal / totalBasket), 2, MidpointRounding.AwayFromZero);
+                share = Math.Min(share, b.SubTotal);
+                result[b.RestaurantId] = share;
+                allocatedSoFar += share;
+            }
+        }
+        return result;
+    }
+
     public static CouponQuote Evaluate(Coupon? coupon, string? module, decimal orderAmount, long? restaurantId, int userUseCount, DateTime now)
     {
         if (coupon == null || !coupon.IsActive)
@@ -121,6 +159,61 @@ public static class CouponEngine
     /// Stages coupon use and runs the order save under one transaction.
     /// A failure inside saveOrder rolls the usage back.
     /// </summary>
+    /// <summary>
+    /// Consume coupon for a multi-order checkout group atomically.
+    /// </summary>
+    public static async Task<CouponQuote> ConsumeForGroupAsync(
+        AppDbContext db,
+        string code,
+        string? module,
+        decimal aggregateAmount,
+        long userId,
+        Func<CouponQuote, Task> saveOrders)
+    {
+        await Gate.WaitAsync();
+        Coupon? coupon = null;
+        var relational = db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) != true;
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
+        try
+        {
+            coupon = await FindAsync(db, code);
+            var uses = coupon == null
+                ? 0
+                : await db.CouponUsages.CountAsync(u => u.CouponId == coupon.Id && u.UserId == userId);
+            var quote = Evaluate(coupon, module, aggregateAmount, null, uses, DateTime.UtcNow);
+            if (!quote.IsValid || quote.Coupon == null)
+                return quote;
+            if (relational)
+                tx = await db.Database.BeginTransactionAsync();
+            quote.Coupon.CurrentUsageCount += 1;
+            quote.Coupon.UpdatedAt = DateTime.UtcNow;
+            db.CouponUsages.Add(new CouponUsage
+            {
+                CouponId = quote.Coupon.Id,
+                UserId = userId,
+                UsedAt = DateTime.UtcNow
+            });
+            await saveOrders(quote);
+            if (tx != null)
+                await tx.CommitAsync();
+            return quote;
+        }
+        catch
+        {
+            if (tx != null)
+                await tx.RollbackAsync();
+            else
+                DiscardStagedCoupon(db, coupon);
+            throw;
+        }
+        finally
+        {
+            if (tx != null)
+                await tx.DisposeAsync();
+            Gate.Release();
+        }
+    }
+
     public static async Task<CouponQuote> ConsumeForOrderAsync(
         AppDbContext db,
         string code,
