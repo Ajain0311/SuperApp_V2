@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { vendorService, VendorOrderSummary } from '../../services/vendorService';
 import { signalRService } from '../../services/signalr';
+import { ScreenBackButton } from '../../components/common/ScreenBackButton';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -231,8 +232,13 @@ export const VendorOrdersScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.title}>Kitchen Orders</Text>
-        <Text style={styles.subtitle}>Manage kitchen preparation & dispatch pipeline</Text>
+        <View style={styles.headerTop}>
+          <ScreenBackButton accessibilityLabel="Back" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Kitchen Orders</Text>
+            <Text style={styles.subtitle}>Manage kitchen preparation & dispatch pipeline</Text>
+          </View>
+        </View>
       </View>
 
       {/* Status Filter Chips */}
@@ -282,6 +288,10 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     ...typography.h2,

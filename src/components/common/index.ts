@@ -7,3 +7,4 @@ export * from './PriceDisplay';
 export * from './EmptyState';
 export * from './AppAlert';
 export * from './OfflineBanner';
+export * from './ScreenBackButton';

@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { driverService, DriverEarnings } from '../../services/driverService';
+import { ScreenBackButton } from '../../components/common/ScreenBackButton';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -37,8 +38,16 @@ export const DriverEarningsScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.centerBox}>
-        <ActivityIndicator size="large" color="#10B981" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.header, { paddingHorizontal: spacing.md, paddingTop: spacing.sm }]}>
+          <View style={styles.headerTop}>
+            <ScreenBackButton accessibilityLabel="Back" />
+            <Text style={styles.title}>Earnings & Payouts</Text>
+          </View>
+        </View>
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color="#10B981" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -50,8 +59,13 @@ export const DriverEarningsScreen: React.FC = () => {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); loadEarnings(); }} tintColor="#10B981" />}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Earnings & Payouts</Text>
-          <Text style={styles.subtitle}>Direct settlements from your completed rides</Text>
+          <View style={styles.headerTop}>
+            <ScreenBackButton accessibilityLabel="Back" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Earnings & Payouts</Text>
+              <Text style={styles.subtitle}>Direct settlements from your completed rides</Text>
+            </View>
+          </View>
         </View>
 
         {/* Primary Today's Earnings Card */}
@@ -133,6 +147,10 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.md,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     ...typography.h2,

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { driverService, DriverRideItem } from '../../services/driverService';
+import { ScreenBackButton } from '../../components/common/ScreenBackButton';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -84,8 +85,13 @@ export const DriverRidesScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.title}>Trip History</Text>
-        <Text style={styles.subtitle}>All your completed and past trips</Text>
+        <View style={styles.headerTop}>
+          <ScreenBackButton accessibilityLabel="Back" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Trip History</Text>
+            <Text style={styles.subtitle}>All your completed and past trips</Text>
+          </View>
+        </View>
       </View>
 
       {/* Filter Tabs */}
@@ -136,6 +142,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     ...typography.h2,

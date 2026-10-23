@@ -17,6 +17,7 @@ import { AppColors } from '../../theme/colors';
 import { AppRadius } from '../../theme/spacing';
 import { AppConstants } from '../../constants/app';
 import { RatingBadge } from '../../components/common/RatingBadge';
+import { ScreenBackButton } from '../../components/common/ScreenBackButton';
 import { VegBadge } from '../../components/common/VegBadge';
 import { ItemCustomizationSheet } from './ItemCustomizationSheet';
 import { CartSummarySheet } from './CartSummarySheet';
@@ -355,22 +356,11 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
     <SafeAreaView style={styles.safeArea}>
       {/* Header Bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity
-          onPress={() => {
-            if (navigation.canGoBack()) {
-              navigation.goBack();
-              return;
-            }
-            navigation.navigate('MainTabs', { screen: 'Food' });
-          }}
-          style={styles.backButton}
-          activeOpacity={0.8}
-          accessibilityRole="button"
+        <ScreenBackButton
+          fallback={() => navigation.navigate('MainTabs', { screen: 'Food' })}
           accessibilityLabel="Back to Food"
           testID="restaurant-back-btn"
-        >
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        />
 
         <View style={styles.titleCol}>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -643,10 +633,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: AppColors.border,
-  },
-  backButton: {
-    padding: 6,
-    marginRight: 8,
   },
   titleCol: {
     flex: 1,

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { vendorService } from '../../services/vendorService';
+import { ScreenBackButton } from '../../components/common/ScreenBackButton';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -65,8 +66,16 @@ export const VendorMenuScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.centerBox}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.header, { paddingHorizontal: spacing.md, paddingTop: spacing.sm }]}>
+          <View style={styles.headerTop}>
+            <ScreenBackButton accessibilityLabel="Back" />
+            <Text style={styles.title}>Menu & Stock</Text>
+          </View>
+        </View>
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color="#F59E0B" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -78,8 +87,13 @@ export const VendorMenuScreen: React.FC = () => {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); loadMenu(); }} tintColor="#F59E0B" />}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Menu & Stock</Text>
-          <Text style={styles.subtitle}>Toggle out-of-stock items in real time</Text>
+          <View style={styles.headerTop}>
+            <ScreenBackButton accessibilityLabel="Back" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Menu & Stock</Text>
+              <Text style={styles.subtitle}>Toggle out-of-stock items in real time</Text>
+            </View>
+          </View>
         </View>
 
         {categories.length === 0 ? (
@@ -154,6 +168,10 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.md,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     ...typography.h2,
