@@ -187,15 +187,42 @@ describe('Admin Native API Contracts & Endpoints', () => {
     expect(batches.data.data[0].status).toBe('PENDING');
   });
 
-  it('fetches ride fare configuration rules', async () => {
+  it('fetches ride fare configuration as { rules, options } envelope', async () => {
     (apiClient.get as jest.Mock).mockResolvedValue({
       data: {
         success: true,
-        data: [{ vehicleType: 'BIKE', baseFare: 25, minimumFare: 35, perKmRate: 8 }],
+        data: {
+          rules: [{ vehicleType: 'BIKE', baseFare: 25, minimumFare: 35, includedDistanceKm: 1.5, perKmRate: 8 }],
+          options: [{ code: 'PRIORITY', additionalAmount: 10 }],
+        },
       },
     });
     const res = await apiClient.get('/admin/ride-fares');
-    expect(res.data.data[0].vehicleType).toBe('BIKE');
+    expect(Array.isArray(res.data.data)).toBe(false);
+    expect(res.data.data.rules[0].vehicleType).toBe('BIKE');
     expect(apiClient.get).toHaveBeenCalledWith('/admin/ride-fares');
+  });
+
+  it('lists hotel commissions with configuredRatePercent / pendingCommissionBalance fields', async () => {
+    (apiClient.get as jest.Mock).mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            restaurantId: 2,
+            restaurantName: 'UNCLE JOHNS',
+            configuredRatePercent: 15,
+            grossDeliveredSales: 1000,
+            totalCommissionEarned: 150,
+            pendingCommissionBalance: 150,
+            settledCommissionAmount: 0,
+            deliveredOrdersCount: 5,
+          },
+        ],
+      },
+    });
+    const res = await apiClient.get('/admin/hotel-commissions');
+    expect(res.data.data[0].configuredRatePercent).toBe(15);
+    expect(res.data.data[0].pendingCommissionBalance).toBe(150);
   });
 });
