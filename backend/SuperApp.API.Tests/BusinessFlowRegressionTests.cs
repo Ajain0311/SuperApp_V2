@@ -96,7 +96,7 @@ public class BusinessFlowRegressionTests
     }
 
     [Fact]
-    public async Task Restaurant_CannotPickupOrDeliver()
+    public async Task Restaurant_HotelSelfDelivery_ReadyToDelivered()
     {
         var db = NewDb();
         await PendingOrder(db, "COD", "PENDING");
@@ -104,11 +104,11 @@ public class BusinessFlowRegressionTests
         Assert.IsType<OkObjectResult>((await api.UpdateOrderStatus(41, new UpdateOrderStatusRequest { Status = "ACCEPTED" })).Result);
         Assert.IsType<OkObjectResult>((await api.UpdateOrderStatus(41, new UpdateOrderStatusRequest { Status = "PREPARING" })).Result);
         Assert.IsType<OkObjectResult>((await api.UpdateOrderStatus(41, new UpdateOrderStatusRequest { Status = "READY" })).Result);
+        // Captains no longer pick up food — hotel skips PICKED_UP and marks DELIVERED.
         Assert.IsType<BadRequestObjectResult>((await api.UpdateOrderStatus(41, new UpdateOrderStatusRequest { Status = "PICKED_UP" })).Result);
-        Assert.IsType<BadRequestObjectResult>((await api.UpdateOrderStatus(41, new UpdateOrderStatusRequest { Status = "DELIVERED" })).Result);
-        db.FoodOrders.Single().Status = OrderStatus.PickedUp;
-        await db.SaveChangesAsync();
-        Assert.IsType<BadRequestObjectResult>((await api.UpdateOrderStatus(41, new UpdateOrderStatusRequest { Status = "DELIVERED" })).Result);
+        Assert.IsType<OkObjectResult>((await api.UpdateOrderStatus(41, new UpdateOrderStatusRequest { Status = "DELIVERED" })).Result);
+        Assert.Equal(OrderStatus.Delivered, db.FoodOrders.Single().Status);
+        Assert.Equal("PAID", db.FoodOrders.Single().PaymentStatus);
     }
 
     [Theory]

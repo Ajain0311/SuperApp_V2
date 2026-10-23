@@ -204,14 +204,30 @@ export const VendorOrdersScreen: React.FC = () => {
           )}
 
           {status === 'READY' && (
-            <Text style={[styles.btnText, { color: '#8B5CF6' }]}>
-              {item.driverId || item.driverName
-                ? `Captain assigned${item.driverName ? `: ${item.driverName}` : ''} — awaiting pickup`
-                : 'Waiting for captain pickup'}
-            </Text>
+            <TouchableOpacity
+              style={[styles.statusBtn, { backgroundColor: '#8B5CF6' }]}
+              disabled={isUpdating}
+              onPress={() => handleUpdateStatus(item.id, 'DELIVERED')}
+            >
+              {isUpdating ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.btnText}>Mark Delivered</Text>
+              )}
+            </TouchableOpacity>
           )}
           {status === 'PICKED_UP' && (
-            <Text style={[styles.btnText, { color: '#10B981' }]}>Out for delivery</Text>
+            <TouchableOpacity
+              style={[styles.statusBtn, { backgroundColor: '#10B981' }]}
+              disabled={isUpdating}
+              onPress={() => handleUpdateStatus(item.id, 'DELIVERED')}
+            >
+              {isUpdating ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.btnText}>Mark Delivered</Text>
+              )}
+            </TouchableOpacity>
           )}
         </View>
       </View>

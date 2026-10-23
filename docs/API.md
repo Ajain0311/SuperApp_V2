@@ -150,12 +150,13 @@ Fetches authenticated user identity, saved addresses, and active role permission
 *(Requires Role: RESTAURANT_OWNER)*
 - `GET /api/vendor/profile`: Returns restaurant profile mapped to the authenticated vendor user.
 - `GET /api/vendor/orders?status=PENDING`: Returns incoming kitchen order queue.
-- `POST /api/vendor/orders/{id}/status`: Advances kitchen state machine:
+- `PUT /api/vendor/orders/{id}/status`: Advances kitchen state machine for **hotel self-delivery** (no captain food dispatch):
   ```json
   {
     "status": "ACCEPTED" // PENDING -> ACCEPTED -> PREPARING -> READY -> DELIVERED
   }
   ```
+  READY no longer broadcasts `FoodDeliveryAvailable` to the drivers pool.
 - `GET /api/vendor/menu`: Returns vendor's restaurant menu items.
 - `POST /api/vendor/menu/items`: Creates/updates dish pricing, availability, and description.
 - `POST /api/vendor/categories`: Action endpoint supporting `ADD`, `EDIT`, `DELETE` category.
