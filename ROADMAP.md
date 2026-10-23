@@ -15,9 +15,11 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Help & Support admin-configurable; API `v-0d6ecbb`. Broadcast home strip still on `v-88f460d`+.
-  - Help/Support: Admin Settings editor → `support_*` AppSettings → `GET /api/config/support` → Profile HelpSupportScreen (call/WhatsApp/email/FAQ).
-  - Broadcast: home announcement strip + bell badge.
+- **Status**: Broadcast home marquee + admin DisplayHours (shipping).
+  - Home: glass marquee strip (`MarqueeText`); filters by `ReferenceId` `exp:…` (fallback CreatedAt + `broadcast_default_display_hours`).
+  - Admin Settings + Dashboard: duration chips 1h/6h/12h/24h/48h/7d → `displayHours` on `POST /admin/notifications/broadcast`.
+  - Backend: `SupportSettings.BroadcastDefaultHoursKey`, expiry token on Notification.ReferenceId.
+  - Prior: Help & Support `v-0d6ecbb`; profile name edit `v-687c589`.
   - Actors: cust 7014065979 / 9123456780, owner 9900000004, captain 6375002348, TEST_OTP 123456.
-  - PEM: `C:\Users\admin\.ssh\Bseries.pem`. Proper verified commits before next task.
-  - Next: admin set real phone/WhatsApp/email; Expo reload to confirm Help screen.
+  - PEM: `C:\Users\admin\.ssh\Bseries.pem`.
+  - Next: Expo reload; send a short-duration broadcast from admin and confirm marquee + auto-hide after expiry.

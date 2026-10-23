@@ -55,6 +55,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcastRole, setBroadcastRole] = useState('ALL');
+  const [broadcastDisplayHours, setBroadcastDisplayHours] = useState(24);
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -245,10 +246,14 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         title: broadcastTitle.trim(),
         message: broadcastMsg.trim(),
         targetRole: broadcastRole === 'ALL' ? null : broadcastRole,
+        displayHours: broadcastDisplayHours,
       });
       setBroadcastTitle('');
       setBroadcastMsg('');
-      Alert.alert('Broadcast Sent', 'Announcement successfully pushed to all target users.');
+      Alert.alert(
+        'Broadcast Sent',
+        `Announcement pushed. Home marquee shows for ${broadcastDisplayHours} hour(s).`,
+      );
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to broadcast notification');
     } finally {
@@ -737,6 +742,27 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
               onPress={() => setBroadcastRole(role)}
             >
               <Text style={[styles.roleSelectText, broadcastRole === role && styles.roleSelectTextActive]}>{role}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={[styles.roleSelectText, { marginTop: 2 }]}>Home marquee duration</Text>
+        <View style={styles.targetRoleRow}>
+          {[
+            { hours: 1, label: '1h' },
+            { hours: 6, label: '6h' },
+            { hours: 12, label: '12h' },
+            { hours: 24, label: '24h' },
+            { hours: 48, label: '48h' },
+            { hours: 168, label: '7d' },
+          ].map((opt) => (
+            <TouchableOpacity
+              key={opt.hours}
+              style={[styles.roleSelectPill, broadcastDisplayHours === opt.hours && styles.roleSelectPillActive]}
+              onPress={() => setBroadcastDisplayHours(opt.hours)}
+            >
+              <Text style={[styles.roleSelectText, broadcastDisplayHours === opt.hours && styles.roleSelectTextActive]}>
+                {opt.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>

@@ -213,4 +213,6 @@ public class BroadcastNotificationRequest
     public string Title { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
     public string? TargetRole { get; set; } // null/empty = ALL, or CUSTOMER, DRIVER, RESTAURANT_OWNER, MARKETPLACE_SELLER
+    /// <summary>How long the home marquee stays visible (1–168 hours). Null uses AppSetting broadcast_default_display_hours.</summary>
+    public int? DisplayHours { get; set; }
 }

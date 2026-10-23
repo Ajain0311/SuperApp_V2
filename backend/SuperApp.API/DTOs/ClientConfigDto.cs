@@ -20,4 +20,6 @@ public class SupportConfigDto
     public string Email { get; set; } = string.Empty;
     public string Hours { get; set; } = string.Empty;
     public string Faq { get; set; } = string.Empty;
+    /// <summary>Default home marquee visibility window when a broadcast omits DisplayHours.</summary>
+    public int BroadcastDefaultDisplayHours { get; set; } = 24;
 }
