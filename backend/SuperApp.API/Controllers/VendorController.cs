@@ -19,12 +19,18 @@ public class VendorController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IHubContext<OrderStatusHub> _orderHub;
     private readonly IHubContext<RideTrackingHub>? _rideHub;
+    private readonly INotificationService? _notifications;
 
-    public VendorController(AppDbContext db, IHubContext<OrderStatusHub> orderHub, IHubContext<RideTrackingHub>? rideHub = null)
+    public VendorController(
+        AppDbContext db,
+        IHubContext<OrderStatusHub> orderHub,
+        IHubContext<RideTrackingHub>? rideHub = null,
+        INotificationService? notifications = null)
     {
         _db = db;
         _orderHub = orderHub;
         _rideHub = rideHub;
+        _notifications = notifications;
     }
 
     private async Task<List<long>> GetAuthorizedRestaurantIdsAsync()
@@ -366,44 +372,59 @@ public class VendorController : ControllerBase
 
         if (string.Equals(targetStatus, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
         {
-            // Clear captain assignment + notify pool/customer/kitchen (avoids stuck active food job).
-            await FoodOrderCancellation.ReleaseCaptainAndNotifyAsync(
+            // Clear captain assignment + SignalR pool/kitchen/customer (avoids stuck active food job).
+            var previousDriverId = await FoodOrderCancellation.ReleaseCaptainAndNotifyAsync(
                 _db, order, _orderHub, _rideHub, cancelledBy: "vendor");
             await _db.SaveChangesAsync();
-        }
-        else
-        {
-            // Broadcast to customer tracking screen via OrderStatusHub
-            await _orderHub.Clients.Group($"order-{order.Id}").SendAsync("OrderStatusUpdated", new
-            {
-                orderId = order.Id,
-                status = targetStatus,
-                message = $"Order is now {targetStatus}",
-                estimatedMinutes = order.EstimatedDeliveryMinutes,
-                updatedAt = DateTime.UtcNow
-            });
 
-            // Broadcast to restaurant kitchen group to sync across all kitchen staff screens
-            await _orderHub.Clients.Group($"restaurant-{order.RestaurantId}").SendAsync("OrderAcceptedByOther", new
-            {
-                orderId = order.Id,
-                status = targetStatus,
-                updatedAt = DateTime.UtcNow
-            });
+            long? actingUserId = null;
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (claim != null && long.TryParse(claim.Value, out var uid))
+                actingUserId = uid;
 
-            if (string.Equals(targetStatus, OrderStatus.Ready, StringComparison.OrdinalIgnoreCase) && _rideHub != null)
+            try
             {
-                await _rideHub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAvailable", new
-                {
-                    orderId = order.Id,
-                    orderNumber = order.OrderNumber,
-                    restaurantId = order.RestaurantId,
-                    restaurantName = order.Restaurant?.Name,
-                    grandTotal = order.GrandTotal,
-                    status = targetStatus,
-                    updatedAt = DateTime.UtcNow
-                });
+                await FoodOrderCancellation.NotifyCancelStakeholdersAsync(
+                    _db, order, previousDriverId, cancelledBy: "vendor", _notifications, actingUserId);
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Vendor] Cancel stakeholder notify failed for order {order.Id}: {ex.Message}");
+            }
+
+            return Ok(ApiResponse.Ok($"Order status updated to {targetStatus}"));
+        }
+
+        // Broadcast to customer tracking screen via OrderStatusHub
+        await _orderHub.Clients.Group($"order-{order.Id}").SendAsync("OrderStatusUpdated", new
+        {
+            orderId = order.Id,
+            status = targetStatus,
+            message = $"Order is now {targetStatus}",
+            estimatedMinutes = order.EstimatedDeliveryMinutes,
+            updatedAt = DateTime.UtcNow
+        });
+
+        // Broadcast to restaurant kitchen group to sync across all kitchen staff screens
+        await _orderHub.Clients.Group($"restaurant-{order.RestaurantId}").SendAsync("OrderAcceptedByOther", new
+        {
+            orderId = order.Id,
+            status = targetStatus,
+            updatedAt = DateTime.UtcNow
+        });
+
+        if (string.Equals(targetStatus, OrderStatus.Ready, StringComparison.OrdinalIgnoreCase) && _rideHub != null)
+        {
+            await _rideHub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAvailable", new
+            {
+                orderId = order.Id,
+                orderNumber = order.OrderNumber,
+                restaurantId = order.RestaurantId,
+                restaurantName = order.Restaurant?.Name,
+                grandTotal = order.GrandTotal,
+                status = targetStatus,
+                updatedAt = DateTime.UtcNow
+            });
         }
 
         try
@@ -415,7 +436,6 @@ public class VendorController : ControllerBase
                 "READY" => "Khana pack ho gaya! Bas nikalne wala hai! 🛵",
                 "PICKED_UP" => "Aapka delivery partner hawa se baatein karte hue aa raha hai! 🛵💨",
                 "DELIVERED" => "Dastak ho chuki hai! 🚪😋 Pet bhar ke khao!",
-                "CANCELLED" => "Order cancel ho gaya",
                 _ => $"Order update: {targetStatus}"
             };
             string notifBody = targetStatus switch
@@ -425,7 +445,6 @@ public class VendorController : ControllerBase
                 "READY" => "Garma-garam khana dispatch ke liye ready hai!",
                 "PICKED_UP" => "Rider aapke order ke sath nikal chuka hai. Bas 5-10 minute!",
                 "DELIVERED" => "Khana kaisa laga? Review deke chef ka din bana do! ❤️",
-                "CANCELLED" => $"Order #{order.OrderNumber} cancel kar diya gaya. Captain assignment clear ho chuka hai.",
                 _ => $"Aapka order #{order.OrderNumber} ab {targetStatus} hai."
             };
 

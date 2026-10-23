@@ -700,9 +700,11 @@ public class CaptainPushNotificationTests
         var db = CreateDb();
         var customer = new User { Id = 911, MobileNumber = "9876500911", FullName = "Customer 911" };
         var captainUser = new User { Id = 912, MobileNumber = "9876500912", FullName = "Captain 912" };
+        var owner = new User { Id = 913, MobileNumber = "9876500913", FullName = "Owner 913" };
         var restaurant = new Restaurant { Id = 911, Name = "Cafe 911", IsActive = true };
-        db.Users.AddRange(customer, captainUser);
+        db.Users.AddRange(customer, captainUser, owner);
         db.Restaurants.Add(restaurant);
+        db.RestaurantUsers.Add(new RestaurantUser { RestaurantId = restaurant.Id, UserId = owner.Id, IsActive = true });
         db.Drivers.Add(new Driver { Id = 911, UserId = captainUser.Id, IsOnline = true, IsActive = true });
 
         var order = new FoodOrder
@@ -733,7 +735,11 @@ public class CaptainPushNotificationTests
         rideClients.Setup(c => c.Group(It.IsAny<string>())).Returns(rideProxy.Object);
         rideHub.Setup(h => h.Clients).Returns(rideClients.Object);
 
-        var controller = new FoodOrdersController(db, orderHub.Object, payments: null, rideHub: rideHub.Object);
+        var mockNotif = new Mock<INotificationService>();
+        mockNotif.Setup(n => n.SendPushNotificationAsync(It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .ReturnsAsync(true);
+
+        var controller = new FoodOrdersController(db, orderHub.Object, payments: null, rideHub: rideHub.Object, notifications: mockNotif.Object);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -762,6 +768,120 @@ public class CaptainPushNotificationTests
                 It.Is<object?[]>(args => args != null && args.Length > 0),
                 It.IsAny<CancellationToken>()),
             Times.AtLeastOnce);
+
+        mockNotif.Verify(
+            n => n.SendPushNotificationAsync(
+                captainUser.Id,
+                It.Is<string>(t => t.Contains("cancelled", StringComparison.OrdinalIgnoreCase)),
+                It.Is<string>(b => b.Contains("FO-CANCEL-READY")),
+                "FOOD_ORDER",
+                "FO-CANCEL-READY"),
+            Times.Once);
+
+        mockNotif.Verify(
+            n => n.SendPushNotificationAsync(
+                owner.Id,
+                It.IsAny<string>(),
+                It.Is<string>(b => b.Contains("Customer", StringComparison.OrdinalIgnoreCase) && b.Contains("FO-CANCEL-READY")),
+                "FOOD_ORDER",
+                "FO-CANCEL-READY"),
+            Times.Once);
+
+        mockNotif.Verify(
+            n => n.SendPushNotificationAsync(
+                customer.Id,
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                "FOOD_ORDER",
+                "FO-CANCEL-READY"),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task VendorCancel_AfterCaptainAccepted_NotifiesCaptainAndCustomer()
+    {
+        var db = CreateDb();
+        var customer = new User { Id = 941, MobileNumber = "9876500941", FullName = "Customer 941" };
+        var owner = new User { Id = 942, MobileNumber = "9876500942", FullName = "Owner 942" };
+        var captainUser = new User { Id = 943, MobileNumber = "9876500943", FullName = "Captain 943" };
+        db.Users.AddRange(customer, owner, captainUser);
+        db.Restaurants.Add(new Restaurant { Id = 941, Name = "Cafe 941", IsActive = true });
+        db.RestaurantUsers.Add(new RestaurantUser { RestaurantId = 941, UserId = owner.Id, IsActive = true });
+        db.Drivers.Add(new Driver { Id = 941, UserId = captainUser.Id, IsOnline = true, IsActive = true });
+        db.FoodOrders.Add(new FoodOrder
+        {
+            Id = 9941,
+            OrderNumber = "FO-VENDOR-CANCEL-PUSH",
+            UserId = customer.Id,
+            RestaurantId = 941,
+            PaymentMethod = "COD",
+            PaymentStatus = "PENDING",
+            Status = OrderStatus.Ready,
+            DriverId = 941,
+            DriverAssignedAt = DateTime.UtcNow,
+            GrandTotal = 180m
+        });
+        await db.SaveChangesAsync();
+
+        var orderHub = new Mock<IHubContext<OrderStatusHub>>();
+        var orderClients = new Mock<IHubClients>();
+        var orderProxy = new Mock<IClientProxy>();
+        orderClients.Setup(c => c.Group(It.IsAny<string>())).Returns(orderProxy.Object);
+        orderHub.Setup(h => h.Clients).Returns(orderClients.Object);
+
+        var rideHub = new Mock<IHubContext<RideTrackingHub>>();
+        var rideClients = new Mock<IHubClients>();
+        var rideProxy = new Mock<IClientProxy>();
+        rideClients.Setup(c => c.Group(It.IsAny<string>())).Returns(rideProxy.Object);
+        rideHub.Setup(h => h.Clients).Returns(rideClients.Object);
+
+        var mockNotif = new Mock<INotificationService>();
+        mockNotif.Setup(n => n.SendPushNotificationAsync(It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>()))
+            .ReturnsAsync(true);
+
+        var vendor = new VendorController(db, orderHub.Object, rideHub.Object, mockNotif.Object);
+        vendor.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, owner.Id.ToString()),
+                    new Claim(ClaimTypes.Role, RoleNames.RestaurantOwner)
+                }, "TestAuth"))
+            }
+        };
+
+        var result = await vendor.UpdateOrderStatus(9941, new UpdateOrderStatusRequest { Status = OrderStatus.Cancelled });
+        Assert.IsType<OkObjectResult>(result.Result);
+
+        mockNotif.Verify(
+            n => n.SendPushNotificationAsync(
+                captainUser.Id,
+                It.IsAny<string>(),
+                It.Is<string>(b => b.Contains("FO-VENDOR-CANCEL-PUSH")),
+                "FOOD_ORDER",
+                "FO-VENDOR-CANCEL-PUSH"),
+            Times.Once);
+
+        mockNotif.Verify(
+            n => n.SendPushNotificationAsync(
+                customer.Id,
+                It.IsAny<string>(),
+                It.Is<string>(b => b.Contains("Restaurant", StringComparison.OrdinalIgnoreCase)),
+                "FOOD_ORDER",
+                "FO-VENDOR-CANCEL-PUSH"),
+            Times.Once);
+
+        // Acting vendor should not get a self-notify.
+        mockNotif.Verify(
+            n => n.SendPushNotificationAsync(
+                owner.Id,
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>()),
+            Times.Never);
     }
 
     [Fact]

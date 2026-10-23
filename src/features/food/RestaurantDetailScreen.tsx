@@ -267,6 +267,12 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
       clearCart();
       setIsCartVisible(false);
       const checkoutGroupId = data?.checkoutGroupId;
+      try {
+        const { playOrderPlacedChime } = await import('../../services/feedbackSound');
+        playOrderPlacedChime();
+      } catch {
+        /* sound is optional UX */
+      }
       if (orders.length > 1) {
         Alert.alert(
           'Orders Placed!',
