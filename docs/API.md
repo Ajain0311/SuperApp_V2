@@ -40,7 +40,7 @@ Successful responses return standard JSON envelopes or direct payloads:
 
 ### 2.1 Request Mobile OTP
 `POST /api/auth/send-otp`  
-Sends a 6-digit OTP via BIGB Gateway. In non-production environments, fallback code `123456` is enabled.
+Sends a 6-digit OTP via the configured SMS gateway (BIGB / PunjabGov). Live SMS is sent when `OTP_TEST_MODE=false`. The client must not display any bypass OTP; `devOtp` is omitted for live SMS providers.
 
 - **Request Body**:
   ```json
