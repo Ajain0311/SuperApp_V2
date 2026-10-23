@@ -486,11 +486,14 @@ public class VendorController : ControllerBase
     [HttpPost("toggle-status")]
     public async Task<ActionResult<ApiResponse<bool>>> ToggleStatus([FromBody] ToggleRestaurantStatusRequest request)
     {
+        if (request?.IsOpen is null)
+            return BadRequest(ApiResponse<bool>.Fail("isOpen is required (true or false)"));
+
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
             return NotFound(ApiResponse<bool>.Fail("Restaurant not found"));
 
-        restaurant.IsActive = request.IsOpen;
+        restaurant.IsActive = request.IsOpen.Value;
         restaurant.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -633,6 +636,7 @@ public class VendorController : ControllerBase
 
 public class ToggleRestaurantStatusRequest
 {
-    public bool IsOpen { get; set; }
+    /// <summary>Required. Empty body must not silently close the restaurant.</summary>
+    public bool? IsOpen { get; set; }
 }
 

@@ -15,10 +15,13 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Continuous random chaos testing LIVE GREEN on `v-2b54f3b`.
-  - Suites: `chaos-random-suite.mjs` (83), `chaos-random-wave2.mjs` (33), `chaos-random-wave3.mjs` (21) — multi-seed **FAIL=0** after fixes.
-  - Bugs found→fixed→deployed: marketplace fav FK 500→404; PIN must be 6 digits; dual-cancel race atomic `ExecuteUpdate`; toggle-online requires `isOnline`.
-  - Stress: 25/30/40/50 concurrent food users FAIL=0. Health 200.
-  - Run: `node e2e/agents/chaos-random-suite.mjs [seed]` (+ wave2/wave3). Unit 194/194.
-  - Next: more seeds / optional 250–500 stress; note ride estimate Jaipur often 400 (suite accepts).
+- **Status**: Continuous chaos W4/W5 added; new bugs fixed (pending deploy if not yet on VM).
+  - New suites: `chaos-random-wave4.mjs`, `chaos-random-wave5.mjs`, `chaos-continuous-loop.mjs` (all waves × N seeds).
+  - W4/W5 findings → fixes:
+    - Marketplace `page`/`pageSize` negative → clamp (was HTTP 500 on Skip/Take).
+    - Food order notes with U+0000 → `SanitizeNotes` strip (Postgres text 500).
+    - Concurrent fav toggle unique race → catch `DbUpdateException` → 200 already-favorited.
+    - Vendor `toggle-status` `{}` defaulted `IsOpen=false` and closed restaurant → `bool? IsOpen` required (same pattern as driver).
+  - Live: restaurant 2 re-opened via API after W5 accidental close. Unit **195/195**.
+  - Run: `node e2e/agents/chaos-continuous-loop.mjs [rounds]` or per-wave with seed.
   - Git preference: pull before commit/push; direct push to main when user asks (no MR).

@@ -99,4 +99,43 @@ public class MarketplaceFavoriteTests
         Assert.False(Assert.IsType<ApiResponse<bool>>(removeOk.Value).Data);
         Assert.Empty(db.Favorites);
     }
+
+    [Fact]
+    public async Task GetListings_NegativePage_ClampsToValidPage()
+    {
+        await using var db = CreateDb();
+        var user = new User
+        {
+            MobileNumber = "9000000777",
+            FullName = "Pager",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var category = new MarketplaceCategory { Name = "Gadgets", IsActive = true };
+        db.Users.Add(user);
+        db.MarketplaceCategories.Add(category);
+        await db.SaveChangesAsync();
+        db.MarketplaceListings.Add(new MarketplaceListing
+        {
+            UserId = user.Id,
+            CategoryId = category.Id,
+            Title = "Gadget",
+            Price = 100m,
+            Status = ListingStatus.Active,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var controller = new MarketplaceController(db);
+        SetUser(controller, user.Id);
+
+        var result = await controller.GetListings(null, null, null, null, null, null, page: -5, pageSize: -1);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var body = Assert.IsType<ApiResponse<PagedResult<ListingSummaryDto>>>(ok.Value);
+        Assert.True(body.Success);
+        Assert.Equal(1, body.Data!.Page);
+        Assert.Equal(1, body.Data.PageSize);
+        Assert.Single(body.Data.Items);
+    }
 }

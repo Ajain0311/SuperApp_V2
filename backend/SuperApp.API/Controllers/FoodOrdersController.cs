@@ -35,6 +35,13 @@ public class FoodOrdersController : ControllerBase
         _rideHub = rideHub;
     }
 
+    /// <summary>Postgres text rejects U+0000; strip control NULs so notes never 500.</summary>
+    private static string? SanitizeNotes(string? notes)
+    {
+        if (string.IsNullOrEmpty(notes)) return notes;
+        return notes.Replace("\0", string.Empty, StringComparison.Ordinal);
+    }
+
     private static void ApplyCouponTotals(FoodOrder order, long? couponId, decimal couponDiscount, decimal deliveryFee, decimal subTotal)
     {
         var taxAmount = Math.Round((subTotal - couponDiscount) * 0.05m, 2);
@@ -204,7 +211,7 @@ public class FoodOrdersController : ControllerBase
             DeliveryFee = deliveryFee,
             PaymentMethod = paymentMethod,
             PaymentStatus = initialPaymentStatus,
-            Notes = request.Notes,
+            Notes = SanitizeNotes(request.Notes),
             EstimatedDeliveryMinutes = restaurant.AvgDeliveryTimeMinutes,
             CreatedAt = DateTime.UtcNow,
             Items = orderItems
@@ -348,7 +355,7 @@ public class FoodOrdersController : ControllerBase
                 AddressId = request.AddressId,
                 CouponCode = request.CouponCode,
                 PaymentMethod = paymentMethod,
-                Notes = request.Notes,
+                Notes = SanitizeNotes(request.Notes),
                 Items = only.Value
             };
             var placed = await PlaceOrder(single);
@@ -452,7 +459,7 @@ public class FoodOrdersController : ControllerBase
                 DeliveryFee = restaurant.DeliveryFee,
                 PaymentMethod = "COD",
                 PaymentStatus = "PENDING",
-                Notes = request.Notes,
+                Notes = SanitizeNotes(request.Notes),
                 EstimatedDeliveryMinutes = restaurant.AvgDeliveryTimeMinutes,
                 CreatedAt = DateTime.UtcNow,
                 Items = orderItems

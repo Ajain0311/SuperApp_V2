@@ -78,6 +78,10 @@ public class MarketplaceController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        // Clamp pagination — negative page/pageSize made Skip/Take throw → HTTP 500
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var currentUserId = GetCurrentUserId();
         var userFavorites = currentUserId.HasValue
             ? await _db.Favorites.Where(f => f.UserId == currentUserId.Value).Select(f => f.ListingId).ToListAsync()
@@ -525,7 +529,16 @@ public class MarketplaceController : ControllerBase
             ListingId = listingId,
             CreatedAt = DateTime.UtcNow
         });
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Concurrent toggle race: unique (user_id, listing_id) — treat as already favorited
+            _db.ChangeTracker.Clear();
+            return Ok(ApiResponse<bool>.Ok(true, "Already in favorites"));
+        }
 
         return Ok(ApiResponse<bool>.Ok(true, "Added to favorites"));
     }
