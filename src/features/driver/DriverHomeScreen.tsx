@@ -481,15 +481,9 @@ export const DriverHomeScreen: React.FC = () => {
               if (isActiveJob || alertedFoodOrderIdsRef.current.has(orderId)) {
                 if (!alertedFoodCancelIdsRef.current.has(orderId)) {
                   alertedFoodCancelIdsRef.current.add(orderId);
-                  const by =
-                    data.cancelledBy === 'customer'
-                      ? ' (customer)'
-                      : data.cancelledBy === 'vendor'
-                        ? ' (restaurant)'
-                        : '';
                   Alert.alert(
                     'Order Cancelled ❌',
-                    `Order #${data.orderNumber || orderId} cancel ho gaya${by}. Delivery ab nahi karni.`
+                    `Order #${data.orderNumber || orderId}`
                   );
                 }
               }
