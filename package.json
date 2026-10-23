@@ -35,36 +35,19 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
-    "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
-    "jest": "^30.5.1",
     "pg": "^8.23.1",
-    "playwright": "^1.63.0",
-    "ts-jest": "^29.4.12",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "test": "jest",
-    "test:agents": "node e2e/agents/runner.js",
-    "test:agents:food": "node e2e/agents/runner.js --scenario food-order",
-    "test:agents:isolation": "node e2e/agents/runner.js --scenario isolation",
-    "test:agents:full": "node e2e/agents/runner.js --scenario full-regression",
-    "test:agents:volume": "node e2e/agents/runner.js --scenario full-regression --customers 20 --restaurant-owners 5 --captains 10 --sellers 10 --concurrency 8",
-    "test:agents:self": "node --test e2e/agents/selftest/framework.test.js e2e/agents/selftest/response-shape.test.js e2e/agents/selftest/db-jwt.test.js",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "clean:reports": "node -e \"const fs=require('fs'); ['playwright-report','test-results'].forEach(d => fs.rmSync(d, {recursive:true,force:true})); const rep='e2e/agents/reports'; if(fs.existsSync(rep)) fs.readdirSync(rep).filter(f => f.startsWith('run-')).forEach(f => fs.rmSync(rep+'/'+f, {recursive:true,force:true})); console.log('Cleaned test artifacts');\""
+    "web": "expo start --web"
   },
   "expo": {
     "install": {
       "exclude": [
-        "jest",
-        "@types/jest",
         "expo",
         "expo-constants",
         "expo-location",

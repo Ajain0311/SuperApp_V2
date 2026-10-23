@@ -44,15 +44,28 @@ public class PushNotificationDispatcherService : INotificationService
         var expoAccessToken = Environment.GetEnvironmentVariable("EXPO_ACCESS_TOKEN")
             ?? _configuration["Expo:AccessToken"];
 
+        var provider = Environment.GetEnvironmentVariable("NOTIFICATION_PROVIDER")
+            ?? _configuration["Notification:Provider"]
+            ?? "Expo";
+
+        // Expo push service accepts public delivery requests without requiring an access token,
+        // although setting EXPO_ACCESS_TOKEN is recommended for higher throughput and enhanced security.
+        if (string.Equals(provider, "Expo", StringComparison.OrdinalIgnoreCase))
+        {
+            return (true, string.IsNullOrWhiteSpace(expoAccessToken)
+                ? "Expo push service active (standard public tier)"
+                : "Expo push service active with EXPO_ACCESS_TOKEN");
+        }
+
         // Check if any valid push gateway credential is configured
         if (!string.IsNullOrWhiteSpace(fcmKey) ||
             !string.IsNullOrWhiteSpace(fcmServiceAccount) ||
             !string.IsNullOrWhiteSpace(expoAccessToken))
         {
-            return (true, "Credentials present");
+            return (true, "Push gateway credentials present");
         }
 
-        return (false, "Missing FCM_SERVER_KEY, FIREBASE_SERVICE_ACCOUNT_JSON, and EXPO_ACCESS_TOKEN.");
+        return (false, "Missing FCM_SERVER_KEY, FIREBASE_SERVICE_ACCOUNT_JSON, or EXPO_ACCESS_TOKEN.");
     }
 
     public async Task<bool> SendPushNotificationAsync(long userId, string title, string body, string type, string? referenceId = null)

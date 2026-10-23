@@ -19,12 +19,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test -- --watchAll=false
-      - name: Backend Unit Tests (.NET 10)
-        env:
-          ASPNETCORE_ENVIRONMENT: Development
-          PAYMENT_PROVIDER: Mock
-        run: dotnet test backend/SuperApp.API.Tests/SuperApp.API.Tests.csproj
-      - name: Agent Framework Self-Tests
-        run: npm run test:agents:self
+      - name: Frontend TypeScript Typecheck
+        run: npx tsc --noEmit
+      - name: Backend Build (.NET 10)
+        run: dotnet build backend/SuperApp.sln

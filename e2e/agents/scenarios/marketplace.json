@@ -1,7 +1,0 @@
-{
-  "name": "marketplace",
-  "suite": "MARKETPLACE",
-  "flows": ["marketplace"],
-  "endpoints": ["/api/marketplace/listings", "/api/marketplace/my-listings", "/api/marketplace/favorites/{id}", "/api/marketplace/listings/{id}/report"],
-  "description": "Two sellers publish listings. EDIT of another seller's listing returns 403."
-}

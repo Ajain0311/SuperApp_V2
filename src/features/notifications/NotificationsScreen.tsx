@@ -249,7 +249,7 @@ export const NotificationsScreen: React.FC = () => {
         </View>
 
         <Text style={styles.devTokenText} numberOfLines={1}>
-          Token: {pushToken || 'Fetching push token...'}
+          Push Token: {pushToken ? 'Registered' : 'Not Available (Requires Real Device / Dev Build)'}
         </Text>
 
         {testStatus && <Text style={styles.devStatusText}>{testStatus}</Text>}

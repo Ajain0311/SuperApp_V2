@@ -63,7 +63,6 @@ export type RootStackParamList = {
   Profile: undefined;
   SavedAddresses: undefined;
   HelpSupport: undefined;
-  PaymentTest: undefined;
   Notifications: undefined;
   Activity: {
     initialTab?: number;

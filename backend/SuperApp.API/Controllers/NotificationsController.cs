@@ -223,6 +223,39 @@ public class NotificationsController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok(ApiResponse.Ok("Device token unregistered successfully"));
     }
+
+    /// <summary>
+    /// Safe diagnostics status check for push notification services
+    /// Exposes no secret keys, credentials, or private tokens.
+    /// </summary>
+    [HttpGet("diagnostics")]
+    public async Task<ActionResult<ApiResponse<object>>> GetDiagnostics([FromServices] INotificationService notificationService, [FromServices] IConfiguration config)
+    {
+        var provider = Environment.GetEnvironmentVariable("NOTIFICATION_PROVIDER")
+            ?? config["Notification:Provider"]
+            ?? "Expo";
+
+        var fcmConfigured = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FCM_SERVER_KEY") ?? config["Firebase:ServerKey"])
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FIREBASE_SERVICE_ACCOUNT_JSON") ?? config["Firebase:ServiceAccountJson"]);
+
+        var expoConfigured = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("EXPO_ACCESS_TOKEN") ?? config["Expo:AccessToken"])
+            || string.Equals(provider, "Expo", StringComparison.OrdinalIgnoreCase);
+
+        var activeTokensCount = await _db.UserDeviceTokens.CountAsync(t => t.IsActive && !string.IsNullOrEmpty(t.DeviceToken));
+        var activeCaptainsTokensCount = await _db.UserDeviceTokens
+            .Where(t => t.IsActive && !string.IsNullOrEmpty(t.DeviceToken) && _db.Drivers.Select(d => d.UserId).Contains(t.UserId))
+            .CountAsync();
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            provider,
+            expoConfigured,
+            fcmConfigured,
+            activeTokensCount,
+            activeCaptainsTokensCount,
+            status = "Ready"
+        }));
+    }
 }
 
 
