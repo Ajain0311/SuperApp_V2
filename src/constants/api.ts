@@ -121,6 +121,7 @@ export const ApiEndpoints = {
     rides: '/admin/rides',
     drivers: '/admin/drivers',
     marketplaceListings: '/admin/marketplace/listings',
+    foodItems: '/admin/food-items',
     settings: '/admin/settings',
     broadcastNotification: '/admin/notifications/broadcast',
     roleApplications: '/admin/role-applications',

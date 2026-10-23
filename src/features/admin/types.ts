@@ -123,4 +123,5 @@ export type AdminStackParamList = {
   AdminHotelCommissions: undefined;
   AdminRideFares: undefined;
   AdminRoleApplications: undefined;
+  AdminListings: undefined;
 };

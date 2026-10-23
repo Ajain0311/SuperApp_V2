@@ -127,10 +127,64 @@ public class AdminBannerActionRequest
 
 public class AdminListingActionRequest
 {
-    public string Action { get; set; } = "STATUS"; // STATUS, FEATURED, DELETE
+    public string Action { get; set; } = "STATUS"; // STATUS, FEATURED, EDIT, DELETE
     public long ListingId { get; set; }
     public string? Status { get; set; } // ACTIVE, SOLD, REMOVED
     public bool? IsFeatured { get; set; }
+    public string? Title { get; set; }
+    public decimal? Price { get; set; }
+    public string? Description { get; set; }
+}
+
+public class AdminMarketplaceListingDto
+{
+    public long Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal Price { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public bool IsFeatured { get; set; }
+    public int CategoryId { get; set; }
+    public string CategoryName { get; set; } = string.Empty;
+    public long SellerId { get; set; }
+    public string SellerName { get; set; } = string.Empty;
+    public string? SellerPhone { get; set; }
+    public string? PrimaryImageUrl { get; set; }
+    public string? Location { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class AdminFoodItemDto
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal BasePrice { get; set; }
+    public decimal DiscountPercent { get; set; }
+    public decimal DiscountedPrice { get; set; }
+    public bool IsAvailable { get; set; }
+    public bool IsActive { get; set; }
+    public bool IsVeg { get; set; }
+    public string? ImageUrl { get; set; }
+    public long RestaurantId { get; set; }
+    public string RestaurantName { get; set; } = string.Empty;
+    public string? CategoryName { get; set; }
+    public string? OwnerName { get; set; }
+    public string? OwnerPhone { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public class AdminFoodItemActionRequest
+{
+    public string Action { get; set; } = "STATUS"; // STATUS, EDIT, DELETE
+    public long FoodItemId { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public decimal? BasePrice { get; set; }
+    public decimal? DiscountPercent { get; set; }
+    public bool? IsAvailable { get; set; }
+    public bool? IsActive { get; set; }
 }
 
 public class AdminFoodOrderDto
