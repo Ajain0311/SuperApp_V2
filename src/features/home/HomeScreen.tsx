@@ -528,7 +528,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <View style={styles.headerRightActions}>
             <TouchableOpacity
               style={styles.headerIconButton}
-              onPress={() => navigation.navigate('Notifications')}
+              onPress={() => {
+                setUnreadNotifCount(0);
+                navigation.navigate('Notifications');
+              }}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="View notifications"

@@ -60,6 +60,7 @@ export const ApiEndpoints = {
     setDefaultAddress: (id: string | number) => `/addresses/${id}/default`,
     notifications: '/notifications',
     markNotificationRead: (id: string | number) => `/notifications/${id}/read`,
+    markAllNotificationsRead: '/notifications/read-all',
     banners: '/banners',
     reviews: '/reviews',
     paymentsKit: '/payments/kit',

@@ -134,6 +134,9 @@ export const NotificationsScreen: React.FC = () => {
     });
 
     void fetchNotifications();
+
+    // Mark all notifications as read when screen is opened
+    apiClient.put(ApiEndpoints.common.markAllNotificationsRead).catch(() => {});
   }, [fetchNotifications]);
 
   const handleTestOrderNotification = async () => {
