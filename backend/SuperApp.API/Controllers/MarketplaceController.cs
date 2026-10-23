@@ -25,7 +25,7 @@ public class MarketplaceController : ControllerBase
 
     private long? GetCurrentUserId()
     {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+        var claim = User?.FindFirst(ClaimTypes.NameIdentifier);
         if (claim != null && long.TryParse(claim.Value, out var id))
             return id;
         return null;
@@ -58,12 +58,6 @@ public class MarketplaceController : ControllerBase
                 ListingCount = c.Listings.Count(l => l.IsActive && l.Status == ListingStatus.Active)
             })
             .ToListAsync();
-
-        if (!categories.Any())
-        {
-            // Return fallback default categories
-            categories = GetFallbackCategories();
-        }
 
         return Ok(ApiResponse<List<MarketplaceCategoryDto>>.Ok(categories));
     }
@@ -133,38 +127,26 @@ public class MarketplaceController : ControllerBase
 
         var totalCount = await query.CountAsync();
 
-        List<ListingSummaryDto> items;
-
-        if (totalCount == 0 && !categoryId.HasValue && string.IsNullOrWhiteSpace(search))
-        {
-            // Provide high-quality fallback items for immediate test experience
-            var fallbacks = GetFallbackListings(userFavorites);
-            items = fallbacks.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-            totalCount = fallbacks.Count;
-        }
-        else
-        {
-            items = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(l => new ListingSummaryDto
-                {
-                    Id = l.Id,
-                    Title = l.Title,
-                    Price = l.Price,
-                    Condition = l.Condition,
-                    Location = l.Location,
-                    PrimaryImageUrl = l.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).FirstOrDefault() ?? "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400",
-                    IsFeatured = l.IsFeatured,
-                    ViewCount = l.ViewCount,
-                    Status = l.Status,
-                    CreatedAt = l.CreatedAt,
-                    CategoryId = l.CategoryId,
-                    CategoryName = l.Category != null ? l.Category.Name : "General",
-                    IsFavorite = userFavorites.Contains(l.Id)
-                })
-                .ToListAsync();
-        }
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(l => new ListingSummaryDto
+            {
+                Id = l.Id,
+                Title = l.Title,
+                Price = l.Price,
+                Condition = l.Condition,
+                Location = l.Location,
+                PrimaryImageUrl = l.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).FirstOrDefault(),
+                IsFeatured = l.IsFeatured,
+                ViewCount = l.ViewCount,
+                Status = l.Status,
+                CreatedAt = l.CreatedAt,
+                CategoryId = l.CategoryId,
+                CategoryName = l.Category != null ? l.Category.Name : string.Empty,
+                IsFavorite = userFavorites.Contains(l.Id)
+            })
+            .ToListAsync();
 
         var result = new PagedResult<ListingSummaryDto>
         {
@@ -192,38 +174,7 @@ public class MarketplaceController : ControllerBase
             .FirstOrDefaultAsync(l => l.Id == id && l.IsActive);
 
         if (listing == null)
-        {
-            // Check fallback items
-            var fallback = GetFallbackListings(new List<long>()).FirstOrDefault(f => f.Id == id);
-            if (fallback != null)
-            {
-                var detailFallback = new ListingDetailDto
-                {
-                    Id = fallback.Id,
-                    Title = fallback.Title,
-                    Description = "Excellent condition, sparingly used, authentic with original box and bill. Price slightly negotiable for immediate buyers. Pickup available at location.",
-                    Price = fallback.Price,
-                    Condition = fallback.Condition,
-                    Location = fallback.Location,
-                    Status = fallback.Status,
-                    IsFeatured = fallback.IsFeatured,
-                    ViewCount = fallback.ViewCount + 1,
-                    CreatedAt = fallback.CreatedAt,
-                    CategoryId = fallback.CategoryId,
-                    CategoryName = fallback.CategoryName,
-                    SellerId = 1,
-                    SellerName = "Aditya Sharma",
-                    SellerPhone = "9876543210",
-                    SellerAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-                    SellerJoinedAt = DateTime.UtcNow.AddMonths(-8),
-                    IsFavorite = false,
-                    Images = new List<string> { fallback.PrimaryImageUrl ?? "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600" }
-                };
-                return Ok(ApiResponse<ListingDetailDto>.Ok(detailFallback));
-            }
-
             return NotFound(ApiResponse<ListingDetailDto>.Fail("Listing not found"));
-        }
 
         // Increment view count
         listing.ViewCount++;
@@ -246,20 +197,15 @@ public class MarketplaceController : ControllerBase
             ViewCount = listing.ViewCount,
             CreatedAt = listing.CreatedAt,
             CategoryId = listing.CategoryId,
-            CategoryName = listing.Category?.Name ?? "General",
+            CategoryName = listing.Category?.Name ?? string.Empty,
             SellerId = listing.UserId,
-            SellerName = listing.User?.FullName ?? "Community Member",
-            SellerPhone = listing.User?.MobileNumber,
+            SellerName = listing.User?.FullName?.Trim() ?? string.Empty,
+            SellerPhone = string.IsNullOrWhiteSpace(listing.User?.MobileNumber) ? null : listing.User!.MobileNumber.Trim(),
             SellerAvatar = listing.User?.ProfileImageUrl,
             SellerJoinedAt = listing.User?.CreatedAt,
             IsFavorite = isFavorite,
-            Images = listing.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).ToList()
+            Images = listing.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl).Where(u => !string.IsNullOrWhiteSpace(u)).ToList()
         };
-
-        if (!dto.Images.Any())
-        {
-            dto.Images.Add("https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600");
-        }
 
         return Ok(ApiResponse<ListingDetailDto>.Ok(dto));
     }
@@ -351,13 +297,13 @@ public class MarketplaceController : ControllerBase
                     Price = newListing.Price,
                     Condition = newListing.Condition,
                     Location = newListing.Location,
-                    PrimaryImageUrl = request.ImageUrls?.FirstOrDefault() ?? "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400",
+                    PrimaryImageUrl = request.ImageUrls?.FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)),
                     IsFeatured = newListing.IsFeatured,
                     ViewCount = 0,
                     Status = newListing.Status,
                     CreatedAt = newListing.CreatedAt,
                     CategoryId = newListing.CategoryId,
-                    CategoryName = cat?.Name ?? "General",
+                    CategoryName = cat?.Name ?? string.Empty,
                     IsFavorite = false
                 };
 
@@ -418,7 +364,7 @@ public class MarketplaceController : ControllerBase
                     Status = listingToEdit.Status,
                     CreatedAt = listingToEdit.CreatedAt,
                     CategoryId = listingToEdit.CategoryId,
-                    CategoryName = listingToEdit.Category?.Name ?? "General",
+                    CategoryName = listingToEdit.Category?.Name ?? string.Empty,
                     IsFavorite = false
                 }, "Listing updated successfully"));
 
@@ -499,7 +445,7 @@ public class MarketplaceController : ControllerBase
                 Status = l.Status,
                 CreatedAt = l.CreatedAt,
                 CategoryId = l.CategoryId,
-                CategoryName = l.Category != null ? l.Category.Name : "General",
+                CategoryName = l.Category != null ? l.Category.Name : string.Empty,
                 IsFavorite = false
             })
             .ToListAsync();
@@ -649,7 +595,7 @@ public class MarketplaceController : ControllerBase
                 Status = f.Listing.Status,
                 CreatedAt = f.Listing.CreatedAt,
                 CategoryId = f.Listing.CategoryId,
-                CategoryName = f.Listing.Category != null ? f.Listing.Category.Name : "General",
+                CategoryName = f.Listing.Category != null ? f.Listing.Category.Name : string.Empty,
                 IsFavorite = true
             })
             .ToListAsync();
@@ -942,120 +888,6 @@ public class MarketplaceController : ControllerBase
 
         return Ok(ApiResponse.Ok("Listing reported successfully. Our moderation team will review it shortly."));
     }
-
-    // --- Helpers & Seed Fallbacks ---
-    private static List<MarketplaceCategoryDto> GetFallbackCategories() => new()
-    {
-        new MarketplaceCategoryDto { Id = 1, Name = "Mobiles", ListingCount = 4 },
-        new MarketplaceCategoryDto { Id = 2, Name = "Vehicles", ListingCount = 2 },
-        new MarketplaceCategoryDto { Id = 3, Name = "Electronics", ListingCount = 5 },
-        new MarketplaceCategoryDto { Id = 4, Name = "Furniture", ListingCount = 3 },
-        new MarketplaceCategoryDto { Id = 5, Name = "Fashion", ListingCount = 2 },
-        new MarketplaceCategoryDto { Id = 6, Name = "Books", ListingCount = 1 },
-        new MarketplaceCategoryDto { Id = 7, Name = "Sports", ListingCount = 2 },
-        new MarketplaceCategoryDto { Id = 8, Name = "Others", ListingCount = 1 }
-    };
-
-    private static List<ListingSummaryDto> GetFallbackListings(List<long> userFavorites) => new()
-    {
-        new ListingSummaryDto
-        {
-            Id = 101,
-            Title = "iPhone 14 Pro Max 256GB Deep Purple (Like New)",
-            Price = 68000,
-            Condition = "LIKE_NEW",
-            Location = "Koramangala, Bengaluru",
-            PrimaryImageUrl = "https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=500",
-            IsFeatured = true,
-            ViewCount = 142,
-            Status = "ACTIVE",
-            CreatedAt = DateTime.UtcNow.AddDays(-1),
-            CategoryId = 1,
-            CategoryName = "Mobiles",
-            IsFavorite = userFavorites.Contains(101)
-        },
-        new ListingSummaryDto
-        {
-            Id = 102,
-            Title = "Royal Enfield Classic 350 (2022 Stealth Black)",
-            Price = 145000,
-            Condition = "USED",
-            Location = "Indiranagar, Bengaluru",
-            PrimaryImageUrl = "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=500",
-            IsFeatured = true,
-            ViewCount = 310,
-            Status = "ACTIVE",
-            CreatedAt = DateTime.UtcNow.AddDays(-2),
-            CategoryId = 2,
-            CategoryName = "Vehicles",
-            IsFavorite = userFavorites.Contains(102)
-        },
-        new ListingSummaryDto
-        {
-            Id = 103,
-            Title = "Sony PlayStation 5 Disc Edition + 2 Controllers",
-            Price = 38500,
-            Condition = "LIKE_NEW",
-            Location = "HSR Layout, Bengaluru",
-            PrimaryImageUrl = "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=500",
-            IsFeatured = false,
-            ViewCount = 98,
-            Status = "ACTIVE",
-            CreatedAt = DateTime.UtcNow.AddHours(-18),
-            CategoryId = 3,
-            CategoryName = "Electronics",
-            IsFavorite = userFavorites.Contains(103)
-        },
-        new ListingSummaryDto
-        {
-            Id = 104,
-            Title = "Solid Sheesham Teak Wood 6-Seater Dining Table",
-            Price = 22000,
-            Condition = "USED",
-            Location = "Whitefield, Bengaluru",
-            PrimaryImageUrl = "https://images.unsplash.com/photo-1617806118233-18e1de247200?w=500",
-            IsFeatured = false,
-            ViewCount = 74,
-            Status = "ACTIVE",
-            CreatedAt = DateTime.UtcNow.AddDays(-3),
-            CategoryId = 4,
-            CategoryName = "Furniture",
-            IsFavorite = userFavorites.Contains(104)
-        },
-        new ListingSummaryDto
-        {
-            Id = 105,
-            Title = "Canon EOS 200D II DSLR with 18-55mm IS STM Lens",
-            Price = 32000,
-            Condition = "LIKE_NEW",
-            Location = "Jayanagar, Bengaluru",
-            PrimaryImageUrl = "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=500",
-            IsFeatured = false,
-            ViewCount = 112,
-            Status = "ACTIVE",
-            CreatedAt = DateTime.UtcNow.AddDays(-4),
-            CategoryId = 3,
-            CategoryName = "Electronics",
-            IsFavorite = userFavorites.Contains(105)
-        },
-        new ListingSummaryDto
-        {
-            Id = 106,
-            Title = "Zara Genuine Leather Biker Jacket (Black - Size M)",
-            Price = 3999,
-            Condition = "NEW",
-            Location = "MG Road, Bengaluru",
-            PrimaryImageUrl = "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500",
-            IsFeatured = false,
-            ViewCount = 65,
-            Status = "ACTIVE",
-            CreatedAt = DateTime.UtcNow.AddHours(-6),
-            CategoryId = 5,
-            CategoryName = "Fashion",
-            IsFavorite = userFavorites.Contains(106)
-        }
-    };
-
 
     // --- Chat Endpoints ---
 

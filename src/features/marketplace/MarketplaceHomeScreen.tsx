@@ -25,18 +25,6 @@ import { ApiEndpoints } from '../../constants/api';
 import { absoluteImageUrl } from '../../services/documentService';
 import { shadowStyle } from '../../utils/platformStyles';
 
-const CATEGORIES: MarketplaceCategory[] = [
-  { id: 0, name: 'All' },
-  { id: 1, name: 'Mobiles' },
-  { id: 2, name: 'Vehicles' },
-  { id: 3, name: 'Electronics' },
-  { id: 4, name: 'Furniture' },
-  { id: 5, name: 'Fashion' },
-  { id: 6, name: 'Books' },
-  { id: 7, name: 'Sports' },
-  { id: 8, name: 'Others' },
-];
-
 const QUICK_FILTERS = ['All', 'Featured', 'Under ₹10k', 'Like New'];
 
 export const MarketplaceHomeScreen: React.FC = () => {
@@ -44,7 +32,7 @@ export const MarketplaceHomeScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(0);
   const [selectedFilter, setSelectedFilter] = useState('All');
-  const [categories, setCategories] = useState<MarketplaceCategory[]>(CATEGORIES);
+  const [categories, setCategories] = useState<MarketplaceCategory[]>([{ id: 0, name: 'All' }]);
   const [serverListings, setServerListings] = useState<ListingSummary[]>([]);
 
   const { customListings, favorites, toggleFavorite } = useMarketplaceStore();
@@ -159,15 +147,17 @@ export const MarketplaceHomeScreen: React.FC = () => {
         onPress={() => navigation.navigate('ListingDetail', { listingId: String(item.id) })}
       >
         <View style={styles.imageWrapper}>
-          <Image
-            source={{
-              uri:
-                absoluteImageUrl(item.primaryImageUrl || '') ||
-                'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400',
-            }}
-            style={styles.productImage}
-            resizeMode="cover"
-          />
+          {absoluteImageUrl(item.primaryImageUrl || '') ? (
+            <Image
+              source={{ uri: absoluteImageUrl(item.primaryImageUrl || '')! }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.productImage, styles.productImageEmpty]}>
+              <MaterialIcons name="image-not-supported" size={28} color={colors.textTertiary} />
+            </View>
+          )}
           {item.isFeatured && (
             <View style={styles.featuredRibbon}>
               <Text style={styles.featuredRibbonText}>FEATURED</Text>
@@ -500,6 +490,11 @@ const styles = StyleSheet.create({
   productImage: {
     width: '100%',
     height: '100%',
+  },
+  productImageEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cardDark,
   },
   featuredRibbon: {
     position: 'absolute',

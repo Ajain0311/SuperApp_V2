@@ -15,11 +15,11 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Broadcast home marquee + admin DisplayHours live on API `v-55bafe5` (PR #30).
-  - Home: glass marquee strip (`MarqueeText`); filters by `ReferenceId` `exp:…` (fallback CreatedAt + `broadcast_default_display_hours`).
-  - Admin Settings + Dashboard: duration chips 1h/6h/12h/24h/48h/7d → `displayHours` on `POST /admin/notifications/broadcast`.
-  - Backend: `SupportSettings.BroadcastDefaultHoursKey`, expiry token on Notification.ReferenceId.
-  - Verified: `tsc`, 211 backend, 109 jest, agents self; health OK after deploy.
+- **Status**: Marketplace listing owner UX + no fake fallbacks (in progress / shipping).
+  - Own listing: hide Make Offer / Chat / Call; show Remove for publisher + admin.
+  - Call: `Linking.openURL(tel:…)` without `canOpenURL` gate (Android dialer).
+  - Removed marketplace fake seed listings / unsplash / fake seller phone defaults.
+  - Prior: broadcast marquee `v-55bafe5` (PR #30).
   - Actors: cust 7014065979 / 9123456780, owner 9900000004, captain 6375002348, TEST_OTP 123456.
   - PEM: `C:\Users\admin\.ssh\Bseries.pem`.
-  - Next: Expo reload; admin se short-duration broadcast bhejo aur home marquee + expiry confirm karo.
+  - Next: Expo reload; open own listing (no offer), other listing Call opens dialer.
