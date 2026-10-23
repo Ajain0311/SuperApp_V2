@@ -1236,7 +1236,7 @@ public class AdminController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Message))
             return BadRequest(ApiResponse.Fail("Title and Message are required"));
 
-        // Active users only; ordered so recipients are deterministic (old Take(200) without OrderBy could miss users).
+        // Active users only — no Take() cap (old Take(200)/Take(2000) skipped newer high-Id users).
         var query = _db.Users.Where(u => u.IsActive);
 
         if (!string.IsNullOrWhiteSpace(request.TargetRole))
@@ -1245,26 +1245,34 @@ public class AdminController : ControllerBase
             query = query.Where(u => u.UserRoles.Any(ur => ur.Role.Name == roleName));
         }
 
-        var targetUsers = await query.OrderBy(u => u.Id).Take(2000).ToListAsync();
+        var targetUserIds = await query.OrderBy(u => u.Id).Select(u => u.Id).ToListAsync();
         var displayHours = await SupportSettings.ResolveBroadcastDisplayHoursAsync(_db, request.DisplayHours);
         var expiresUtc = DateTime.UtcNow.AddHours(displayHours);
         var expiryToken = SupportSettings.FormatBroadcastExpiry(expiresUtc);
+        var title = request.Title.Trim();
+        var body = request.Message.Trim();
+        var now = DateTime.UtcNow;
 
-        foreach (var u in targetUsers)
+        // Batch insert so large audiences stay under one SaveChanges without loading full User rows.
+        const int batchSize = 500;
+        for (var i = 0; i < targetUserIds.Count; i += batchSize)
         {
-            _db.Notifications.Add(new Notification
+            var batch = targetUserIds.Skip(i).Take(batchSize);
+            foreach (var userId in batch)
             {
-                UserId = u.Id,
-                Title = request.Title.Trim(),
-                Body = request.Message.Trim(),
-                Type = "SYSTEM",
-                ReferenceId = expiryToken,
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
-            });
+                _db.Notifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = title,
+                    Body = body,
+                    Type = "SYSTEM",
+                    ReferenceId = expiryToken,
+                    IsRead = false,
+                    CreatedAt = now
+                });
+            }
+            await _db.SaveChangesAsync();
         }
-
-        await _db.SaveChangesAsync();
 
         if (_notificationService != null)
         {
@@ -1272,8 +1280,8 @@ public class AdminController : ControllerBase
             {
                 // In-app rows already saved above — push path must not duplicate Notification inserts.
                 await _notificationService.SendBroadcastNotificationAsync(
-                    request.Title.Trim(),
-                    request.Message.Trim(),
+                    title,
+                    body,
                     "SYSTEM",
                     persistInApp: false);
             }
@@ -1284,7 +1292,7 @@ public class AdminController : ControllerBase
         }
 
         return Ok(ApiResponse.Ok(
-            $"Notification broadcasted to {targetUsers.Count} recipient(s); home marquee for {displayHours}h (until {expiresUtc:u})"));
+            $"Notification broadcasted to {targetUserIds.Count} recipient(s); home marquee for {displayHours}h (until {expiresUtc:u})"));
     }
 
     /// <summary>
