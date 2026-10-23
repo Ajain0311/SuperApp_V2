@@ -15,8 +15,8 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Overnight green on main (`PASS 1121 FAIL 0`). Shipping safe food cancel-after-captain-accept.
-  - **Food cancel rule (locked)**: Customer/vendor may cancel through `READY` (captain assigned OK); block after `PICKED_UP`. Cancel clears `DriverId` and notifies `FoodDeliveryStatusChanged`.
+- **Status**: Food cancel-after-captain-accept shipped on main (PR #25) and live E2E PASS.
+  - **Rule**: cancel through `READY` (captain OK); block after `PICKED_UP`; clears `DriverId` + notifies pool.
+  - **Live proof**: order `2518` accept → customer cancel `200` / `driverId` null / active-food empty; after pickup cancel `400`.
   - **Still backlog (teammate)**: direct foods feed; multi-hotel one checkout → N kitchen orders.
-  - **Also on dev**: OTP provider rename PunjabGov → BIGB (PR stack).
-  - **Verification so far**: `dotnet test` 183/183; Jest 109; agents self 16; live cancel-after-accept retest pending post-deploy.
+  - **Verification**: `dotnet test` 183; Jest 109; agents self 16; overnight earlier `PASS 1121 FAIL 0`; production `v-522c394`.
