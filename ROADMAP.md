@@ -15,8 +15,9 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Teammate food pack COMPLETE on production (`v-ff2efb8`).
-  - Cancel-after-accept: READY cancel OK; PICKED_UP blocked; clears captain (live PASS).
-  - Direct foods: `GET /restaurants/foods` + Food tab dishes (live 200).
-  - Multi-hotel: checkout → N kitchen orders; hotel isolation; ONLINE multi blocked (live orders 2622/2623 PASS).
+- **Status**: Continuous chaos/random live testing + 3 product hardening fixes.
+  - Chaos suite wave1 seed=424242: **80/83 PASS**; caught (1) marketplace fake-favorite FK **500**, (2) weak PIN accepted `12`, (3) ride start 400 on missing ride/OTP.
+  - Fixes: `ToggleFavorite` → 404 if listing missing; `UpsertAddressRequest` PIN `^\d{6}$`; chaos expects ride-start `[400,403,404]`.
+  - New scripts: `e2e/agents/chaos-random-suite.mjs`, `e2e/agents/chaos-random-wave2.mjs`. Unit tests 194/194.
+  - Next agent: keep running chaos waves with new seeds; re-verify AD01/M03 on production after deploy; optional 250/500 food stress.
   - Git preference: pull before commit/push; direct push to main when user asks (no MR).

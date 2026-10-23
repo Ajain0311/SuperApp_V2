@@ -515,6 +515,10 @@ public class MarketplaceController : ControllerBase
             return Ok(ApiResponse<bool>.Ok(false, "Removed from favorites"));
         }
 
+        var listingExists = await _db.MarketplaceListings.AnyAsync(l => l.Id == listingId && l.IsActive);
+        if (!listingExists)
+            return NotFound(ApiResponse<bool>.Fail("Listing not found"));
+
         _db.Favorites.Add(new Favorite
         {
             UserId = userId,

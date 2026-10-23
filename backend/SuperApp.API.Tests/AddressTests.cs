@@ -1,5 +1,7 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using SuperApp.API.Data;
+using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 using Xunit;
 
@@ -122,5 +124,29 @@ public class AddressTests
         Assert.Equal(24.572846m, refreshed.Latitude);
         Assert.Equal(73.723135m, refreshed.Longitude);
         Assert.True(refreshed.IsDefault);
+    }
+
+    [Theory]
+    [InlineData("12", false)]
+    [InlineData("30200", false)]
+    [InlineData("302001a", false)]
+    [InlineData("abcdef", false)]
+    [InlineData("302001", true)]
+    [InlineData("110001", true)]
+    public void UpsertAddressRequest_PinCode_MustBeSixDigits(string pin, bool expectValid)
+    {
+        var req = new UpsertAddressRequest
+        {
+            AddressLine1 = "Street",
+            City = "Jaipur",
+            State = "Rajasthan",
+            PinCode = pin,
+        };
+        var ctx = new ValidationContext(req);
+        var results = new List<ValidationResult>();
+        var ok = Validator.TryValidateObject(req, ctx, results, validateAllProperties: true);
+        Assert.Equal(expectValid, ok);
+        if (!expectValid)
+            Assert.Contains(results, r => (r.ErrorMessage ?? "").Contains("6 digits", StringComparison.OrdinalIgnoreCase));
     }
 }

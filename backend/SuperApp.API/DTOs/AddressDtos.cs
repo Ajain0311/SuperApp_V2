@@ -34,6 +34,7 @@ public class UpsertAddressRequest
     public string State { get; set; } = string.Empty;
 
     [Required, MaxLength(10)]
+    [RegularExpression(@"^\d{6}$", ErrorMessage = "PIN code must be exactly 6 digits")]
     public string PinCode { get; set; } = string.Empty;
 
     public decimal? Latitude { get; set; }

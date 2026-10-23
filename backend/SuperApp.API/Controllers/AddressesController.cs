@@ -40,6 +40,15 @@ public class AddressesController : ControllerBase
         IsDefault = a.IsDefault,
     };
 
+    private static string? PinValidationMessage(UpsertAddressRequest? request)
+    {
+        var pin = request?.PinCode?.Trim();
+        if (string.IsNullOrEmpty(pin)) return null;
+        if (pin.Length != 6 || !pin.All(char.IsDigit))
+            return "PIN code must be exactly 6 digits";
+        return null;
+    }
+
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<AddressDto>>>> GetMine()
     {
@@ -60,7 +69,7 @@ public class AddressesController : ControllerBase
     public async Task<ActionResult<ApiResponse<AddressDto>>> Create([FromBody] UpsertAddressRequest request)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ApiResponse<AddressDto>.Fail("Please fill address, city, state and PIN"));
+            return BadRequest(ApiResponse<AddressDto>.Fail(PinValidationMessage(request) ?? "Please fill address, city, state and PIN"));
 
         var userId = TryGetUserId();
         if (userId == null)
@@ -102,7 +111,7 @@ public class AddressesController : ControllerBase
     public async Task<ActionResult<ApiResponse<AddressDto>>> Update(long id, [FromBody] UpsertAddressRequest request)
     {
         if (!ModelState.IsValid)
-            return BadRequest(ApiResponse<AddressDto>.Fail("Please fill address, city, state and PIN"));
+            return BadRequest(ApiResponse<AddressDto>.Fail(PinValidationMessage(request) ?? "Please fill address, city, state and PIN"));
 
         var userId = TryGetUserId();
         if (userId == null)
