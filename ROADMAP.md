@@ -15,11 +15,10 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Edge-case tested; broadcast fanout fix live on `v-8b02b43` (PR #32). Marketplace owner UX on `v-9ab8b51` (PR #31).
-  - Live edge suite: **31 PASS / 0 FAIL** (own offer 400, stranger delete 403, owner delete, fake 101→404, offer zero/neg, self-chat 400, exp tokens for new+old users).
-  - Found+fixed: broadcast `Take(2000)` skipped new high-Id users; now all active recipients (~6293).
-  - Verified: tsc, 219 backend, agents self; health OK.
-  - NOT_TESTED on physical phone: Call dialer UI open (API sellerPhone OK).
-  - Actors: cust 7014065979 / 9123456780, owner 9900000004, captain 6375002348, TEST_OTP 123456.
-  - PEM: `C:\Users\admin\.ssh\Bseries.pem`.
-  - Next: Expo reload; phone pe Call dialer confirm.
+- **Status**: Food cancel visibility + soft place chime shipped (PR #33 → main, deploy in progress).
+  - Problem: after captain accepted food pickup, customer cancel silently cleared the job with no Alert/push for captain/kitchen.
+  - Fix: `NotifyCancelStakeholdersAsync` (captain + restaurant staff + customer); captain/kitchen Alerts; soft `expo-av` order-placed chime.
+  - Verified: **224** backend, **113** Jest, **16** agents self, tsc clean. Live smoke: place→READY→accept→cancel → `CANCELLED` (notify awaited post-deploy).
+  - Commit: `b1e470a` / merge `6261794` on `dev`; PR #33 merged.
+  - Metro LAN still on `:8081` for multi-phone UAT. Actors: cust 7014065979, owner 9900000004, captain 6375002348, TEST_OTP 123456.
+  - Next: after deploy green, re-run live smoke for `captain_notif_hit` / `owner_notif_hit`; phone UAT cancel Alert + place chime.
