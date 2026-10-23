@@ -126,7 +126,7 @@ case "$action" in
             -o "$NEW_RELEASE_DIR" \
             --nologo
 
-        # 5. Preserve .env file in new release
+        # 5. Preserve .env file in new release (copy + canonical symlink target)
         if [ -f "$APP_ROOT/.env" ]; then
             cp "$APP_ROOT/.env" "$NEW_RELEASE_DIR/.env"
         fi
@@ -140,6 +140,12 @@ case "$action" in
             # If dist is a normal folder, backup & copy
             rm -rf "$DIST_DIR"/*
             cp -a "$NEW_RELEASE_DIR"/* "$DIST_DIR"/
+        fi
+
+        # 6b. Always re-link WorkingDirectory .env to APP_ROOT/.env so OTP_TEST_MODE / TEST_OTP survive publishes
+        if [ -f "$APP_ROOT/.env" ]; then
+            ln -sfn "$APP_ROOT/.env" "$DIST_DIR/.env"
+            log "🔗 dist/.env -> $APP_ROOT/.env"
         fi
 
         # 7. Restart systemd service

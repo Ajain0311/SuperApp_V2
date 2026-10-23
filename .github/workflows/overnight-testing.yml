@@ -79,10 +79,51 @@ jobs:
           chmod 600 ~/.ssh/vm.pem
           ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -i ~/.ssh/vm.pem -f -N -L 5433:127.0.0.1:5432 "${VM_USER}@${VM_HOST}"
+          ready=0
+          for i in $(seq 1 20); do
+            if (echo >/dev/tcp/127.0.0.1/5433) >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::Postgres SSH tunnel did not open on localhost:5433"
+            exit 1
+          fi
           echo "Postgres SSH tunnel up on localhost:5433"
           # Prefer the overnight tunnel URL so verifier hits the same DB as the live API.
+          echo "OVERNIGHT_DB_URL=${OVERNIGHT_DB_URL}" >> "$GITHUB_ENV"
           echo "SUPABASE_DB_URL=${OVERNIGHT_DB_URL}" >> "$GITHUB_ENV"
           echo "ConnectionStrings__SupabaseConnection=" >> "$GITHUB_ENV"
+
+      - name: Wait for API auth smoke (survive deploy races)
+        if: steps.check_secrets.outputs.has_secrets == 'true'
+        run: |
+          set -euo pipefail
+          smoke_mobile="9000099988"
+          for i in $(seq 1 36); do
+            send_code=$(curl -sS -o /tmp/otp-send.json -w '%{http_code}' \
+              -X POST "$API_BASE_URL/api/auth/send-otp" \
+              -H 'Content-Type: application/json' \
+              -d "{\"mobileNumber\":\"$smoke_mobile\"}" || echo 000)
+            if [ "$send_code" = "200" ]; then
+              verify_code=$(curl -sS -o /tmp/otp-verify.json -w '%{http_code}' \
+                -X POST "$API_BASE_URL/api/auth/verify-otp" \
+                -H 'Content-Type: application/json' \
+                -d "{\"mobileNumber\":\"$smoke_mobile\",\"otpCode\":\"$TEST_OTP\"}" || echo 000)
+              if [ "$verify_code" = "200" ]; then
+                echo "Auth smoke OK (send/verify 200) on attempt $i"
+                exit 0
+              fi
+              echo "verify-otp=$verify_code on attempt $i; waiting for API settle..."
+            else
+              echo "send-otp=$send_code on attempt $i; waiting for API settle..."
+            fi
+            sleep 5
+          done
+          echo "::error::API auth smoke failed after ~3 minutes (deploy race or OTP_TEST_MODE missing)"
+          exit 1
 
       - name: Run 100-user volume regression
         if: steps.check_secrets.outputs.has_secrets == 'true'

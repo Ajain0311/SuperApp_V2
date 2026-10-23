@@ -142,7 +142,7 @@ Fetches authenticated user identity, saved addresses, and active role permission
   ```
 - `GET /api/foodorders` *(Requires Bearer Token)*: Returns order history for current customer.
 - `GET /api/foodorders/{id}` *(Requires Bearer Token)*: Returns detailed status stepper and items.
-- `POST /api/foodorders/{id}/cancel` *(Requires Bearer Token)*: Cancels order if still in `PENDING` state.
+- `POST /api/foodorders/{id}/cancel` *(Requires Bearer Token)*: Customer may cancel through `READY` (including after captain accept). Clears `DriverId`, notifies `drivers-pool` via `FoodDeliveryStatusChanged`, and refunds PAID online orders when the gateway supports it. Blocked once `PICKED_UP` / `DELIVERED`.
 
 ### 3.3 Restaurant Vendor Portal (`/api/vendor`)
 *(Requires Role: RESTAURANT_OWNER)*

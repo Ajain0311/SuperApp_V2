@@ -5,6 +5,7 @@ using SuperApp.API.Data;
 using SuperApp.API.DTOs;
 using SuperApp.API.Models;
 using SuperApp.API.Hubs;
+using SuperApp.API.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 
@@ -293,12 +294,18 @@ public class VendorController : ControllerBase
         // PENDING -> ACCEPTED, CANCELLED
         // ACCEPTED -> PREPARING, CANCELLED
         // PREPARING -> READY, CANCELLED
-        // READY -> CANCELLED
+        // READY -> CANCELLED (even with captain assigned; clears assignment)
+        // PICKED_UP+ cannot be cancelled (food already with rider)
         if (targetStatus == OrderStatus.Accepted
             && string.Equals(order.PaymentMethod, "ONLINE", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(order.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest(ApiResponse.Fail("Online payment is not verified yet. Order cannot be accepted."));
+        }
+
+        if (targetStatus == OrderStatus.Cancelled && !FoodOrderCancellation.CanVendorCancel(currentStatus))
+        {
+            return BadRequest(ApiResponse.Fail("Order cannot be cancelled after the captain has picked it up"));
         }
 
         bool isValidTransition = (currentStatus, targetStatus) switch
@@ -310,7 +317,6 @@ public class VendorController : ControllerBase
             (OrderStatus.Preparing, OrderStatus.Ready) => true,
             (OrderStatus.Preparing, OrderStatus.Cancelled) => true,
             (OrderStatus.Ready, OrderStatus.Cancelled) => true,
-            (OrderStatus.PickedUp, OrderStatus.Cancelled) => true,
             _ => false
         };
 
@@ -358,36 +364,46 @@ public class VendorController : ControllerBase
         order.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        // Broadcast to customer tracking screen via OrderStatusHub
-        await _orderHub.Clients.Group($"order-{order.Id}").SendAsync("OrderStatusUpdated", new
+        if (string.Equals(targetStatus, OrderStatus.Cancelled, StringComparison.OrdinalIgnoreCase))
         {
-            orderId = order.Id,
-            status = targetStatus,
-            message = $"Order is now {targetStatus}",
-            estimatedMinutes = order.EstimatedDeliveryMinutes,
-            updatedAt = DateTime.UtcNow
-        });
-
-        // Broadcast to restaurant kitchen group to sync across all kitchen staff screens
-        await _orderHub.Clients.Group($"restaurant-{order.RestaurantId}").SendAsync("OrderAcceptedByOther", new
+            // Clear captain assignment + notify pool/customer/kitchen (avoids stuck active food job).
+            await FoodOrderCancellation.ReleaseCaptainAndNotifyAsync(
+                _db, order, _orderHub, _rideHub, cancelledBy: "vendor");
+            await _db.SaveChangesAsync();
+        }
+        else
         {
-            orderId = order.Id,
-            status = targetStatus,
-            updatedAt = DateTime.UtcNow
-        });
-
-        if (string.Equals(targetStatus, OrderStatus.Ready, StringComparison.OrdinalIgnoreCase) && _rideHub != null)
-        {
-            await _rideHub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAvailable", new
+            // Broadcast to customer tracking screen via OrderStatusHub
+            await _orderHub.Clients.Group($"order-{order.Id}").SendAsync("OrderStatusUpdated", new
             {
                 orderId = order.Id,
-                orderNumber = order.OrderNumber,
-                restaurantId = order.RestaurantId,
-                restaurantName = order.Restaurant?.Name,
-                grandTotal = order.GrandTotal,
+                status = targetStatus,
+                message = $"Order is now {targetStatus}",
+                estimatedMinutes = order.EstimatedDeliveryMinutes,
+                updatedAt = DateTime.UtcNow
+            });
+
+            // Broadcast to restaurant kitchen group to sync across all kitchen staff screens
+            await _orderHub.Clients.Group($"restaurant-{order.RestaurantId}").SendAsync("OrderAcceptedByOther", new
+            {
+                orderId = order.Id,
                 status = targetStatus,
                 updatedAt = DateTime.UtcNow
             });
+
+            if (string.Equals(targetStatus, OrderStatus.Ready, StringComparison.OrdinalIgnoreCase) && _rideHub != null)
+            {
+                await _rideHub.Clients.Group("drivers-pool").SendAsync("FoodDeliveryAvailable", new
+                {
+                    orderId = order.Id,
+                    orderNumber = order.OrderNumber,
+                    restaurantId = order.RestaurantId,
+                    restaurantName = order.Restaurant?.Name,
+                    grandTotal = order.GrandTotal,
+                    status = targetStatus,
+                    updatedAt = DateTime.UtcNow
+                });
+            }
         }
 
         try
@@ -399,6 +415,7 @@ public class VendorController : ControllerBase
                 "READY" => "Khana pack ho gaya! Bas nikalne wala hai! 🛵",
                 "PICKED_UP" => "Aapka delivery partner hawa se baatein karte hue aa raha hai! 🛵💨",
                 "DELIVERED" => "Dastak ho chuki hai! 🚪😋 Pet bhar ke khao!",
+                "CANCELLED" => "Order cancel ho gaya",
                 _ => $"Order update: {targetStatus}"
             };
             string notifBody = targetStatus switch
@@ -408,6 +425,7 @@ public class VendorController : ControllerBase
                 "READY" => "Garma-garam khana dispatch ke liye ready hai!",
                 "PICKED_UP" => "Rider aapke order ke sath nikal chuka hai. Bas 5-10 minute!",
                 "DELIVERED" => "Khana kaisa laga? Review deke chef ka din bana do! ❤️",
+                "CANCELLED" => $"Order #{order.OrderNumber} cancel kar diya gaya. Captain assignment clear ho chuka hai.",
                 _ => $"Aapka order #{order.OrderNumber} ab {targetStatus} hai."
             };
 

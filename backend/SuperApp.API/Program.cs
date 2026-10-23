@@ -224,6 +224,7 @@ if (string.Equals(otpProvider, "BIGB", StringComparison.OrdinalIgnoreCase))
 }
 else if (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
 {
+    builder.Services.AddScoped<MockOtpService>();
     builder.Services.AddScoped<IOtpService, MockOtpService>();
 }
 else
