@@ -37,22 +37,34 @@ export function loadDotEnv(file = path.resolve(process.cwd(), '.env')) {
 
 export function connectionFromEnv() {
   loadDotEnv();
-  return process.env.SUPABASE_DB_URL
+  // Prefer overnight tunnel URL when set (same DB the live API uses on B-series).
+  return process.env.OVERNIGHT_DB_URL
+    || process.env.SUPABASE_DB_URL
     || process.env.ConnectionStrings__SupabaseConnection
     || process.env.DATABASE_URL
     || '';
+}
+
+/** Build node-postgres Pool options from parsePgConnection output (URL string or object). */
+export function poolOptionsFromParsed(config, extras = {}) {
+  const base = { max: 4, connectionTimeoutMillis: 8000, ...extras };
+  if (typeof config === 'string') {
+    return { connectionString: config, ...base };
+  }
+  return { ...config, ...base };
 }
 
 export async function openVerifier() {
   const raw = connectionFromEnv();
   const config = parsePgConnection(raw);
   if (!config) return { ok: false, reason: 'No database connection string in the environment' };
-  const pool = new pg.Pool({ ...config, max: 4, connectionTimeoutMillis: 8000 });
+  // URL strings must use connectionString — spreading a string yields {0:'p',1:'o',...} and silent connect failures.
+  const pool = new pg.Pool(poolOptionsFromParsed(config));
   try {
     await pool.query('select 1');
   } catch (err) {
     await pool.end().catch(() => {});
-    return { ok: false, reason: `Database connection failed: ${err.message}` };
+    return { ok: false, reason: `Database connection failed: ${err.message || err.code || String(err)}` };
   }
   return {
     ok: true,

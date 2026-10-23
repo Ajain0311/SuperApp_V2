@@ -211,19 +211,18 @@ else
 // Previous hardcoded provider (commented out):
 // builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
 
-builder.Services.AddScoped<MockOtpService>();
-builder.Services.AddScoped<PunjabGovOtpService>();
 ProductionSecurityValidator.ValidateOtpProvider(otpProvider, otpTestMode, isProduction);
 
 // OTP_TEST_MODE with an explicit live provider (PunjabGov) must keep that provider.
 // PunjabGovOtpService honors TEST_OTP and skips SMS when OTP_TEST_MODE=true outside Production.
-// Selecting MockOtpService while OTP_PROVIDER=PunjabGov throws at resolve-time and breaks all auth.
-if (string.Equals(otpProvider, "PunjabGov", StringComparison.OrdinalIgnoreCase))
+// Never register MockOtpService when OTP_PROVIDER=PunjabGov — its ctor throws and 500s all auth.
+var useMockOtp = !string.Equals(otpProvider, "PunjabGov", StringComparison.OrdinalIgnoreCase)
+    && (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase));
+
+builder.Services.AddScoped<PunjabGovOtpService>();
+if (useMockOtp)
 {
-    builder.Services.AddScoped<IOtpService, PunjabGovOtpService>();
-}
-else if (otpTestMode || string.Equals(otpProvider, "Mock", StringComparison.OrdinalIgnoreCase))
-{
+    builder.Services.AddScoped<MockOtpService>();
     builder.Services.AddScoped<IOtpService, MockOtpService>();
 }
 else
