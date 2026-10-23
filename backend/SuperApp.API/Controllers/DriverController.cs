@@ -717,15 +717,22 @@ public class DriverController : ControllerBase
         if (driver == null)
             return Forbid();
 
-        if (request.Latitude < -90m || request.Latitude > 90m ||
-            request.Longitude < -180m || request.Longitude > 180m ||
-            (request.Latitude == 0m && request.Longitude == 0m))
+        if (!request.Latitude.HasValue || !request.Longitude.HasValue)
+        {
+            return BadRequest(ApiResponse.Fail("Both latitude and longitude are required."));
+        }
+
+        var lat = request.Latitude.Value;
+        var lng = request.Longitude.Value;
+        if (lat < -90m || lat > 90m ||
+            lng < -180m || lng > 180m ||
+            (lat == 0m && lng == 0m))
         {
             return BadRequest(ApiResponse.Fail("Invalid or out-of-range GPS coordinates."));
         }
 
-        driver.CurrentLatitude = request.Latitude;
-        driver.CurrentLongitude = request.Longitude;
+        driver.CurrentLatitude = lat;
+        driver.CurrentLongitude = lng;
         driver.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -744,15 +751,15 @@ public class DriverController : ControllerBase
             await _hub.Clients.Group($"ride-{request.RideId.Value}").SendAsync("DriverLocationUpdated", new
             {
                 rideId = request.RideId.Value,
-                latitude = request.Latitude,
-                longitude = request.Longitude,
+                latitude = lat,
+                longitude = lng,
                 heading = request.Heading,
                 speed = request.Speed,
                 updatedAt = DateTime.UtcNow
             });
 
             // Configurable Auto-Arrived Feature (MUST REMAIN DISABLED by default)
-            await CheckAndProcessAutoArrivalAsync(driver, request.RideId.Value, request.Latitude, request.Longitude);
+            await CheckAndProcessAutoArrivalAsync(driver, request.RideId.Value, lat, lng);
         }
 
         return Ok(ApiResponse.Ok("Location updated"));

@@ -21,6 +21,7 @@ const WAVES = [
   'chaos-random-wave7.mjs',
   'chaos-random-wave8.mjs',
   'chaos-random-wave9.mjs',
+  'chaos-random-wave10.mjs',
 ];
 
 function run(script, seed) {

@@ -101,6 +101,50 @@ public class MarketplaceFavoriteTests
     }
 
     [Fact]
+    public async Task RemoveFavorite_MissingOrPresent_Returns200()
+    {
+        await using var db = CreateDb();
+        var user = new User
+        {
+            MobileNumber = "9000000666",
+            FullName = "Fav Remover",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        var category = new MarketplaceCategory { Name = "Books", IsActive = true };
+        db.Users.Add(user);
+        db.MarketplaceCategories.Add(category);
+        await db.SaveChangesAsync();
+
+        var listing = new MarketplaceListing
+        {
+            UserId = user.Id,
+            CategoryId = category.Id,
+            Title = "Book",
+            Price = 50m,
+            Status = ListingStatus.Active,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.MarketplaceListings.Add(listing);
+        await db.SaveChangesAsync();
+        db.Favorites.Add(new Favorite { UserId = user.Id, ListingId = listing.Id, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var controller = new MarketplaceController(db);
+        SetUser(controller, user.Id);
+
+        var remove = await controller.RemoveFavorite(listing.Id);
+        var ok = Assert.IsType<OkObjectResult>(remove.Result);
+        Assert.False(Assert.IsType<ApiResponse<bool>>(ok.Value).Data);
+        Assert.Empty(db.Favorites);
+
+        var again = await controller.RemoveFavorite(listing.Id);
+        Assert.IsType<OkObjectResult>(again.Result);
+        Assert.Empty(db.Favorites);
+    }
+
+    [Fact]
     public async Task GetListings_NegativePage_ClampsToValidPage()
     {
         await using var db = CreateDb();

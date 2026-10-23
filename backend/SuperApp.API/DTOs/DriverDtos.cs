@@ -38,10 +38,9 @@ public class ToggleOnlineRequest
 public class UpdateDriverLocationRequest
 {
     public long? RideId { get; set; }
-    [Required]
-    public decimal Latitude { get; set; }
-    [Required]
-    public decimal Longitude { get; set; }
+    /// <summary>Both coordinates required; omitted JSON fields must not silently become 0.</summary>
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
     public double? Heading { get; set; }
     public double? Speed { get; set; }
 }

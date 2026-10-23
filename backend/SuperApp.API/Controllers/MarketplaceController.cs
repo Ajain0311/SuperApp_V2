@@ -582,11 +582,31 @@ public class MarketplaceController : ControllerBase
 
         var userId = currentUserId.Value;
 
+        // Atomic delete avoids concurrent RemoveFavorite / ToggleFavorite DbUpdateConcurrencyException → 500
+        if (_db.Database.IsRelational())
+        {
+            await _db.Favorites
+                .Where(f => f.UserId == userId && f.ListingId == listingId)
+                .ExecuteDeleteAsync();
+            return Ok(ApiResponse<bool>.Ok(false, "Removed from favorites"));
+        }
+
         var existing = await _db.Favorites.FirstOrDefaultAsync(f => f.UserId == userId && f.ListingId == listingId);
         if (existing != null)
         {
-            _db.Favorites.Remove(existing);
-            await _db.SaveChangesAsync();
+            try
+            {
+                _db.Favorites.Remove(existing);
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                _db.ChangeTracker.Clear();
+            }
+            catch (DbUpdateException)
+            {
+                _db.ChangeTracker.Clear();
+            }
         }
 
         return Ok(ApiResponse<bool>.Ok(false, "Removed from favorites"));

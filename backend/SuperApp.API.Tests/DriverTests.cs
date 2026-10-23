@@ -285,6 +285,13 @@ public class DriverTests
             Longitude = 0m
         });
         Assert.IsType<BadRequestObjectResult>(res3.Result);
+
+        // Missing longitude must not silently default to 0
+        var res4 = await controller.UpdateLocation(new UpdateDriverLocationRequest
+        {
+            Latitude = 28.7041m
+        });
+        Assert.IsType<BadRequestObjectResult>(res4.Result);
     }
 
     [Fact]
