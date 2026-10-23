@@ -111,7 +111,7 @@ public class VendorController : ControllerBase
     {
         var restaurant = await GetAuthorizedRestaurantAsync();
         if (restaurant == null)
-            return NotFound(ApiResponse.Fail("Restaurant not found"));
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse.Fail("Restaurant not found or not authorized"));
 
         var action = request.Action?.ToUpperInvariant() ?? string.Empty;
 

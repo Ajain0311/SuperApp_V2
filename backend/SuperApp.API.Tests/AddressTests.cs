@@ -126,6 +126,61 @@ public class AddressTests
         Assert.True(refreshed.IsDefault);
     }
 
+    [Fact]
+    public async Task SetDefault_LeavesExactlyOneDefault_WhenCalledSequentially()
+    {
+        await using var db = CreateDb();
+        var user = new User
+        {
+            MobileNumber = "9333333333",
+            FullName = "Default Race",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var a1 = new Address
+        {
+            UserId = user.Id, Label = "A1", AddressLine1 = "S1", City = "Jaipur",
+            State = "Rajasthan", PinCode = "302001", IsDefault = false, IsActive = true, CreatedAt = DateTime.UtcNow,
+        };
+        var a2 = new Address
+        {
+            UserId = user.Id, Label = "A2", AddressLine1 = "S2", City = "Jaipur",
+            State = "Rajasthan", PinCode = "302002", IsDefault = false, IsActive = true, CreatedAt = DateTime.UtcNow,
+        };
+        var a3 = new Address
+        {
+            UserId = user.Id, Label = "A3", AddressLine1 = "S3", City = "Jaipur",
+            State = "Rajasthan", PinCode = "302003", IsDefault = false, IsActive = true, CreatedAt = DateTime.UtcNow,
+        };
+        db.Addresses.AddRange(a1, a2, a3);
+        await db.SaveChangesAsync();
+
+        // Mimic ApplySingleDefaultAsync InMemory path for each target in turn.
+        async Task Apply(long targetId)
+        {
+            var rows = await db.Addresses.Where(a => a.UserId == user.Id && a.IsActive).ToListAsync();
+            foreach (var row in rows)
+            {
+                row.IsDefault = row.Id == targetId;
+                row.UpdatedAt = DateTime.UtcNow;
+            }
+            await db.SaveChangesAsync();
+        }
+
+        await Apply(a1.Id);
+        await Apply(a2.Id);
+        await Apply(a3.Id);
+
+        var defaults = await db.Addresses.AsNoTracking()
+            .Where(a => a.UserId == user.Id && a.IsActive && a.IsDefault)
+            .ToListAsync();
+        Assert.Single(defaults);
+        Assert.Equal(a3.Id, defaults[0].Id);
+    }
+
     [Theory]
     [InlineData("12", false)]
     [InlineData("30200", false)]

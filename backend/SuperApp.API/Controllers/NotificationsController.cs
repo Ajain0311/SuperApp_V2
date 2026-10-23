@@ -127,7 +127,7 @@ public class NotificationsController : ControllerBase
     [HttpPost("device-token")]
     public async Task<ActionResult<ApiResponse>> RegisterDeviceToken([FromBody] RegisterDeviceTokenRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Token))
+        if (string.IsNullOrWhiteSpace(request?.Token))
         {
             return BadRequest(ApiResponse.Fail("Device token is required"));
         }
@@ -138,35 +138,60 @@ public class NotificationsController : ControllerBase
             return BadRequest(ApiResponse.Fail("Device token format is invalid"));
         }
 
+        // Column MaxLength(500) — reject before SaveChanges to avoid DbUpdateException 500.
+        if (cleanToken.Length > 500)
+        {
+            return BadRequest(ApiResponse.Fail("Device token is too long (max 500 characters)"));
+        }
+
+        var platform = string.IsNullOrWhiteSpace(request.Platform) ? "expo" : request.Platform.Trim();
+        if (platform.Length > 50)
+        {
+            return BadRequest(ApiResponse.Fail("Platform is too long (max 50 characters)"));
+        }
+
+        string? deviceType = string.IsNullOrWhiteSpace(request.DeviceType) ? null : request.DeviceType.Trim();
+        if (deviceType != null && deviceType.Length > 100)
+        {
+            return BadRequest(ApiResponse.Fail("Device type is too long (max 100 characters)"));
+        }
+
         var userId = GetCurrentUserId();
         if (!userId.HasValue)
             return Unauthorized(ApiResponse.Fail("Authentication required"));
 
-        var existing = await _db.UserDeviceTokens
-            .FirstOrDefaultAsync(t => t.UserId == userId.Value && t.DeviceToken == cleanToken);
-
-        if (existing == null)
+        try
         {
-            _db.UserDeviceTokens.Add(new UserDeviceToken
+            var existing = await _db.UserDeviceTokens
+                .FirstOrDefaultAsync(t => t.UserId == userId.Value && t.DeviceToken == cleanToken);
+
+            if (existing == null)
             {
-                UserId = userId.Value,
-                DeviceToken = request.Token,
-                Platform = request.Platform ?? "expo",
-                DeviceType = request.DeviceType,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            });
-        }
-        else
-        {
-            existing.IsActive = true;
-            existing.Platform = request.Platform ?? existing.Platform;
-            existing.DeviceType = request.DeviceType ?? existing.DeviceType;
-            existing.UpdatedAt = DateTime.UtcNow;
-        }
+                _db.UserDeviceTokens.Add(new UserDeviceToken
+                {
+                    UserId = userId.Value,
+                    DeviceToken = cleanToken,
+                    Platform = platform,
+                    DeviceType = deviceType,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                existing.IsActive = true;
+                existing.Platform = platform;
+                existing.DeviceType = deviceType ?? existing.DeviceType;
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
 
-        await _db.SaveChangesAsync();
-        return Ok(ApiResponse.Ok("Device token registered successfully"));
+            await _db.SaveChangesAsync();
+            return Ok(ApiResponse.Ok("Device token registered successfully"));
+        }
+        catch (DbUpdateException)
+        {
+            return BadRequest(ApiResponse.Fail("Device token could not be saved"));
+        }
     }
 
     /// <summary>

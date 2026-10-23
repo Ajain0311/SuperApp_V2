@@ -15,9 +15,9 @@ MANDATORY PROTOCOL (TEMPORARILY INACTIVE):
 ## 📌 Last Session Handoff
 
 - **Date**: October 23, 2026
-- **Status**: Continuous chaos W1–W7 LIVE; deploy `v-1ebfd9f`.
-  - Suites: `chaos-random-suite` + wave2–7 + `chaos-continuous-loop.mjs`.
-  - Bugs found→fixed→deployed: marketplace neg page; notes NUL; fav `ExecuteDelete`; vendor `isOpen` required; listing title >200 → 400 (was 500).
-  - Continuous 3-round W1–W6: 18/18 FAIL=0. Stress N=40 FAIL=0. Unit 195+.
-  - Run: `node e2e/agents/chaos-continuous-loop.mjs [rounds]`.
+- **Status**: Chaos W8 invented + bugfixes shipping; continuous loop now W1–W8.
+  - New suite: `e2e/agents/chaos-random-wave8.mjs` (profile junk, OTP flood, coupon/device-token, default-addr race, qty fuzz, ride extremes, offer-on-own, admin authz, vendor menu junk).
+  - W8 live findings→fixes: device-token >500 / long platform → 400 (was 500); concurrent `SetDefault` atomic single-default; vendor `food-items` without restaurant → 403 (was 404).
+  - Unit 196. Deploy after push: `sudo bash /opt/SuperApp_V2/scripts/manage.sh deploy v-<sha>`.
+  - Run: `node e2e/agents/chaos-random-wave8.mjs [seed]` or `node e2e/agents/chaos-continuous-loop.mjs [rounds]`.
   - Git preference: pull before commit/push; direct push to main when user asks (no MR).

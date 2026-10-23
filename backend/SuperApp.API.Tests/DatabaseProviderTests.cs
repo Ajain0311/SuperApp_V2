@@ -248,6 +248,22 @@ public class DatabaseProviderTests
             Token = ""
         });
         Assert.IsType<BadRequestObjectResult>(invalidResult.Result);
+
+        // Act 4: Token longer than column MaxLength(500) must be 400, not 500
+        var tooLong = await controller.RegisterDeviceToken(new RegisterDeviceTokenRequest
+        {
+            Token = new string('x', 600),
+            Platform = "android",
+        });
+        Assert.IsType<BadRequestObjectResult>(tooLong.Result);
+
+        // Act 5: Platform longer than MaxLength(50) must be 400
+        var longPlatform = await controller.RegisterDeviceToken(new RegisterDeviceTokenRequest
+        {
+            Token = "ExponentPushToken[PlatformTooLong_12345]",
+            Platform = new string('p', 80),
+        });
+        Assert.IsType<BadRequestObjectResult>(longPlatform.Result);
     }
 
     [Fact]

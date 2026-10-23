@@ -158,27 +158,9 @@ public class AddressesController : ControllerBase
         if (address == null)
             return NotFound(ApiResponse<AddressDto>.Fail("Address not found"));
 
-        // Column-scoped updates only — never touch latitude/longitude on set-default.
-        await ClearDefaultsAsync(userId.Value, id);
-
-        if (_db.Database.IsInMemory())
-        {
-            var target = await _db.Addresses.FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId.Value && a.IsActive);
-            if (target != null)
-            {
-                target.IsDefault = true;
-                target.UpdatedAt = DateTime.UtcNow;
-                await _db.SaveChangesAsync();
-            }
-        }
-        else
-        {
-            await _db.Addresses
-                .Where(a => a.Id == id && a.UserId == userId.Value && a.IsActive)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(a => a.IsDefault, true)
-                    .SetProperty(a => a.UpdatedAt, DateTime.UtcNow));
-        }
+        // Atomic single-default: clear+set in one pass so concurrent SetDefault
+        // cannot leave multiple IsDefault=true (TOCTOU on ClearDefaults-then-set).
+        await ApplySingleDefaultAsync(userId.Value, id);
 
         address.IsDefault = true;
         address.UpdatedAt = DateTime.UtcNow;
@@ -258,6 +240,34 @@ public class AddressesController : ControllerBase
                 .Where(a => a.UserId == userId && a.IsActive && a.IsDefault && (exceptId == null || a.Id != exceptId))
                 .ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
         }
+    }
+
+    /// <summary>
+    /// Force exactly one default among the user's active addresses.
+    /// Sets IsDefault = (Id == targetId) for every active row in one update.
+    /// </summary>
+    private async Task ApplySingleDefaultAsync(long userId, long targetId)
+    {
+        var now = DateTime.UtcNow;
+        if (_db.Database.IsInMemory())
+        {
+            var rows = await _db.Addresses
+                .Where(a => a.UserId == userId && a.IsActive)
+                .ToListAsync();
+            foreach (var row in rows)
+            {
+                row.IsDefault = row.Id == targetId;
+                row.UpdatedAt = now;
+            }
+            await _db.SaveChangesAsync();
+            return;
+        }
+
+        await _db.Addresses
+            .Where(a => a.UserId == userId && a.IsActive)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.IsDefault, a => a.Id == targetId)
+                .SetProperty(a => a.UpdatedAt, now));
     }
 
     private static (decimal? Latitude, decimal? Longitude) NormalizeCoordinates(decimal? latitude, decimal? longitude)
