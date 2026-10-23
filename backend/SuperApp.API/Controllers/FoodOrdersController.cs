@@ -22,17 +22,20 @@ public class FoodOrdersController : ControllerBase
     private readonly IHubContext<OrderStatusHub> _orderHub;
     private readonly IHubContext<RideTrackingHub>? _rideHub;
     private readonly IPaymentService? _payments;
+    private readonly INotificationService? _notifications;
 
     public FoodOrdersController(
         AppDbContext db,
         IHubContext<OrderStatusHub> orderHub,
         IPaymentService? payments = null,
-        IHubContext<RideTrackingHub>? rideHub = null)
+        IHubContext<RideTrackingHub>? rideHub = null,
+        INotificationService? notifications = null)
     {
         _db = db;
         _orderHub = orderHub;
         _payments = payments;
         _rideHub = rideHub;
+        _notifications = notifications;
     }
 
     /// <summary>Postgres text rejects U+0000; strip control NULs so notes never 500.</summary>
@@ -771,10 +774,20 @@ public class FoodOrdersController : ControllerBase
             claimed = 1;
         }
 
-        await FoodOrderCancellation.ReleaseCaptainAndNotifyAsync(
+        var previousDriverId = await FoodOrderCancellation.ReleaseCaptainAndNotifyAsync(
             _db, order, _orderHub, _rideHub, cancelledBy: "customer");
 
         await _db.SaveChangesAsync();
+
+        try
+        {
+            await FoodOrderCancellation.NotifyCancelStakeholdersAsync(
+                _db, order, previousDriverId, cancelledBy: "customer", _notifications, actingUserId: userId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FoodOrders] Cancel stakeholder notify failed for order {order.Id}: {ex.Message}");
+        }
 
         return Ok(ApiResponse.Ok("Order cancelled successfully"));
     }

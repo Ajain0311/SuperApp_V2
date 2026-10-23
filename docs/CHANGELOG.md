@@ -5,6 +5,12 @@ All notable changes in this migration project are documented below.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Food cancel visibility + order-placed chime
+
+- Customer/vendor food cancel now notifies assigned captain, restaurant staff, and customer (in-app + push) via shared `FoodOrderCancellation.NotifyCancelStakeholdersAsync`.
+- Captain `DriverHomeScreen` shows an Alert when an accepted (or offered) food job is cancelled; kitchen shows Alert on customer cancel.
+- Soft local order-placed chime (`expo-av` + `assets/sounds/order-placed.wav`) after successful checkout.
+
 ## [2.3.0] - 2026-09-20
 
 ### Live Browser Testing, UAT Automation, Secret Sanitization & Documentation Consolidation

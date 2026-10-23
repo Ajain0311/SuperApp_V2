@@ -138,6 +138,24 @@ jest.mock('expo-notifications', () => {
   };
 });
 
+jest.mock('expo-av', () => {
+  const sound = {
+    replayAsync: jest.fn().mockResolvedValue(undefined),
+    setVolumeAsync: jest.fn().mockResolvedValue(undefined),
+    unloadAsync: jest.fn().mockResolvedValue(undefined),
+  };
+  return {
+    Audio: {
+      setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
+      Sound: {
+        createAsync: jest.fn().mockResolvedValue({ sound }),
+      },
+    },
+  };
+});
+
+jest.mock('../assets/sounds/order-placed.wav', () => 1, { virtual: true });
+
 jest.mock('@rnmapbox/maps', () => {
   const React = require('react');
   const { View } = require('react-native');

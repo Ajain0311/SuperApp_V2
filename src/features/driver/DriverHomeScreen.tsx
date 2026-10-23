@@ -60,6 +60,7 @@ export const DriverHomeScreen: React.FC = () => {
   const locationWatcherRef = useRef<(() => void) | null>(null);
   const alertedRideIdsRef = useRef<Set<number>>(new Set());
   const alertedFoodOrderIdsRef = useRef<Set<number>>(new Set());
+  const alertedFoodCancelIdsRef = useRef<Set<number>>(new Set());
   const cameraRef = useRef<any>(null);
 
   const tokenReady = mapboxService.isConfigured();
@@ -464,9 +465,44 @@ export const DriverHomeScreen: React.FC = () => {
           });
 
           unregisterFoodStatus = signalRService.onFoodDeliveryStatusChanged((data: any) => {
-            if (!data?.orderId || !activeFoodOrder) return;
-            if (Number(data.orderId) !== Number(activeFoodOrder.id)) return;
-            if (data.status === 'DELIVERED' || data.status === 'CANCELLED') {
+            if (!data?.orderId) return;
+            const orderId = Number(data.orderId);
+            if (!Number.isFinite(orderId)) return;
+
+            // Drop from available pool even if captain had not accepted yet.
+            if (data.status === 'CANCELLED' || data.status === 'DELIVERED') {
+              setAvailableFoodOrders((prev) => prev.filter((o) => o.id !== orderId));
+            }
+
+            const isActiveJob =
+              !!activeFoodOrder && Number(activeFoodOrder.id) === orderId;
+
+            if (data.status === 'CANCELLED') {
+              if (isActiveJob || alertedFoodOrderIdsRef.current.has(orderId)) {
+                if (!alertedFoodCancelIdsRef.current.has(orderId)) {
+                  alertedFoodCancelIdsRef.current.add(orderId);
+                  const by =
+                    data.cancelledBy === 'customer'
+                      ? ' (customer)'
+                      : data.cancelledBy === 'vendor'
+                        ? ' (restaurant)'
+                        : '';
+                  Alert.alert(
+                    'Order Cancelled ❌',
+                    `Order #${data.orderNumber || orderId} cancel ho gaya${by}. Delivery ab nahi karni.`
+                  );
+                }
+              }
+              if (isActiveJob) {
+                setActiveFoodOrder(null);
+                loadDriverData();
+              }
+              return;
+            }
+
+            if (!isActiveJob) return;
+
+            if (data.status === 'DELIVERED') {
               setActiveFoodOrder(null);
               loadDriverData();
               return;

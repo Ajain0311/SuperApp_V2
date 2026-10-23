@@ -144,7 +144,7 @@ Fetches authenticated user identity, saved addresses, and active role permission
 - `GET /api/foodorders/{id}` *(Requires Bearer Token)*: Returns detailed status stepper and items.
 - `GET /api/restaurants/foods`: Cross-restaurant dish feed for direct-foods browse (`search`, `category`, `isVegOnly`, `isBestseller`, `restaurantId`, `city`, `page`, `pageSize`).
 - `POST /api/foodorders/checkout` *(Requires Bearer Token)*: Multi-hotel cart checkout. Server groups items by `FoodItem.RestaurantId` and creates **N kitchen orders**. COD supports multiple hotels; ONLINE and coupons are single-hotel only.
-- `POST /api/foodorders/{id}/cancel` *(Requires Bearer Token)*: Customer may cancel through `READY` (including after captain accept). Clears `DriverId`, notifies `drivers-pool` via `FoodDeliveryStatusChanged`, and refunds PAID online orders when the gateway supports it. Blocked once `PICKED_UP` / `DELIVERED`.
+- `POST /api/foodorders/{id}/cancel` *(Requires Bearer Token)*: Customer may cancel through `READY` (including after captain accept). Clears `DriverId`, notifies `drivers-pool` via `FoodDeliveryStatusChanged` (payload includes `cancelledBy`), pushes in-app + device notifications to the assigned captain, restaurant staff, and customer, and refunds PAID online orders when the gateway supports it. Blocked once `PICKED_UP` / `DELIVERED`. Vendor cancel via `POST /api/vendor/orders/{id}/status` with `CANCELLED` uses the same stakeholder notify path.
 
 ### 3.3 Restaurant Vendor Portal (`/api/vendor`)
 *(Requires Role: RESTAURANT_OWNER)*

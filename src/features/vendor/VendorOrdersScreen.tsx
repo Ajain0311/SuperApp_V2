@@ -75,9 +75,18 @@ export const VendorOrdersScreen: React.FC = () => {
           });
 
           unregAccepted = signalRService.onOrderAcceptedByOther((data: any) => {
-            if (data?.orderId) {
-              setOrders((prev) =>
-                prev.map((o) => (o.id === data.orderId ? { ...o, status: data.status } : o))
+            if (!data?.orderId) return;
+            setOrders((prev) =>
+              prev.map((o) => (o.id === data.orderId ? { ...o, status: data.status } : o))
+            );
+            // Customer cancel: kitchen needs an explicit heads-up (vendor self-cancel already knows).
+            if (
+              String(data.status || '').toUpperCase() === 'CANCELLED' &&
+              data.cancelledBy === 'customer'
+            ) {
+              Alert.alert(
+                'Order Cancelled ❌',
+                `Customer ne order #${data.orderNumber || data.orderId} cancel kar diya.`
               );
             }
           });
