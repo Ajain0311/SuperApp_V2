@@ -1,22 +1,20 @@
 {
   "expo": {
-    "name": "SuperApp",
+    "name": "RJ09 SEWA",
     "slug": "HTTP-EXPNAT-NET",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A0E21"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.superapp.v2",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "SuperApp uses your location to set pickup points for rides and recommend nearby restaurants and stores.",
-        "LSApplicationQueriesSchemes": ["tel", "telprompt"]
+        "LSApplicationQueriesSchemes": [
+          "tel",
+          "telprompt"
+        ]
       }
     },
     "android": {
@@ -34,7 +32,8 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "POST_NOTIFICATIONS"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"

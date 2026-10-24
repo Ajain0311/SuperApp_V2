@@ -58,9 +58,32 @@ export const AddListingScreen: React.FC = () => {
   const [description, setDescription] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(1);
   const [selectedCondition, setSelectedCondition] = useState('LIKE_NEW');
+  const [categoriesList, setCategoriesList] = useState(CATEGORIES);
   const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await apiClient.get<any>(ApiEndpoints.marketplace.categories);
+        const data = res.data?.data || res.data;
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          const list = data.map((c: any) => ({ id: c.id, name: c.name }));
+          setCategoriesList(list);
+          if (!list.some((c: any) => c.id === selectedCategoryId)) {
+            setSelectedCategoryId(list[0].id);
+          }
+        }
+      } catch {
+        // Fallback to static CATEGORIES
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handlePickPhoto = async () => {
     try {
@@ -193,6 +216,7 @@ export const AddListingScreen: React.FC = () => {
       console.warn('[AddListing] Server error:', err?.message);
       setIsSubmitting(false);
       const errorMessage =
+        err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.message ||
         'Could not publish listing to the server. Please check your connection and retry.';
@@ -202,7 +226,7 @@ export const AddListingScreen: React.FC = () => {
 
     setIsSubmitting(false);
 
-    const cat = CATEGORIES.find((c) => c.id === selectedCategoryId) || CATEGORIES[0];
+    const cat = categoriesList.find((c) => c.id === selectedCategoryId) || categoriesList[0];
 
     const newListing: ListingSummary = {
       id: serverListing.id,
@@ -299,7 +323,7 @@ export const AddListingScreen: React.FC = () => {
         {/* Category */}
         <Text style={styles.inputLabel}>Category *</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-          {CATEGORIES.map((cat) => {
+          {categoriesList.map((cat) => {
             const isSelected = cat.id === selectedCategoryId;
             return (
               <TouchableOpacity

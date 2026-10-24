@@ -642,6 +642,39 @@ END $$;");
         {
             Console.WriteLine($"[Schema Check] role_applications grants: {ex.Message}");
         }
+
+        // Synchronize all PostgreSQL sequences with existing max table IDs to prevent identity collisions
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"
+DO $$
+DECLARE
+    r RECORD;
+    max_id BIGINT;
+BEGIN
+    FOR r IN (
+        SELECT t.table_name, c.column_name, pg_get_serial_sequence(quote_ident(t.table_name), c.column_name) AS seq_name
+        FROM information_schema.tables t
+        JOIN information_schema.columns c ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+        WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+    ) LOOP
+        IF r.seq_name IS NOT NULL THEN
+            BEGIN
+                EXECUTE format('SELECT MAX(%I) FROM %I', r.column_name, r.table_name) INTO max_id;
+                IF max_id IS NOT NULL AND max_id > 0 THEN
+                    EXECUTE format('SELECT setval(%L, %s, true)', r.seq_name, max_id);
+                END IF;
+            EXCEPTION WHEN OTHERS THEN
+                NULL;
+            END;
+        END IF;
+    END LOOP;
+END $$;");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Schema Check] sequence sync: {ex.Message}");
+        }
     }
 }
 

@@ -54,6 +54,13 @@
         "expo-notifications",
         "expo-dev-client"
       ]
+    },
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "expo-av"
+        ]
+      }
     }
   },
   "private": true
