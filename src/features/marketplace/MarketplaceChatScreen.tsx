@@ -6,12 +6,10 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,6 +20,8 @@ import { ApiEndpoints } from '../../constants/api';
 import { signalRService, ChatMessageEvent } from '../../services/signalr';
 import { useAuthStore } from '../../store/authStore';
 import { OfflineBanner } from '../../components/common/OfflineBanner';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
+import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -29,6 +29,8 @@ import { spacing } from '../../theme/spacing';
 export const MarketplaceChatScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'MarketplaceChat'>>();
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight({ androidMode: 'pad' });
   const params = route.params || {
     listingId: '0',
     sellerId: 0,
@@ -50,6 +52,13 @@ export const MarketplaceChatScreen: React.FC = () => {
 
   const flatListRef = useRef<FlatList>(null);
   const activeConvIdRef = useRef<number | null>(params.conversationId ?? null);
+  const keyboardOpen = keyboardHeight > 0;
+
+  useEffect(() => {
+    if (!keyboardOpen) return;
+    const t = setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(t);
+  }, [keyboardOpen, messages.length]);
 
   const loadConversation = useCallback(async () => {
     setIsLoading(true);
@@ -287,17 +296,15 @@ export const MarketplaceChatScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       ) : (
-        <KeyboardAvoidingView
-          style={styles.chatArea}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
+        <FormKeyboardAvoid variant="chat" style={styles.chatArea}>
           <FlatList
             ref={flatListRef}
             data={messages}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderMessageItem}
             contentContainerStyle={styles.messagesList}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
@@ -308,8 +315,13 @@ export const MarketplaceChatScreen: React.FC = () => {
             }
           />
 
-          {/* Input Bar */}
-          <SafeAreaView edges={['bottom']} style={styles.inputBarWrapper}>
+          {/* Input bar — rides above keyboard via FormKeyboardAvoid chat padding */}
+          <View
+            style={[
+              styles.inputBarWrapper,
+              { paddingBottom: keyboardOpen ? spacing.sm : Math.max(insets.bottom, spacing.sm) },
+            ]}
+          >
             <View style={styles.inputBar}>
               <TextInput
                 style={styles.textInput}
@@ -319,6 +331,9 @@ export const MarketplaceChatScreen: React.FC = () => {
                 onChangeText={setInputText}
                 multiline
                 maxLength={1000}
+                onFocus={() => {
+                  setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 120);
+                }}
               />
               <TouchableOpacity
                 style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
@@ -332,8 +347,8 @@ export const MarketplaceChatScreen: React.FC = () => {
                 )}
               </TouchableOpacity>
             </View>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
+          </View>
+        </FormKeyboardAvoid>
       )}
     </SafeAreaView>
   );
