@@ -1929,13 +1929,26 @@ public class AdminController : ControllerBase
 
         if (_notificationService != null)
         {
-            var roleLabel = app.RequestedRole == RoleNames.Driver
-                ? "Rider / Captain"
-                : "Hotel / Restaurant";
-            var title = $"{roleLabel} application approved";
-            var body = app.RequestedRole == RoleNames.Driver
-                ? "Your rider application was approved. Open Profile → switch role to start accepting trips."
-                : "Your hotel application was approved. Open Profile → switch to Restaurant Owner to manage your hotel.";
+            string title;
+            string body;
+            if (app.RequestedRole == RoleNames.Driver)
+            {
+                var vLabel = string.IsNullOrWhiteSpace(app.VehicleType) ? "vehicle" : app.VehicleType;
+                title = "Rider vehicle approved";
+                body =
+                    $"Your {vLabel} application was approved" +
+                    (string.IsNullOrWhiteSpace(app.VehicleRegistrationNumber)
+                        ? "."
+                        : $" ({app.VehicleRegistrationNumber}).") +
+                    " Open Profile → switch to Rider to use it. You can also apply for another vehicle anytime.";
+            }
+            else
+            {
+                var outlet = string.IsNullOrWhiteSpace(app.HotelName) ? "outlet" : app.HotelName;
+                title = "Hotel / cafe outlet approved";
+                body =
+                    $"\"{outlet}\" was approved. Open Profile → Restaurant Owner to manage it. You can apply for another hotel or cafe anytime.";
+            }
             try
             {
                 await _notificationService.SendPushNotificationAsync(
