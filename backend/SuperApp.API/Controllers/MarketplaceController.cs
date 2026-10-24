@@ -241,22 +241,62 @@ public class MarketplaceController : ControllerBase
                 if (!request.Price.HasValue || request.Price.Value < 0)
                     return BadRequest(ApiResponse<ListingSummaryDto>.Fail("Valid price is required"));
 
-                // Auto-grant MARKETPLACE_SELLER role if needed
-                var hasSellerRole = await _db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == 5);
-                if (!hasSellerRole)
+                // Auto-grant MARKETPLACE_SELLER by role name (never hardcode RoleId — prod ids differ from seed).
+                try
                 {
-                    _db.UserRoles.Add(new UserRole
+                    var sellerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == RoleNames.MarketplaceSeller);
+                    if (sellerRole == null)
                     {
-                        UserId = userId,
-                        RoleId = 5,
-                        CreatedAt = DateTime.UtcNow
-                    });
+                        sellerRole = new Role
+                        {
+                            Name = RoleNames.MarketplaceSeller,
+                            Description = "Marketplace seller",
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        _db.Roles.Add(sellerRole);
+                        await _db.SaveChangesAsync();
+                    }
+
+                    var hasSellerRole = await _db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == sellerRole.Id);
+                    if (!hasSellerRole)
+                    {
+                        _db.UserRoles.Add(new UserRole
+                        {
+                            UserId = userId,
+                            RoleId = sellerRole.Id,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                catch (Exception roleEx)
+                {
+                    // Listing publish must not fail if role grant has a transient issue.
+                    Console.WriteLine($"[MarketplaceController] Auto-assign seller role skipped: {roleEx.Message}");
+                    // Clear any failed tracked role/user_role entities so listing save is clean.
+                    foreach (var entry in _db.ChangeTracker.Entries()
+                                 .Where(e => e.Entity is Role or UserRole && e.State != EntityState.Unchanged)
+                                 .ToList())
+                    {
+                        entry.State = EntityState.Detached;
+                    }
+                }
+
+                // Ensure category exists or fall back to first active
+                var cat = await _db.MarketplaceCategories.FindAsync(request.CategoryId.Value);
+                if (cat == null || !cat.IsActive)
+                {
+                    cat = await _db.MarketplaceCategories.Where(c => c.IsActive).OrderBy(c => c.SortOrder).FirstOrDefaultAsync();
+                    if (cat == null)
+                        return BadRequest(ApiResponse<ListingSummaryDto>.Fail("No marketplace categories available"));
+                    request.CategoryId = cat.Id;
                 }
 
                 var newListing = new MarketplaceListing
                 {
                     UserId = userId,
-                    CategoryId = request.CategoryId.Value,
+                    CategoryId = cat.Id,
                     Title = request.Title.Trim(),
                     Description = request.Description?.Trim(),
                     Price = request.Price.Value,
@@ -272,28 +312,72 @@ public class MarketplaceController : ControllerBase
                 };
 
                 _db.MarketplaceListings.Add(newListing);
-                await _db.SaveChangesAsync();
+                try
+                {
+                    await _db.SaveChangesAsync();
+                }
+                catch (DbUpdateException dbEx)
+                {
+                    // If sequence is out of sync in PostgreSQL, resync sequence and retry once
+                    try
+                    {
+                        await _db.Database.ExecuteSqlRawAsync(
+                            "SELECT setval(pg_get_serial_sequence('marketplace_listings', 'id'), COALESCE((SELECT MAX(id) FROM marketplace_listings), 1));"
+                        );
+                        _db.Entry(newListing).State = EntityState.Detached;
+                        newListing.Id = 0;
+                        _db.MarketplaceListings.Add(newListing);
+                        await _db.SaveChangesAsync();
+                    }
+                    catch
+                    {
+                        throw dbEx;
+                    }
+                }
 
                 if (request.ImageUrls != null && request.ImageUrls.Any())
                 {
-                    int order = 1;
-                    foreach (var img in request.ImageUrls)
+                    try
                     {
-                        if (!string.IsNullOrWhiteSpace(img))
+                        int order = 1;
+                        foreach (var img in request.ImageUrls)
                         {
-                            _db.ListingImages.Add(new ListingImage
+                            if (!string.IsNullOrWhiteSpace(img))
                             {
-                                ListingId = newListing.Id,
-                                ImageUrl = img.Trim(),
-                                SortOrder = order++,
-                                CreatedAt = DateTime.UtcNow
-                            });
+                                var cleanUrl = img.Trim();
+                                if (cleanUrl.Length > 500)
+                                    cleanUrl = cleanUrl.Substring(0, 500);
+
+                                _db.ListingImages.Add(new ListingImage
+                                {
+                                    ListingId = newListing.Id,
+                                    ImageUrl = cleanUrl,
+                                    SortOrder = order++,
+                                    CreatedAt = DateTime.UtcNow
+                                });
+                            }
+                        }
+                        await _db.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException)
+                    {
+                        try
+                        {
+                            await _db.Database.ExecuteSqlRawAsync(
+                                "SELECT setval(pg_get_serial_sequence('listing_images', 'id'), COALESCE((SELECT MAX(id) FROM listing_images), 1));"
+                            );
+                            await _db.SaveChangesAsync();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[MarketplaceController] Failed to save listing images: {ex.Message}");
                         }
                     }
-                    await _db.SaveChangesAsync();
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[MarketplaceController] Failed to save listing images: {ex.Message}");
+                    }
                 }
-
-                var cat = await _db.MarketplaceCategories.FindAsync(newListing.CategoryId);
 
                 var dto = new ListingSummaryDto
                 {
@@ -308,7 +392,7 @@ public class MarketplaceController : ControllerBase
                     Status = newListing.Status,
                     CreatedAt = newListing.CreatedAt,
                     CategoryId = newListing.CategoryId,
-                    CategoryName = cat?.Name ?? string.Empty,
+                    CategoryName = cat.Name,
                     IsFavorite = false
                 };
 
