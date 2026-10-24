@@ -918,7 +918,7 @@ public class FoodOrdersController : ControllerBase
 
     public static FoodOrderDto MapToOrderDto(
         FoodOrder o,
-        Restaurant restaurant,
+        Restaurant? restaurant,
         Address? address = null,
         User? user = null,
         string? ownerPhone = null)
@@ -927,8 +927,8 @@ public class FoodOrdersController : ControllerBase
         var restPhone = !string.IsNullOrWhiteSpace(ownerPhone)
             ? ownerPhone.Trim()
             : (!string.IsNullOrWhiteSpace(restaurant?.Phone) ? restaurant.Phone : null);
-        var restAddr = !string.IsNullOrWhiteSpace(restaurant?.AddressLine) 
-            ? (!string.IsNullOrWhiteSpace(restaurant?.City) ? $"{restaurant.AddressLine}, {restaurant.City}" : restaurant.AddressLine)
+        var restAddr = (restaurant != null && !string.IsNullOrWhiteSpace(restaurant.AddressLine)) 
+            ? (!string.IsNullOrWhiteSpace(restaurant.City) ? $"{restaurant.AddressLine}, {restaurant.City}" : restaurant.AddressLine)
             : (!string.IsNullOrWhiteSpace(restaurant?.City) ? restaurant.City : null);
         var deliveryAddr = address != null 
             ? $"{address.AddressLine1}, {address.City} ({address.PinCode})" 

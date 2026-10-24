@@ -72,7 +72,7 @@ public class PaymentsController : ControllerBase
             CheckoutMode = mode,
             KeyId = key,
             HasCredentials = hasCredentials,
-            CheckoutUrl = isProd ? null : "/pay-test/",
+            CheckoutUrl = isProd ? "" : "/pay-test/",
             TestCards = isProd ? [] :
             [
                 "Visa 4012 0010 3714 1112",
