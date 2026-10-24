@@ -315,7 +315,7 @@ export const NotificationsScreen: React.FC = () => {
         refreshing={refreshing}
         onRefresh={handleRefresh}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderDevTester}
+        ListHeaderComponent={null}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <MaterialIcons name="notifications-none" size={52} color={colors.textTertiary} />
