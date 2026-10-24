@@ -12,7 +12,6 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
@@ -25,6 +24,7 @@ import { useRoleStore, ROLE_CONFIGS } from '../../store/roleStore';
 import { RoleSwitchModal } from '../../components/RoleSwitchModal';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -323,11 +323,7 @@ export const ProfileScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => !savingName && setEditVisible(false)}
       >
-        <KeyboardAvoidingView
-          style={styles.editKeyboardRoot}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
-        >
+        <FormKeyboardAvoid style={styles.editKeyboardRoot}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <View style={styles.editOverlay}>
               <View style={styles.editSheet}>
@@ -376,7 +372,7 @@ export const ProfileScreen: React.FC = () => {
               </View>
             </View>
           </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+        </FormKeyboardAvoid>
       </Modal>
     </SafeAreaView>
   );

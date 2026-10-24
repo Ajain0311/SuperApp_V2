@@ -27,6 +27,7 @@ import { ApiEndpoints } from '../../constants/api';
 import { notificationService } from '../../services/notificationService';
 import { documentService } from '../../services/documentService';
 import { LocationService } from '../../services/locationService';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 const locationService = new LocationService();
 
@@ -254,7 +255,8 @@ export const AddListingScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <FormKeyboardAvoid>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Photos Section */}
         <Text style={styles.sectionTitle}>Photos (Upload up to 5)</Text>
         <Text style={styles.sectionSubtitle}>
@@ -418,6 +420,7 @@ export const AddListingScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </FormKeyboardAvoid>
     </SafeAreaView>
   );
 };

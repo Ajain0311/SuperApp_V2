@@ -21,6 +21,7 @@ import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
 import { documentService } from '../../services/documentService';
 import { ApiEndpoints } from '../../constants/api';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 type RoleKind = 'DRIVER' | 'RESTAURANT_OWNER';
 
@@ -130,6 +131,7 @@ export const RoleApplicationScreen: React.FC = () => {
         <View style={{ width: 32 }} />
       </View>
 
+      <FormKeyboardAvoid>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.intro}>
           Default mode is Citizen. Admin must approve this request before the new role is added to your
@@ -204,6 +206,7 @@ export const RoleApplicationScreen: React.FC = () => {
           {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitText}>Submit for Admin Approval</Text>}
         </TouchableOpacity>
       </ScrollView>
+      </FormKeyboardAvoid>
     </SafeAreaView>
   );
 };

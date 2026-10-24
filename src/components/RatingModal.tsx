@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { reviewService } from '../services/reviewService';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
+import { FormKeyboardAvoid } from './common/FormKeyboardAvoid';
 
 interface RatingModalProps {
   visible: boolean;
@@ -65,6 +66,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <FormKeyboardAvoid>
       <View style={styles.overlay}>
         <View style={styles.modalCard}>
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
@@ -132,6 +134,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+      </FormKeyboardAvoid>
     </Modal>
   );
 };

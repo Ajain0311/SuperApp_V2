@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 type TabKey = 'FOOD' | 'MARKETPLACE';
 
@@ -454,6 +455,7 @@ export const AdminListingsScreen: React.FC<AdminListingsScreenProps> = ({ naviga
       )}
 
       <Modal visible={editVisible} transparent animationType="slide" onRequestClose={() => setEditVisible(false)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
@@ -500,6 +502,7 @@ export const AdminListingsScreen: React.FC<AdminListingsScreenProps> = ({ naviga
             </TouchableOpacity>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </View>
   );

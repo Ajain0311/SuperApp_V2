@@ -20,6 +20,7 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
 import { useAuthStore } from '../../store/authStore';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 type AdminTab = 'OVERVIEW' | 'USERS' | 'RESTAURANTS' | 'ORDERS' | 'RIDES' | 'BAZAAR' | 'CONFIG';
 
@@ -926,6 +927,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         animationType="slide"
         onRequestClose={() => setShowAddRestModal(false)}
       >
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Add Restaurant Partner</Text>
@@ -1050,6 +1052,7 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
             </View>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </SafeAreaView>
   );

@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { AdminSetting } from './types';
 
 interface AdminSettingsScreenProps {
@@ -405,6 +406,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
 
       {/* Edit Setting Modal */}
       <Modal visible={editingSetting !== null} transparent animationType="slide" onRequestClose={() => setEditingSetting(null)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -436,6 +438,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
             </View>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </View>
   );

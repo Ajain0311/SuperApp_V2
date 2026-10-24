@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { mapHotelCommission, mapSettlementBatch, money } from './adminFinanceMappers';
 
 export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
@@ -292,6 +293,7 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
       )}
 
       <Modal visible={rateModalVisible} transparent animationType="fade" onRequestClose={() => setRateModalVisible(false)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalHeading}>Set Prospective Commission Rate</Text>
@@ -314,6 +316,7 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
             </View>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
 
       <Modal
@@ -322,6 +325,7 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
         animationType="fade"
         onRequestClose={() => setSettlementModalVisible(false)}
       >
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalHeading}>Create Collection Batch</Text>
@@ -353,6 +357,7 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
             </View>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </View>
   );

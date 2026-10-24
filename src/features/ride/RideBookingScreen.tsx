@@ -22,6 +22,7 @@ import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { locationService } from '../../services/locationService';
 import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { mapboxService, SelectedMapPlace } from '../../services/mapboxService';
 
 interface VehicleOption {
@@ -444,6 +445,7 @@ export const RideBookingScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      <FormKeyboardAvoid>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Rapido-Style Location Inputs Card */}
         <View style={styles.card}>
@@ -711,6 +713,7 @@ export const RideBookingScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      </FormKeyboardAvoid>
 
       {/* Pin on Map Modal */}
       {isMapModalVisible && (

@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { vendorService } from '../../services/vendorService';
 import { documentService, absoluteImageUrl } from '../../services/documentService';
 import { ScreenBackButton } from '../../components/common/ScreenBackButton';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -391,6 +392,7 @@ export const VendorMenuScreen: React.FC = () => {
 
       {/* Add / Edit Food Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
@@ -501,10 +503,12 @@ export const VendorMenuScreen: React.FC = () => {
             </ScrollView>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
 
       {/* Category Modal */}
       <Modal visible={categoryModal} transparent animationType="fade" onRequestClose={() => setCategoryModal(false)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { maxHeight: 280 }]}>
             <Text style={styles.modalTitle}>New Category</Text>
@@ -529,6 +533,7 @@ export const VendorMenuScreen: React.FC = () => {
             </View>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </SafeAreaView>
   );
