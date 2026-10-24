@@ -1,23 +1,22 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AppColors } from '../../theme/colors';
-import { AppRadius } from '../../theme/spacing';
 import { useAuthStore } from '../../store/authStore';
 import { shadowStyle } from '../../utils/platformStyles';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 interface PhoneEntryScreenProps {
   navigation: any;
@@ -27,10 +26,33 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const sendOtp = useAuthStore((state) => state.sendOtp);
+  const scrollRef = useRef<ScrollView>(null);
+  const inputCardY = useRef(0);
 
   const cleanNumber = phoneNumber.trim().replace(/\D/g, '');
   const isValidLength = cleanNumber.length === 10;
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, () => setKeyboardOpen(true));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const scrollInputIntoView = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, inputCardY.current - 24),
+        animated: true,
+      });
+    });
+  };
 
   const handleContinue = async () => {
     if (!cleanNumber) {
@@ -60,10 +82,9 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#0A0E21" />
 
-      {/* Subtle Ambient Background Gradient */}
       <LinearGradient
         colors={['#1E1738', '#141829', '#0A0E21']}
         start={{ x: 0.5, y: 0 }}
@@ -71,61 +92,71 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
         style={StyleSheet.absoluteFill}
       />
 
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <FormKeyboardAvoid offset={Platform.OS === 'ios' ? 8 : 0}>
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          ref={scrollRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            keyboardOpen && styles.scrollContentKeyboard,
+          ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
+          contentInsetAdjustmentBehavior="always"
         >
-          {/* Top Brand Section */}
-          <View style={styles.brandHeader}>
+          <View style={[styles.brandHeader, keyboardOpen && styles.brandHeaderCompact]}>
             <LinearGradient
               colors={['#FF6B35', '#E55A2B']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.logoBadge}
+              style={[styles.logoBadge, keyboardOpen && styles.logoBadgeCompact]}
             >
-              <Ionicons name="sparkles" size={28} color="#FFFFFF" />
+              <Ionicons name="sparkles" size={keyboardOpen ? 20 : 28} color="#FFFFFF" />
             </LinearGradient>
 
-            <View style={styles.appPill}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.appPillText}>ALL-IN-ONE SUPER APP</Text>
-            </View>
+            {!keyboardOpen ? (
+              <View style={styles.appPill}>
+                <View style={styles.pulseDot} />
+                <Text style={styles.appPillText}>ALL-IN-ONE SUPER APP</Text>
+              </View>
+            ) : null}
 
-            <Text style={styles.heroTitle}>SuperApp</Text>
-            <Text style={styles.heroSubtitle}>
-              Delicious Food • Fast City Rides • Local Bazaar
-            </Text>
+            <Text style={[styles.heroTitle, keyboardOpen && styles.heroTitleCompact]}>SuperApp</Text>
+            {!keyboardOpen ? (
+              <Text style={styles.heroSubtitle}>
+                Delicious Food • Fast City Rides • Local Bazaar
+              </Text>
+            ) : null}
           </View>
 
-          {/* Service Feature Chips */}
-          <View style={styles.featureRow}>
-            <View style={styles.featureChip}>
-              <Text style={styles.featureChipIcon}>🍕</Text>
-              <Text style={styles.featureChipText}>Food Delivery</Text>
+          {!keyboardOpen ? (
+            <View style={styles.featureRow}>
+              <View style={styles.featureChip}>
+                <Text style={styles.featureChipIcon}>🍕</Text>
+                <Text style={styles.featureChipText}>Food Delivery</Text>
+              </View>
+              <View style={styles.featureChip}>
+                <Text style={styles.featureChipIcon}>🚕</Text>
+                <Text style={styles.featureChipText}>Fast Cabs</Text>
+              </View>
+              <View style={styles.featureChip}>
+                <Text style={styles.featureChipIcon}>🛍️</Text>
+                <Text style={styles.featureChipText}>Bazaar</Text>
+              </View>
             </View>
-            <View style={styles.featureChip}>
-              <Text style={styles.featureChipIcon}>🚕</Text>
-              <Text style={styles.featureChipText}>Fast Cabs</Text>
-            </View>
-            <View style={styles.featureChip}>
-              <Text style={styles.featureChipIcon}>🛍️</Text>
-              <Text style={styles.featureChipText}>Bazaar</Text>
-            </View>
-          </View>
+          ) : null}
 
-          {/* Main Login Card */}
-          <View style={styles.cardContainer}>
+          <View
+            style={styles.cardContainer}
+            onLayout={(e) => {
+              inputCardY.current = e.nativeEvent.layout.y;
+            }}
+          >
             <Text style={styles.cardTitle}>Login or Sign Up</Text>
             <Text style={styles.cardSubtitle}>
-              We'll send a 6-digit verification code to your mobile number
+              Enter your mobile number — we will send a 6-digit OTP
             </Text>
 
-            {/* Modern Phone Input Field */}
             <View
               style={[
                 styles.phoneInputCard,
@@ -138,15 +169,19 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
               <View style={styles.inputDivider} />
               <TextInput
                 style={styles.phoneNumberInput}
-                placeholder="Mobile Number"
+                placeholder="10-digit mobile number"
                 placeholderTextColor="#64748B"
                 keyboardType="phone-pad"
                 maxLength={10}
                 value={phoneNumber}
                 onChangeText={(t) => setPhoneNumber(t.replace(/\D/g, ''))}
-                onFocus={() => setIsFocused(true)}
+                onFocus={() => {
+                  setIsFocused(true);
+                  scrollInputIntoView();
+                }}
                 onBlur={() => setIsFocused(false)}
-                autoFocus
+                returnKeyType="done"
+                blurOnSubmit
               />
               {phoneNumber.length > 0 ? (
                 isValidLength ? (
@@ -164,29 +199,27 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
               ) : null}
             </View>
 
-            {/* Digits Counter / Helper */}
             <View style={styles.helperRow}>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, isValidLength && styles.helperTextReady]}>
                 {isValidLength
-                  ? '✓ Ready to send code'
+                  ? 'Ready to send code'
                   : cleanNumber.length > 0
-                  ? `${cleanNumber.length}/10 digits entered`
+                  ? `${cleanNumber.length}/10 digits`
                   : 'Enter 10-digit mobile number'}
               </Text>
               <View style={styles.securityBadge}>
                 <Ionicons name="shield-checkmark-outline" size={13} color="#0D9488" />
-                <Text style={styles.securityBadgeText}>100% Secure</Text>
+                <Text style={styles.securityBadgeText}>Secure</Text>
               </View>
             </View>
 
-            {/* Continue Button */}
             <TouchableOpacity
               style={[
                 styles.continueBtn,
                 (!isValidLength || isLoading) && styles.continueBtnDisabled,
               ]}
               onPress={handleContinue}
-              disabled={isLoading}
+              disabled={isLoading || !isValidLength}
               activeOpacity={0.85}
             >
               <LinearGradient
@@ -199,57 +232,55 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
                 end={{ x: 1, y: 0 }}
                 style={styles.continueBtnGradient}
               >
-                {isLoading ? (
-                  <View style={styles.loadingRow}>
-                    <Text style={styles.continueBtnText}>Sending OTP...</Text>
-                  </View>
-                ) : (
-                  <View style={styles.btnContentRow}>
-                    <Text
-                      style={[
-                        styles.continueBtnText,
-                        !isValidLength && styles.continueBtnTextDisabled,
-                      ]}
-                    >
-                      Get Verification Code
-                    </Text>
+                <View style={styles.btnContentRow}>
+                  <Text
+                    style={[
+                      styles.continueBtnText,
+                      !isValidLength && styles.continueBtnTextDisabled,
+                    ]}
+                  >
+                    {isLoading ? 'Sending OTP…' : 'Get Verification Code'}
+                  </Text>
+                  {!isLoading ? (
                     <Ionicons
                       name="arrow-forward"
                       size={18}
                       color={isValidLength ? '#FFFFFF' : '#64748B'}
                     />
-                  </View>
-                )}
+                  ) : null}
+                </View>
               </LinearGradient>
             </TouchableOpacity>
           </View>
 
-          {/* Trust Guarantees */}
-          <View style={styles.trustGrid}>
-            <View style={styles.trustItem}>
-              <Ionicons name="flash-outline" size={16} color="#FF8A5C" />
-              <Text style={styles.trustText}>Instant SMS OTP</Text>
-            </View>
-            <View style={styles.trustDot} />
-            <View style={styles.trustItem}>
-              <Ionicons name="lock-closed-outline" size={16} color="#10B981" />
-              <Text style={styles.trustText}>End-to-End Encrypted</Text>
-            </View>
-            <View style={styles.trustDot} />
-            <View style={styles.trustItem}>
-              <Ionicons name="shield-outline" size={16} color="#3B82F6" />
-              <Text style={styles.trustText}>Zero Spam</Text>
-            </View>
-          </View>
+          {!keyboardOpen ? (
+            <>
+              <View style={styles.trustGrid}>
+                <View style={styles.trustItem}>
+                  <Ionicons name="flash-outline" size={16} color="#FF8A5C" />
+                  <Text style={styles.trustText}>Instant SMS OTP</Text>
+                </View>
+                <View style={styles.trustDot} />
+                <View style={styles.trustItem}>
+                  <Ionicons name="lock-closed-outline" size={16} color="#10B981" />
+                  <Text style={styles.trustText}>Encrypted</Text>
+                </View>
+                <View style={styles.trustDot} />
+                <View style={styles.trustItem}>
+                  <Ionicons name="shield-outline" size={16} color="#3B82F6" />
+                  <Text style={styles.trustText}>Zero Spam</Text>
+                </View>
+              </View>
 
-          {/* Footer Terms */}
-          <Text style={styles.termsText}>
-            By continuing, you agree to SuperApp's{' '}
-            <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-            <Text style={styles.termsLink}>Privacy Policy</Text>.
-          </Text>
+              <Text style={styles.termsText}>
+                By continuing, you agree to SuperApp's{' '}
+                <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+                <Text style={styles.termsLink}>Privacy Policy</Text>.
+              </Text>
+            </>
+          ) : null}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </FormKeyboardAvoid>
     </SafeAreaView>
   );
 };
@@ -259,19 +290,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0A0E21',
   },
-  container: {
-    flex: 1,
-  },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 22,
-    paddingTop: 24,
+    paddingTop: 20,
     paddingBottom: 40,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContentKeyboard: {
+    justifyContent: 'flex-start',
+    paddingTop: 8,
+    paddingBottom: 120,
   },
   brandHeader: {
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 18,
+  },
+  brandHeaderCompact: {
+    marginTop: 0,
+    marginBottom: 12,
   },
   logoBadge: {
     width: 64,
@@ -287,6 +326,12 @@ const styles = StyleSheet.create({
       elevation: 8,
     }),
     marginBottom: 14,
+  },
+  logoBadgeCompact: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    marginBottom: 8,
   },
   appPill: {
     flexDirection: 'row',
@@ -319,6 +364,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginBottom: 6,
   },
+  heroTitleCompact: {
+    fontSize: 22,
+    marginBottom: 0,
+  },
   heroSubtitle: {
     fontSize: 13,
     color: '#94A3B8',
@@ -329,7 +378,7 @@ const styles = StyleSheet.create({
   featureRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 26,
+    marginBottom: 22,
     justifyContent: 'center',
     flexWrap: 'wrap',
   },
@@ -378,7 +427,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94A3B8',
     lineHeight: 19,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   phoneInputCard: {
     flexDirection: 'row',
@@ -388,7 +437,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#2A2D3E',
     paddingHorizontal: 12,
-    paddingVertical: 14,
+    minHeight: 56,
     marginBottom: 8,
   },
   phoneInputCardFocused: {
@@ -406,7 +455,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginRight: 0,
   },
   inputDivider: {
     width: 1,
@@ -419,7 +467,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    padding: 0,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
     margin: 0,
   },
   verifiedIconBox: {
@@ -429,13 +477,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
     paddingHorizontal: 4,
   },
   helperText: {
     fontSize: 11,
     color: '#94A3B8',
     fontWeight: '600',
+  },
+  helperTextReady: {
+    color: '#10B981',
   },
   securityBadge: {
     flexDirection: 'row',
@@ -472,10 +523,6 @@ const styles = StyleSheet.create({
   },
   continueBtnTextDisabled: {
     color: '#94A3B8',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   trustGrid: {
     flexDirection: 'row',
