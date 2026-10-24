@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -257,20 +258,27 @@ export const VendorOrdersScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Status Filter Chips */}
-      <View style={styles.filterScroll}>
+      {/* Status Filter Chips — horizontal scroll so DELIVERED / CANCELLED stay reachable */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterScrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         {(['ALL', 'PENDING', 'PREPARING', 'READY', 'DELIVERED', 'CANCELLED'] as const).map((chip) => (
           <TouchableOpacity
             key={chip}
             style={[styles.filterChip, filter === chip && styles.filterChipActive]}
             onPress={() => setFilter(chip)}
+            activeOpacity={0.8}
           >
             <Text style={[styles.filterChipText, filter === chip && styles.filterChipTextActive]}>
-              {chip}
+              {chip === 'DELIVERED' ? 'DELIVERY' : chip}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {isLoading ? (
         <View style={styles.centerBox}>
@@ -319,10 +327,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   filterScroll: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
+    flexGrow: 0,
     marginVertical: spacing.sm,
+  },
+  filterScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
     gap: spacing.xs,
+    paddingRight: spacing.lg,
   },
   filterChip: {
     paddingVertical: 7,
@@ -331,6 +344,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    flexShrink: 0,
   },
   filterChipActive: {
     backgroundColor: '#F59E0B',
