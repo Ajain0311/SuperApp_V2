@@ -7,6 +7,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { navigationRef } from './src/navigation/navigationRef';
 import { colors } from './src/theme/colors';
 import { notificationService } from './src/services/notificationService';
+import { locationService } from './src/services/locationService';
 import { AppEnvironment } from './src/config/environment';
 import { mapboxService } from './src/services/mapboxService';
 import { configService } from './src/services/configService';
@@ -58,6 +59,7 @@ export default function App() {
       return;
     }
 
+    void locationService.requestPermission().catch(() => {});
     notificationService.getExpoPushToken().then((token) => {
       if (token) {
         notificationService.registerDeviceTokenWithBackend(token);

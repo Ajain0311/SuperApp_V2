@@ -215,6 +215,24 @@ export const RideBookingScreen: React.FC = () => {
       const isDisabled = message.toLowerCase().includes('disabled');
 
       setGpsStatus(isDenied ? 'DENIED' : 'UNAVAILABLE');
+      if (isDenied) {
+        Alert.alert(
+          'Location Required',
+          'Please allow location access so we can detect your pickup point and find nearby rides.',
+          [
+            { text: 'Set on Map', style: 'cancel' },
+            {
+              text: 'Allow Location',
+              onPress: async () => {
+                const res = await locationService.requestPermission();
+                if (res === 'granted') {
+                  handleLocateMe();
+                }
+              },
+            },
+          ]
+        );
+      }
       setPickupAddress(
         isDenied
           ? 'Location permission denied. Search or move the map pin.'
