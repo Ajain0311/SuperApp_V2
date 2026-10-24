@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Image,
@@ -11,6 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../theme/colors';
@@ -103,7 +103,13 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
           if (data.name) setRestaurantName(data.name);
           if (data.rating) setRestaurantRating(Number(data.rating));
           if (data.deliveryFee !== undefined) setRestaurantDeliveryFee(Number(data.deliveryFee));
-          if (data.description || data.cuisines) setRestaurantCuisines(data.description || data.cuisines);
+          // Subtitle should stay short — full description can blow up the app bar
+          const cuisineText = (data.cuisines || data.city || data.description || '').toString().trim();
+          if (cuisineText) {
+            setRestaurantCuisines(
+              cuisineText.length > 60 ? `${cuisineText.slice(0, 57)}…` : cuisineText
+            );
+          }
 
           const categoryList: any[] = Array.isArray(data.categories) ? data.categories : [];
           const fromCategories: FoodItemRow[] = categoryList.flatMap((cat: any) =>
@@ -630,9 +636,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 8,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: AppColors.border,
+    backgroundColor: AppColors.background,
+    zIndex: 2,
   },
   titleCol: {
     flex: 1,
