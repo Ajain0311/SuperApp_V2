@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import { mapboxService } from './mapboxService';
 
 export type LocationPermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -79,24 +80,53 @@ export class LocationService {
    * Reverse geocode coordinates to a human-readable street address
    */
   async reverseGeocode(latitude: number, longitude: number): Promise<string> {
+    // 1. Try Mapbox Geocoding first for high-detail village, mohalla, and landmark names (e.g. Hiran Magri)
+    try {
+      if (mapboxService.isConfigured()) {
+        const mapboxPlace = await mapboxService.reverseGeocode(latitude, longitude);
+        if (mapboxPlace?.address && !mapboxPlace.address.includes('°')) {
+          return mapboxPlace.address;
+        }
+      }
+    } catch (mapboxErr) {
+      console.debug?.('[LocationService] mapbox reverseGeocode fallback to native geocode:', mapboxErr);
+    }
+
+    // 2. Fallback to device native reverse geocode (expo-location)
     try {
       const addresses = await Location.reverseGeocodeAsync({ latitude, longitude });
       if (addresses && addresses.length > 0) {
         const addr = addresses[0];
+        // Filter out broad administrative divisions like 'Udaipur Division' so local names take priority
+        const sanitizePart = (val: string | null | undefined): string | null => {
+          if (!val) return null;
+          const trimmed = val.trim();
+          if (/division/i.test(trimmed)) return null;
+          return trimmed;
+        };
+
         const parts = [
-          addr.name,
-          addr.street,
-          addr.subregion || addr.district || addr.city,
-          addr.region,
+          sanitizePart(addr.name),
+          sanitizePart(addr.street),
+          sanitizePart(addr.district) || sanitizePart(addr.subregion) || sanitizePart(addr.city),
+          sanitizePart(addr.city !== addr.district ? addr.city : null),
+          sanitizePart(addr.postalCode),
         ].filter(Boolean);
+
         if (parts.length > 0) {
-          return parts.join(', ');
+          const deduped: string[] = [];
+          for (const p of parts as string[]) {
+            if (!deduped.some((d) => d.toLowerCase() === p.toLowerCase())) {
+              deduped.push(p);
+            }
+          }
+          return deduped.join(', ');
         }
       }
-      return `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`;
+      return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     } catch (error) {
       console.warn('[LocationService] reverseGeocode error:', error);
-      return `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`;
+      return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     }
   }
 

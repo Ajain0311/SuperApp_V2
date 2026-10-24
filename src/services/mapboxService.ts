@@ -38,20 +38,73 @@ type MapboxFeature = {
 const GEOCODE_BASE = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
 
 const parseContext = (context: MapboxContextItem[] | undefined) => {
+  let localityOrNeighborhood: string | undefined;
   let city: string | undefined;
+  let district: string | undefined;
   let state: string | undefined;
   let pinCode: string | undefined;
+
   for (const item of context || []) {
     const id = String(item.id || '');
-    if (id.startsWith('place.') || id.startsWith('locality.') || id.startsWith('district.')) {
+    if (id.startsWith('neighborhood.') || id.startsWith('locality.')) {
+      if (!localityOrNeighborhood) {
+        localityOrNeighborhood = item.text;
+      }
+    } else if (id.startsWith('place.')) {
       city = city || item.text;
+    } else if (id.startsWith('district.')) {
+      district = district || item.text;
     } else if (id.startsWith('region.')) {
       state = item.text;
     } else if (id.startsWith('postcode.')) {
       pinCode = item.text;
     }
   }
-  return { city, state, pinCode };
+
+  const resolvedCity = city || localityOrNeighborhood || district;
+  return { localityOrNeighborhood, city: resolvedCity, district, state, pinCode };
+};
+
+export const formatDetailedMapboxAddress = (feature: MapboxFeature): string => {
+  const title = (feature.text || '').trim();
+  const ctx = parseContext(feature.context);
+
+  const parts: string[] = [];
+  const seen = new Set<string>();
+
+  const addPart = (val?: string) => {
+    if (!val) return;
+    const clean = val.trim();
+    if (!clean) return;
+    const lower = clean.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      parts.push(clean);
+    }
+  };
+
+  // 1. Specific Street, Colony, or Place name
+  addPart(title);
+
+  // 2. Village / Mohalla / Locality / Neighborhood (e.g. Hiran Magri, Uparala Para)
+  addPart(ctx.localityOrNeighborhood);
+
+  // 3. City / Town (e.g. Udaipur, Bassi)
+  addPart(ctx.city);
+
+  // 4. District (e.g. Chittorgarh if different from city)
+  if (ctx.district && ctx.district.toLowerCase() !== ctx.city?.toLowerCase()) {
+    addPart(ctx.district);
+  }
+
+  // 5. Pincode
+  addPart(ctx.pinCode);
+
+  if (parts.length > 0) {
+    return parts.join(', ');
+  }
+
+  return feature.place_name || title;
 };
 
 const featureToSuggestion = (feature: MapboxFeature): MapPlaceSuggestion | null => {
@@ -59,10 +112,11 @@ const featureToSuggestion = (feature: MapboxFeature): MapPlaceSuggestion | null 
   const lat = feature.center?.[1];
   if (typeof lat !== 'number' || typeof lng !== 'number') return null;
   const ctx = parseContext(feature.context);
+  const detailedAddress = formatDetailedMapboxAddress(feature);
   return {
     id: String(feature.id || `${lat},${lng}`),
     name: feature.text || feature.place_name || 'Selected place',
-    address: feature.place_name || feature.text || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+    address: detailedAddress,
     latitude: lat,
     longitude: lng,
     city: ctx.city,
