@@ -96,7 +96,7 @@ function roleAppBadge(status: string | null): { label: string; color: string; su
     return {
       label: 'Approved',
       color: '#10B981',
-      subtitle: 'Approved — switch role from Profile to use it',
+      subtitle: 'Approved — tap to add another vehicle or outlet',
     };
   }
   if (status === 'REJECTED') {
@@ -325,7 +325,10 @@ export const ProfileScreen: React.FC = () => {
           <MenuItem
             icon="two-wheeler"
             title="Become a Rider / Captain"
-            subtitle={driverBadge?.subtitle || 'Upload license — admin approves DRIVER role'}
+            subtitle={
+              driverBadge?.subtitle ||
+              'Bike, Auto, or Car/Taxi — admin approves each vehicle'
+            }
             color={colors.blue}
             badgeLabel={driverBadge?.label}
             badgeColor={driverBadge?.color}
@@ -334,8 +337,11 @@ export const ProfileScreen: React.FC = () => {
           <View style={styles.itemDivider} />
           <MenuItem
             icon="restaurant"
-            title="Open a Hotel / Restaurant"
-            subtitle={hotelBadge?.subtitle || 'Upload business docs — admin approves'}
+            title="Open a Hotel / Cafe"
+            subtitle={
+              hotelBadge?.subtitle ||
+              'Hotel, restaurant, or cafe — admin approves each outlet'
+            }
             color={colors.secondary}
             badgeLabel={hotelBadge?.label}
             badgeColor={hotelBadge?.color}

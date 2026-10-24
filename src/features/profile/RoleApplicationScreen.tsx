@@ -120,14 +120,14 @@ export const RoleApplicationScreen: React.FC = () => {
   const [docNo, setDocNo] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const [loadingApp, setLoadingApp] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [latestApp, setLatestApp] = useState<RoleApp | null>(null);
+  const [apps, setApps] = useState<RoleApp[]>([]);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const title = useMemo(
-    () => (isDriver ? 'Become a Rider / Captain' : 'Open a Hotel / Restaurant'),
+    () => (isDriver ? 'Become a Rider / Captain' : 'Open a Hotel / Cafe'),
     [isDriver]
   );
 
@@ -147,7 +147,14 @@ export const RoleApplicationScreen: React.FC = () => {
             const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             return tb - ta;
           });
-        setLatestApp(forRole[0] || null);
+        setApps(forRole);
+        // Prefill license from latest driver app when adding another vehicle
+        if (isDriver) {
+          const withLicense = forRole.find((a) => a.licenseNumber);
+          if (withLicense?.licenseNumber) {
+            setLicenseNumber((prev) => prev || withLicense.licenseNumber || '');
+          }
+        }
       } catch (e: any) {
         setLoadError(e?.response?.data?.message || e?.message || 'Could not load application status');
       } finally {
@@ -155,7 +162,7 @@ export const RoleApplicationScreen: React.FC = () => {
         setRefreshing(false);
       }
     },
-    [requestedRole]
+    [requestedRole, isDriver]
   );
 
   useFocusEffect(
@@ -164,10 +171,15 @@ export const RoleApplicationScreen: React.FC = () => {
     }, [loadMine])
   );
 
-  const status = String(latestApp?.status || '').toUpperCase();
-  const meta = statusMeta(status);
-  const blocksNewSubmit = status === 'PENDING' || status === 'APPROVED';
-  const showForm = !blocksNewSubmit;
+  const hasApproved = apps.some((a) => String(a.status || '').toUpperCase() === 'APPROVED');
+  const pendingCount = apps.filter((a) => String(a.status || '').toUpperCase() === 'PENDING').length;
+  const formTitle = isDriver
+    ? hasApproved
+      ? 'Add another vehicle'
+      : 'Submit rider application'
+    : hasApproved
+    ? 'Add another hotel / cafe'
+    : 'Submit outlet application';
 
   const pickDocument = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -232,8 +244,20 @@ export const RoleApplicationScreen: React.FC = () => {
       await apiClient.post(ApiEndpoints.roleApplications.submit, body);
       Alert.alert(
         'Submitted',
-        'Your application is pending admin approval. Status will update on this screen, and you will get a notification when it is decided.'
+        isDriver
+          ? 'Vehicle application is pending admin approval. You can add more vehicles after this one is reviewed, or cancel and resubmit.'
+          : 'Outlet application is pending admin approval. You can add another hotel/cafe after review, or cancel this one.'
       );
+      setVehicleReg('');
+      setVehicleMake('');
+      setVehicleModel('');
+      setHotelName('');
+      setHotelAddress('');
+      setHotelCity('');
+      setHotelPhone('');
+      setNotes('');
+      setDocUri(null);
+      setDocNo(null);
       await loadMine();
     } catch (e: any) {
       Alert.alert('Could not submit', e?.response?.data?.message || e?.message || 'Try again');
@@ -242,27 +266,34 @@ export const RoleApplicationScreen: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
-    if (!latestApp?.id) return;
+  const handleCancel = (appId: number) => {
     Alert.alert('Cancel application?', 'You can submit again later from this same screen.', [
       { text: 'Keep', style: 'cancel' },
       {
         text: 'Cancel application',
         style: 'destructive',
         onPress: async () => {
-          setCancelling(true);
+          setCancellingId(appId);
           try {
-            await apiClient.post(ApiEndpoints.roleApplications.cancel(latestApp.id), {});
+            await apiClient.post(ApiEndpoints.roleApplications.cancel(appId), {});
             Alert.alert('Cancelled', 'Your application was cancelled.');
             await loadMine();
           } catch (e: any) {
             Alert.alert('Could not cancel', e?.response?.data?.message || e?.message || 'Try again');
           } finally {
-            setCancelling(false);
+            setCancellingId(null);
           }
         },
       },
     ]);
+  };
+
+  const vehicleLabel = (t?: string) => {
+    const v = String(t || '').toUpperCase();
+    if (v === 'BIKE') return 'Bike / Scooty';
+    if (v === 'AUTO') return 'Auto';
+    if (v === 'CAB') return 'Car / Taxi';
+    return t || 'Vehicle';
   };
 
   return (
@@ -288,14 +319,15 @@ export const RoleApplicationScreen: React.FC = () => {
           }
         >
           <Text style={styles.intro}>
-            Default mode is Citizen. Admin must approve this request before the new role is added to your
-            account. Marketplace selling does not need approval — anyone can list items.
+            {isDriver
+              ? 'Apply for Bike/Scooty, Auto, or Car/Taxi. Already approved? Submit again to add another vehicle — admin must approve each one.'
+              : 'Apply for a hotel, restaurant, or cafe. Already have one outlet? Submit again to add another — admin must approve each outlet.'}
           </Text>
 
           {loadingApp ? (
             <View style={styles.statusLoading}>
               <ActivityIndicator color={AppColors.primary} />
-              <Text style={styles.statusLoadingText}>Checking your application status…</Text>
+              <Text style={styles.statusLoadingText}>Checking your applications…</Text>
             </View>
           ) : loadError ? (
             <View style={styles.statusCard}>
@@ -304,77 +336,67 @@ export const RoleApplicationScreen: React.FC = () => {
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ) : latestApp ? (
-            <View style={[styles.statusCard, { borderColor: meta.color + '55', backgroundColor: meta.bg }]}>
-              <View style={styles.statusHeader}>
-                <Ionicons name={meta.icon} size={22} color={meta.color} />
-                <Text style={[styles.statusLabel, { color: meta.color }]}>{meta.label}</Text>
-              </View>
-              <Text style={styles.statusHint}>{meta.hint}</Text>
-              <Text style={styles.statusMeta}>Submitted: {formatDate(latestApp.createdAt)}</Text>
-              {latestApp.reviewedAt ? (
-                <Text style={styles.statusMeta}>
-                  Reviewed: {formatDate(latestApp.reviewedAt)}
-                  {latestApp.reviewedByAdminName ? ` · ${latestApp.reviewedByAdminName}` : ''}
-                </Text>
-              ) : null}
-              {latestApp.adminNotes ? (
-                <Text style={styles.adminNotes}>Admin note: {latestApp.adminNotes}</Text>
-              ) : null}
-
-              {isDriver ? (
-                <View style={styles.summaryBox}>
-                  {latestApp.licenseNumber ? (
-                    <Text style={styles.summaryLine}>License: {latestApp.licenseNumber}</Text>
-                  ) : null}
-                  {latestApp.vehicleType ? (
-                    <Text style={styles.summaryLine}>
-                      Vehicle: {latestApp.vehicleType}
-                      {latestApp.vehicleRegistrationNumber
-                        ? ` · ${latestApp.vehicleRegistrationNumber}`
-                        : ''}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : (
-                <View style={styles.summaryBox}>
-                  {latestApp.hotelName ? (
-                    <Text style={styles.summaryLine}>{latestApp.hotelName}</Text>
-                  ) : null}
-                  {latestApp.hotelAddress ? (
-                    <Text style={styles.summaryLine}>{latestApp.hotelAddress}</Text>
-                  ) : null}
-                  {latestApp.hotelPhone ? (
-                    <Text style={styles.summaryLine}>Phone: {latestApp.hotelPhone}</Text>
-                  ) : null}
-                </View>
-              )}
-
-              {status === 'PENDING' ? (
-                <TouchableOpacity
-                  style={[styles.cancelBtn, cancelling && { opacity: 0.7 }]}
-                  onPress={handleCancel}
-                  disabled={cancelling}
-                >
-                  {cancelling ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.cancelText}>Cancel this application</Text>
-                  )}
-                </TouchableOpacity>
-              ) : null}
+          ) : apps.length > 0 ? (
+            <View style={styles.appsList}>
+              <Text style={styles.appsListTitle}>
+                Your applications{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
+              </Text>
+              {apps.map((app) => {
+                const st = String(app.status || '').toUpperCase();
+                const m = statusMeta(st);
+                return (
+                  <View
+                    key={app.id}
+                    style={[styles.statusCard, { borderColor: m.color + '55', backgroundColor: m.bg }]}
+                  >
+                    <View style={styles.statusHeader}>
+                      <Ionicons name={m.icon} size={20} color={m.color} />
+                      <Text style={[styles.statusLabel, { color: m.color }]}>{m.label}</Text>
+                    </View>
+                    {isDriver ? (
+                      <Text style={styles.summaryLine}>
+                        {vehicleLabel(app.vehicleType)}
+                        {app.vehicleRegistrationNumber ? ` · ${app.vehicleRegistrationNumber}` : ''}
+                      </Text>
+                    ) : (
+                      <Text style={styles.summaryLine}>{app.hotelName || 'Outlet'}</Text>
+                    )}
+                    <Text style={styles.statusMeta}>Submitted: {formatDate(app.createdAt)}</Text>
+                    {app.adminNotes ? (
+                      <Text style={styles.adminNotes}>Admin note: {app.adminNotes}</Text>
+                    ) : null}
+                    {st === 'PENDING' ? (
+                      <TouchableOpacity
+                        style={[styles.cancelBtn, cancellingId === app.id && { opacity: 0.7 }]}
+                        onPress={() => handleCancel(app.id)}
+                        disabled={cancellingId != null}
+                      >
+                        {cancellingId === app.id ? (
+                          <ActivityIndicator color="#FFF" />
+                        ) : (
+                          <Text style={styles.cancelText}>Cancel</Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           ) : (
             <View style={styles.emptyStatus}>
               <Ionicons name="document-text-outline" size={20} color={AppColors.textSecondary} />
-              <Text style={styles.emptyStatusText}>No application yet for this role. Fill the form below.</Text>
+              <Text style={styles.emptyStatusText}>
+                No application yet. Fill the form below to get started.
+              </Text>
             </View>
           )}
 
-          {showForm ? (
-            <>
-              {status === 'REJECTED' || status === 'CANCELLED' ? (
-                <Text style={styles.reapplyTitle}>Submit a new application</Text>
+          <>
+              <Text style={styles.reapplyTitle}>{formTitle}</Text>
+              {pendingCount >= 5 ? (
+                <Text style={styles.adminNotes}>
+                  You already have 5 pending requests. Cancel one or wait for admin review before adding more.
+                </Text>
               ) : null}
 
               {isDriver ? (
@@ -391,13 +413,21 @@ export const RoleApplicationScreen: React.FC = () => {
 
                   <Text style={styles.label}>Vehicle Type *</Text>
                   <View style={styles.chipRow}>
-                    {(['BIKE', 'AUTO', 'CAB'] as const).map((t) => (
+                    {(
+                      [
+                        { id: 'BIKE' as const, label: 'Bike / Scooty' },
+                        { id: 'AUTO' as const, label: 'Auto' },
+                        { id: 'CAB' as const, label: 'Car / Taxi' },
+                      ] as const
+                    ).map((t) => (
                       <TouchableOpacity
-                        key={t}
-                        style={[styles.chip, vehicleType === t && styles.chipActive]}
-                        onPress={() => setVehicleType(t)}
+                        key={t.id}
+                        style={[styles.chip, vehicleType === t.id && styles.chipActive]}
+                        onPress={() => setVehicleType(t.id)}
                       >
-                        <Text style={[styles.chipText, vehicleType === t && styles.chipTextActive]}>{t}</Text>
+                        <Text style={[styles.chipText, vehicleType === t.id && styles.chipTextActive]}>
+                          {t.label}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -437,15 +467,15 @@ export const RoleApplicationScreen: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <Text style={styles.label}>Hotel / Restaurant Name *</Text>
+                  <Text style={styles.label}>Hotel / Cafe / Restaurant Name *</Text>
                   <TextInput
                     style={styles.input}
                     value={hotelName}
                     onChangeText={setHotelName}
-                    placeholder="Spice Hub"
+                    placeholder="Spice Hub Cafe"
                     placeholderTextColor="#777"
                   />
-                  <Text style={styles.label}>Address *</Text>
+                  <Text style={styles.label}>Outlet Address *</Text>
                   <TextInput
                     style={[styles.input, { minHeight: 70 }]}
                     value={hotelAddress}
@@ -505,18 +535,25 @@ export const RoleApplicationScreen: React.FC = () => {
               />
 
               <TouchableOpacity
-                style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+                style={[styles.submitBtn, (submitting || uploading || pendingCount >= 5) && { opacity: 0.7 }]}
                 onPress={handleSubmit}
-                disabled={submitting || uploading}
+                disabled={submitting || uploading || pendingCount >= 5}
               >
                 {submitting ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
-                  <Text style={styles.submitText}>Submit for Admin Approval</Text>
+                  <Text style={styles.submitText}>
+                    {isDriver
+                      ? hasApproved
+                        ? 'Submit Another Vehicle'
+                        : 'Submit for Admin Approval'
+                      : hasApproved
+                      ? 'Submit Another Outlet'
+                      : 'Submit for Admin Approval'}
+                  </Text>
                 )}
               </TouchableOpacity>
-            </>
-          ) : null}
+          </>
         </ScrollView>
       </FormKeyboardAvoid>
     </SafeAreaView>
@@ -549,6 +586,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   statusLoadingText: { color: AppColors.textSecondary, fontSize: 13 },
+  appsList: { marginBottom: 12, gap: 10 },
+  appsListTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
   statusCard: {
     borderWidth: 1,
     borderRadius: 12,

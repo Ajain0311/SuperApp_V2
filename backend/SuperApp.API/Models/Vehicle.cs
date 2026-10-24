@@ -45,7 +45,16 @@ public static class VehicleTypes
 
     public static bool TryNormalize(string? value, out string normalized)
     {
-        normalized = string.IsNullOrWhiteSpace(value) ? Bike : value.Trim().ToUpperInvariant();
+        var raw = string.IsNullOrWhiteSpace(value) ? Bike : value.Trim().ToUpperInvariant();
+        // Scooty / scooter map to BIKE; car / taxi map to CAB for fare + dispatch.
+        normalized = raw switch
+        {
+            "SCOOTY" or "SCOOTER" or "TWO_WHEELER" => Bike,
+            "CAR" or "TAXI" or "CAB" => Cab,
+            "AUTO" or "AUTO_RICKSHAW" or "RICKSHAW" => Auto,
+            "BIKE" or "MOTORCYCLE" => Bike,
+            _ => raw
+        };
         return normalized is Bike or Auto or Cab;
     }
 }

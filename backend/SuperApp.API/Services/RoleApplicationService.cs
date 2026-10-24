@@ -84,15 +84,13 @@ public class RoleApplicationService
         if (role is not (RoleNames.Driver or RoleNames.RestaurantOwner))
             return (null, "Requested role must be DRIVER or RESTAURANT_OWNER");
 
-        var alreadyHas = await _db.UserRoles.AnyAsync(
-            ur => ur.UserId == userId && ur.Role.Name == role, ct);
-        if (alreadyHas)
-            return (null, $"You already have the {role} role");
+        // Citizens may already have DRIVER / RESTAURANT_OWNER and still apply again
+        // to add another vehicle or another hotel/cafe outlet.
 
-        var pending = await _db.RoleApplications.AnyAsync(
+        var pendingCount = await _db.RoleApplications.CountAsync(
             a => a.UserId == userId && a.RequestedRole == role && a.Status == RoleApplicationStatuses.Pending, ct);
-        if (pending)
-            return (null, $"A pending {role} application already exists");
+        if (pendingCount >= 5)
+            return (null, "Too many pending applications. Wait for admin review or cancel one first.");
 
         var app = new RoleApplication
         {
@@ -110,29 +108,57 @@ public class RoleApplicationService
             var (docOk, docErr) = await ValidateDocumentOwnedAsync(request.LicenseDocumentNo, userId, ct);
             if (!docOk) return (null, docErr ?? "License photo upload is required");
             if (!VehicleTypes.TryNormalize(request.VehicleType, out var vehicleType))
-                return (null, "Vehicle type must be BIKE, AUTO, or CAB");
+                return (null, "Vehicle type must be BIKE (scooty), AUTO, or CAB (car/taxi)");
             if (string.IsNullOrWhiteSpace(request.VehicleRegistrationNumber) || request.VehicleRegistrationNumber.Trim().Length < 4)
                 return (null, "Vehicle registration number is required");
+
+            var reg = request.VehicleRegistrationNumber.Trim().ToUpperInvariant();
+            var pendingSameReg = await _db.RoleApplications.AnyAsync(
+                a => a.UserId == userId
+                     && a.RequestedRole == RoleNames.Driver
+                     && a.Status == RoleApplicationStatuses.Pending
+                     && a.VehicleRegistrationNumber == reg, ct);
+            if (pendingSameReg)
+                return (null, "A pending application for this vehicle registration already exists");
+
+            var driver = await _db.Drivers.AsNoTracking().FirstOrDefaultAsync(d => d.UserId == userId, ct);
+            if (driver != null)
+            {
+                var vehicleExists = await _db.Vehicles.AnyAsync(
+                    v => v.DriverId == driver.Id && v.RegistrationNumber == reg && v.IsActive, ct);
+                if (vehicleExists)
+                    return (null, "This vehicle registration is already on your rider profile");
+            }
 
             app.LicenseNumber = request.LicenseNumber.Trim().ToUpperInvariant();
             app.LicenseDocumentNo = request.LicenseDocumentNo!.Trim();
             app.VehicleType = vehicleType;
-            app.VehicleRegistrationNumber = request.VehicleRegistrationNumber.Trim().ToUpperInvariant();
+            app.VehicleRegistrationNumber = reg;
             app.VehicleMake = string.IsNullOrWhiteSpace(request.VehicleMake) ? null : request.VehicleMake.Trim();
             app.VehicleModel = string.IsNullOrWhiteSpace(request.VehicleModel) ? null : request.VehicleModel.Trim();
         }
         else
         {
             if (string.IsNullOrWhiteSpace(request.HotelName) || request.HotelName.Trim().Length < 2)
-                return (null, "Hotel / restaurant name is required");
+                return (null, "Hotel / restaurant / cafe name is required");
             if (string.IsNullOrWhiteSpace(request.HotelAddress) || request.HotelAddress.Trim().Length < 5)
-                return (null, "Hotel address is required");
+                return (null, "Outlet address is required");
             if (string.IsNullOrWhiteSpace(request.HotelPhone) || request.HotelPhone.Trim().Length < 8)
-                return (null, "Hotel contact phone is required");
+                return (null, "Outlet contact phone is required");
             var (docOk, docErr) = await ValidateDocumentOwnedAsync(request.BusinessDocumentNo, userId, ct);
             if (!docOk) return (null, docErr ?? "Business / FSSAI document upload is required");
 
-            app.HotelName = request.HotelName.Trim();
+            var hotelName = request.HotelName.Trim();
+            var pendingSameOutlet = await _db.RoleApplications.AnyAsync(
+                a => a.UserId == userId
+                     && a.RequestedRole == RoleNames.RestaurantOwner
+                     && a.Status == RoleApplicationStatuses.Pending
+                     && a.HotelName != null
+                     && a.HotelName.ToLower() == hotelName.ToLower(), ct);
+            if (pendingSameOutlet)
+                return (null, "A pending application for this outlet name already exists");
+
+            app.HotelName = hotelName;
             app.HotelAddress = request.HotelAddress.Trim();
             app.HotelCity = string.IsNullOrWhiteSpace(request.HotelCity) ? "DEFAULT" : request.HotelCity.Trim();
             app.HotelPhone = request.HotelPhone.Trim();
@@ -195,25 +221,39 @@ public class RoleApplicationService
                 driver.UpdatedAt = DateTime.UtcNow;
             }
 
-            var hasVehicle = await _db.Vehicles.AnyAsync(v => v.DriverId == driver.Id && v.IsActive, ct);
-            if (!hasVehicle)
+            VehicleTypes.TryNormalize(app.VehicleType, out var vType);
+            var reg = string.IsNullOrWhiteSpace(app.VehicleRegistrationNumber)
+                ? $"TMP{driver.Id}-{DateTime.UtcNow.Ticks % 100000}"
+                : app.VehicleRegistrationNumber.Trim().ToUpperInvariant();
+
+            var existingVehicle = await _db.Vehicles.FirstOrDefaultAsync(
+                v => v.DriverId == driver.Id && v.RegistrationNumber == reg, ct);
+            if (existingVehicle == null)
             {
-                VehicleTypes.TryNormalize(app.VehicleType, out var vType);
                 _db.Vehicles.Add(new Vehicle
                 {
                     DriverId = driver.Id,
                     Type = vType,
                     Make = app.VehicleMake ?? "Generic",
                     Model = app.VehicleModel ?? "Standard",
-                    RegistrationNumber = app.VehicleRegistrationNumber ?? $"TMP{driver.Id}",
+                    RegistrationNumber = reg,
                     Color = "Black",
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 });
             }
+            else
+            {
+                existingVehicle.Type = vType;
+                existingVehicle.Make = app.VehicleMake ?? existingVehicle.Make;
+                existingVehicle.Model = app.VehicleModel ?? existingVehicle.Model;
+                existingVehicle.IsActive = true;
+                existingVehicle.UpdatedAt = DateTime.UtcNow;
+            }
         }
         else if (app.RequestedRole == RoleNames.RestaurantOwner)
         {
+            // Each approval creates / links a new food outlet (hotel, cafe, restaurant).
             var restaurant = new Restaurant
             {
                 Name = app.HotelName ?? "New Hotel",
@@ -231,13 +271,18 @@ public class RoleApplicationService
             _db.Restaurants.Add(restaurant);
             await _db.SaveChangesAsync(ct);
 
-            _db.RestaurantUsers.Add(new RestaurantUser
+            var alreadyLinked = await _db.RestaurantUsers.AnyAsync(
+                ru => ru.UserId == app.UserId && ru.RestaurantId == restaurant.Id, ct);
+            if (!alreadyLinked)
             {
-                UserId = app.UserId,
-                RestaurantId = restaurant.Id,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            });
+                _db.RestaurantUsers.Add(new RestaurantUser
+                {
+                    UserId = app.UserId,
+                    RestaurantId = restaurant.Id,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
             app.ResultRestaurantId = restaurant.Id;
         }
 
