@@ -27,6 +27,7 @@ import { spacing } from '../../theme/spacing';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { OfflineBanner } from '../../components/common/OfflineBanner';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { useAuthStore } from '../../store/authStore';
 
 const { width } = Dimensions.get('window');
@@ -495,6 +496,7 @@ export const ListingDetailScreen: React.FC = () => {
 
       {/* Make Offer Modal */}
       <Modal visible={showOfferModal} transparent animationType="slide">
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -531,6 +533,7 @@ export const ListingDetailScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
 
       {/* Contact Options Modal */}
@@ -585,6 +588,7 @@ export const ListingDetailScreen: React.FC = () => {
 
       {/* Report Listing Modal */}
       <Modal visible={showReportModal} transparent animationType="slide">
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -641,6 +645,7 @@ export const ListingDetailScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </SafeAreaView>
   );

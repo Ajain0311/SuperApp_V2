@@ -279,10 +279,23 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({ navigati
         >
           <View style={[styles.navIconBox, { backgroundColor: '#22D3EE20' }]}>
             <Ionicons name="people-circle-outline" size={24} color="#22D3EE" />
+            {(data?.pendingRoleApplications ?? 0) > 0 ? (
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>
+                  {(data?.pendingRoleApplications ?? 0) > 99
+                    ? '99+'
+                    : String(data?.pendingRoleApplications)}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <View style={styles.navCardInfo}>
             <Text style={styles.navCardTitle}>Role Applications</Text>
-            <Text style={styles.navCardSubtitle}>Approve rider / hotel requests from citizens</Text>
+            <Text style={styles.navCardSubtitle}>
+              {(data?.pendingRoleApplications ?? 0) > 0
+                ? `${data?.pendingRoleApplications} waiting for approval`
+                : 'Approve rider / hotel requests from citizens'}
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={AppColors.textSecondary} />
         </TouchableOpacity>
@@ -566,6 +579,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
+    position: 'relative',
+  },
+  countBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: AppColors.surface,
+  },
+  countBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   navCardInfo: {
     flex: 1,

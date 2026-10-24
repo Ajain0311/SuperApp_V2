@@ -614,11 +614,33 @@ CREATE TABLE IF NOT EXISTS role_applications (
 );
 CREATE INDEX IF NOT EXISTS ix_role_applications_user_id ON role_applications(user_id);
 CREATE INDEX IF NOT EXISTS ix_role_applications_status ON role_applications(status);
+-- App DB user must own/read this table (table may have been created earlier as postgres)
+GRANT ALL PRIVILEGES ON TABLE role_applications TO CURRENT_USER;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO CURRENT_USER;
 ");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[Schema Check] coupons/banners/users: {ex.Message}");
+        }
+
+        // Best-effort: if role_applications was created by a different DB role, re-grant access.
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'role_applications'
+  ) THEN
+    EXECUTE 'GRANT ALL PRIVILEGES ON TABLE role_applications TO CURRENT_USER';
+  END IF;
+END $$;");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Schema Check] role_applications grants: {ex.Message}");
         }
     }
 }

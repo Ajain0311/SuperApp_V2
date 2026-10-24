@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { AdminUser } from './types';
 
 interface AdminUserManageModalProps {
@@ -128,6 +129,7 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <FormKeyboardAvoid>
       <View style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
@@ -260,6 +262,7 @@ export const AdminUserManageModal: React.FC<AdminUserManageModalProps> = ({
           </ScrollView>
         </View>
       </View>
+      </FormKeyboardAvoid>
     </Modal>
   );
 };

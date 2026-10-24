@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
@@ -22,6 +24,7 @@ import { useRoleStore, ROLE_CONFIGS } from '../../store/roleStore';
 import { RoleSwitchModal } from '../../components/RoleSwitchModal';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -32,22 +35,86 @@ interface MenuItemProps {
   subtitle: string;
   color: string;
   onPress: () => void;
+  badgeLabel?: string | null;
+  badgeColor?: string;
 }
 
-const MenuItem: React.FC<MenuItemProps> = ({ icon, title, subtitle, color, onPress }) => {
+const MenuItem: React.FC<MenuItemProps> = ({
+  icon,
+  title,
+  subtitle,
+  color,
+  onPress,
+  badgeLabel,
+  badgeColor,
+}) => {
   return (
     <TouchableOpacity activeOpacity={0.7} style={styles.menuItem} onPress={onPress}>
       <View style={[styles.menuIconContainer, { backgroundColor: `${color}26` }]}>
         <MaterialIcons name={icon} size={22} color={color} />
       </View>
       <View style={styles.menuContent}>
-        <Text style={styles.menuTitle}>{title}</Text>
+        <View style={styles.menuTitleRow}>
+          <Text style={styles.menuTitle}>{title}</Text>
+          {badgeLabel ? (
+            <View style={[styles.roleBadge, { backgroundColor: `${badgeColor || color}33` }]}>
+              <Text style={[styles.roleBadgeText, { color: badgeColor || color }]}>{badgeLabel}</Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.menuSubtitle}>{subtitle}</Text>
       </View>
       <MaterialIcons name="chevron-right" size={20} color={colors.textTertiary} />
     </TouchableOpacity>
   );
 };
+
+function latestStatusForRole(
+  apps: Array<{ requestedRole?: string; status?: string; createdAt?: string }>,
+  role: string
+): string | null {
+  const forRole = apps
+    .filter((a) => String(a.requestedRole || '').toUpperCase() === role)
+    .sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta;
+    });
+  return forRole[0]?.status ? String(forRole[0].status).toUpperCase() : null;
+}
+
+function roleAppBadge(status: string | null): { label: string; color: string; subtitle: string } | null {
+  if (!status) return null;
+  if (status === 'PENDING') {
+    return {
+      label: 'Pending',
+      color: '#F59E0B',
+      subtitle: 'Application under admin review — tap to view status',
+    };
+  }
+  if (status === 'APPROVED') {
+    return {
+      label: 'Approved',
+      color: '#10B981',
+      subtitle: 'Approved — switch role from Profile to use it',
+    };
+  }
+  if (status === 'REJECTED') {
+    return {
+      label: 'Rejected',
+      color: '#EF4444',
+      subtitle: 'Rejected — tap to see reason and apply again',
+    };
+  }
+  if (status === 'CANCELLED') {
+    return {
+      label: 'Cancelled',
+      color: '#94A3B8',
+      subtitle: 'Cancelled — tap to submit again',
+    };
+  }
+  return { label: status, color: colors.textSecondary, subtitle: `Status: ${status}` };
+}
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -57,7 +124,36 @@ export const ProfileScreen: React.FC = () => {
   const [editVisible, setEditVisible] = useState(false);
   const [editName, setEditName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [driverAppStatus, setDriverAppStatus] = useState<string | null>(null);
+  const [hotelAppStatus, setHotelAppStatus] = useState<string | null>(null);
   const activeConfig = ROLE_CONFIGS[activeRole] || ROLE_CONFIGS.CUSTOMER;
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await apiClient.get<any>(ApiEndpoints.roleApplications.mine);
+          const data = res?.data?.data ?? res?.data;
+          const list = Array.isArray(data) ? data : [];
+          if (cancelled) return;
+          setDriverAppStatus(latestStatusForRole(list, 'DRIVER'));
+          setHotelAppStatus(latestStatusForRole(list, 'RESTAURANT_OWNER'));
+        } catch {
+          if (!cancelled) {
+            setDriverAppStatus(null);
+            setHotelAppStatus(null);
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
+
+  const driverBadge = roleAppBadge(driverAppStatus);
+  const hotelBadge = roleAppBadge(hotelAppStatus);
 
   const openEditName = () => {
     setEditName(String(user?.fullName || '').trim());
@@ -229,16 +325,20 @@ export const ProfileScreen: React.FC = () => {
           <MenuItem
             icon="two-wheeler"
             title="Become a Rider / Captain"
-            subtitle="Upload license — admin approves DRIVER role"
+            subtitle={driverBadge?.subtitle || 'Upload license — admin approves DRIVER role'}
             color={colors.blue}
+            badgeLabel={driverBadge?.label}
+            badgeColor={driverBadge?.color}
             onPress={() => navigation.navigate('RoleApplication', { role: 'DRIVER' })}
           />
           <View style={styles.itemDivider} />
           <MenuItem
             icon="restaurant"
             title="Open a Hotel / Restaurant"
-            subtitle="Upload business docs — admin approves"
+            subtitle={hotelBadge?.subtitle || 'Upload business docs — admin approves'}
             color={colors.secondary}
+            badgeLabel={hotelBadge?.label}
+            badgeColor={hotelBadge?.color}
             onPress={() => navigation.navigate('RoleApplication', { role: 'RESTAURANT_OWNER' })}
           />
           <View style={styles.itemDivider} />
@@ -320,48 +420,56 @@ export const ProfileScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => !savingName && setEditVisible(false)}
       >
-        <View style={styles.editOverlay}>
-          <View style={styles.editSheet}>
-            <View style={styles.editHeader}>
-              <Text style={styles.editTitle}>Edit name</Text>
-              <TouchableOpacity
-                onPress={() => !savingName && setEditVisible(false)}
-                disabled={savingName}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialIcons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
+        <FormKeyboardAvoid style={styles.editKeyboardRoot}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={styles.editOverlay}>
+              <View style={styles.editSheet}>
+                <View style={styles.editHeader}>
+                  <Text style={styles.editTitle}>Edit name</Text>
+                  <TouchableOpacity
+                    onPress={() => !savingName && setEditVisible(false)}
+                    disabled={savingName}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="close" size={22} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.editHint}>
+                  Only your display name can be changed. Phone number stays fixed.
+                </Text>
+                <Text style={styles.editLabel}>Name</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.textTertiary}
+                  maxLength={100}
+                  autoFocus
+                  editable={!savingName}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleSaveName()}
+                />
+                <Text style={styles.editLabel}>Phone</Text>
+                <View style={styles.editPhoneBox}>
+                  <Text style={styles.editPhoneText}>{phone}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.editSaveBtn, savingName && { opacity: 0.7 }]}
+                  onPress={() => void handleSaveName()}
+                  disabled={savingName}
+                  activeOpacity={0.85}
+                >
+                  {savingName ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.editSaveText}>Save name</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={styles.editHint}>Only your display name can be changed. Phone number stays fixed.</Text>
-            <Text style={styles.editLabel}>Name</Text>
-            <TextInput
-              style={styles.editInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Your name"
-              placeholderTextColor={colors.textTertiary}
-              maxLength={100}
-              autoFocus
-              editable={!savingName}
-            />
-            <Text style={styles.editLabel}>Phone</Text>
-            <View style={styles.editPhoneBox}>
-              <Text style={styles.editPhoneText}>{phone}</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.editSaveBtn, savingName && { opacity: 0.7 }]}
-              onPress={() => void handleSaveName()}
-              disabled={savingName}
-              activeOpacity={0.85}
-            >
-              {savingName ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.editSaveText}>Save name</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </FormKeyboardAvoid>
       </Modal>
     </SafeAreaView>
   );
@@ -472,10 +580,26 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 14,
   },
+  menuTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   menuTitle: {
     ...typography.bodyMedium,
     color: colors.textPrimary,
     fontWeight: '600',
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   menuSubtitle: {
     ...typography.caption,
@@ -561,6 +685,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  editKeyboardRoot: {
+    flex: 1,
+  },
   editOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -575,6 +702,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
     borderTopWidth: 1,
     borderColor: colors.border,
+    maxHeight: '92%',
   },
   editHeader: {
     flexDirection: 'row',

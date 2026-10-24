@@ -16,6 +16,7 @@ import {
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { driverService, DriverProfile, DriverRideItem } from '../../services/driverService';
@@ -675,8 +676,10 @@ export const DriverHomeScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <FormKeyboardAvoid>
       <ScrollView
         contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); loadDriverData(); }} tintColor="#3B82F6" />}
       >
         {/* Driver Header Card */}
@@ -1071,6 +1074,7 @@ export const DriverHomeScreen: React.FC = () => {
           </View>
         )}
       </ScrollView>
+      </FormKeyboardAvoid>
     </SafeAreaView>
   );
 };

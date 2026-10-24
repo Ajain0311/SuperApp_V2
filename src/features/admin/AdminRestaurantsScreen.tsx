@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { AdminRestaurant } from './types';
 
 interface AdminRestaurantsScreenProps {
@@ -236,6 +237,7 @@ export const AdminRestaurantsScreen: React.FC<AdminRestaurantsScreenProps> = ({ 
 
       {/* Add Restaurant Modal */}
       <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -345,6 +347,7 @@ export const AdminRestaurantsScreen: React.FC<AdminRestaurantsScreenProps> = ({ 
             </ScrollView>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </View>
   );

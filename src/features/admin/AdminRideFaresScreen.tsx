@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { extractRideFareRules, type MappedFareRule } from './adminFinanceMappers';
 
 function vehicleIcon(type: string): keyof typeof Ionicons.glyphMap {
@@ -231,6 +232,7 @@ export const AdminRideFaresScreen: React.FC<{ navigation: any }> = ({ navigation
       )}
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -337,6 +339,7 @@ export const AdminRideFaresScreen: React.FC<{ navigation: any }> = ({ navigation
             </ScrollView>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </View>
   );

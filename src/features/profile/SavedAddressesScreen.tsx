@@ -21,6 +21,7 @@ import { spacing } from '../../theme/spacing';
 import { apiClient, ApiError } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { locationService } from '../../services/locationService';
 import { mapboxService } from '../../services/mapboxService';
 import { SelectedMapPlace } from '../../services/mapboxService';
@@ -317,6 +318,7 @@ export const SavedAddressesScreen: React.FC = () => {
       </ScrollView>
 
       <Modal visible={modalOpen} animationType="slide" transparent>
+        <FormKeyboardAvoid>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -420,6 +422,7 @@ export const SavedAddressesScreen: React.FC = () => {
             </ScrollView>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </SafeAreaView>
   );

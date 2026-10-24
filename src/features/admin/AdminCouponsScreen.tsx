@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 export const AdminCouponsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -208,6 +209,7 @@ export const AdminCouponsScreen: React.FC<{ navigation: any }> = ({ navigation }
 
       {/* Create / Edit Modal */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <FormKeyboardAvoid>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -325,6 +327,7 @@ export const AdminCouponsScreen: React.FC<{ navigation: any }> = ({ navigation }
             </ScrollView>
           </View>
         </View>
+        </FormKeyboardAvoid>
       </Modal>
     </View>
   );

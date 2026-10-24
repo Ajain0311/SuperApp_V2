@@ -22,6 +22,7 @@
     "android": {
       "package": "com.superapp.v2",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#0A0E21",
         "foregroundImage": "./assets/android-icon-foreground.png",

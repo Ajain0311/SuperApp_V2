@@ -38,6 +38,7 @@ public class AdminController : ControllerBase
         var totalFoodOrders = await _db.FoodOrders.CountAsync();
         var totalRides = await _db.Rides.CountAsync();
         var activeListings = await _db.MarketplaceListings.CountAsync(l => l.IsActive && l.Status == ListingStatus.Active);
+        var pendingRoleApplications = await _db.RoleApplications.CountAsync(a => a.Status == RoleApplicationStatuses.Pending);
 
         var foodSales = await _db.FoodOrders.Where(o => o.Status == OrderStatus.Delivered).SumAsync(o => (decimal?)o.GrandTotal) ?? 0;
         var rideFares = await _db.Rides.Where(r => r.Status == RideStatus.Completed).SumAsync(r => (decimal?)r.ActualFare) ?? 0;
@@ -97,6 +98,7 @@ public class AdminController : ControllerBase
             TotalFoodOrders = totalFoodOrders,
             TotalRides = totalRides,
             ActiveListings = activeListings,
+            PendingRoleApplications = pendingRoleApplications,
             GrossFoodSales = foodSales,
             GrossRideFares = rideFares,
             PlatformRevenue = platformCommission,
@@ -1925,6 +1927,30 @@ public class AdminController : ControllerBase
         if (error != null || app == null)
             return BadRequest(ApiResponse<RoleApplicationDto>.Fail(error ?? "Approve failed"));
 
+        if (_notificationService != null)
+        {
+            var roleLabel = app.RequestedRole == RoleNames.Driver
+                ? "Rider / Captain"
+                : "Hotel / Restaurant";
+            var title = $"{roleLabel} application approved";
+            var body = app.RequestedRole == RoleNames.Driver
+                ? "Your rider application was approved. Open Profile → switch role to start accepting trips."
+                : "Your hotel application was approved. Open Profile → switch to Restaurant Owner to manage your hotel.";
+            try
+            {
+                await _notificationService.SendPushNotificationAsync(
+                    app.UserId,
+                    title,
+                    body,
+                    "ROLE_APPLICATION",
+                    app.Id.ToString());
+            }
+            catch
+            {
+                // Approval already committed; notification failure must not fail the API.
+            }
+        }
+
         return Ok(ApiResponse<RoleApplicationDto>.Ok(RoleApplicationService.ToDto(app, app.User), "Application approved; role granted"));
     }
 
@@ -1938,6 +1964,29 @@ public class AdminController : ControllerBase
         var (app, error) = await _roleApplications.RejectAsync(id, adminId, adminName, request?.AdminNotes);
         if (error != null || app == null)
             return BadRequest(ApiResponse<RoleApplicationDto>.Fail(error ?? "Reject failed"));
+
+        if (_notificationService != null)
+        {
+            var roleLabel = app.RequestedRole == RoleNames.Driver
+                ? "Rider / Captain"
+                : "Hotel / Restaurant";
+            var notes = string.IsNullOrWhiteSpace(app.AdminNotes) ? "" : $" Reason: {app.AdminNotes.Trim()}";
+            var title = $"{roleLabel} application rejected";
+            var body = $"Your application was not approved.{notes} You can open Profile and apply again.";
+            try
+            {
+                await _notificationService.SendPushNotificationAsync(
+                    app.UserId,
+                    title,
+                    body,
+                    "ROLE_APPLICATION",
+                    app.Id.ToString());
+            }
+            catch
+            {
+                // Rejection already committed; notification failure must not fail the API.
+            }
+        }
 
         return Ok(ApiResponse<RoleApplicationDto>.Ok(RoleApplicationService.ToDto(app), "Application rejected"));
     }

@@ -17,6 +17,7 @@ import { CartItem } from '../../models/food';
 import { useCartStore } from '../../store/cartStore';
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
+import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 interface CartSummarySheetProps {
   visible: boolean;
@@ -100,6 +101,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <FormKeyboardAvoid>
       <View style={styles.overlay}>
         <View style={styles.sheetContainer}>
           {/* Header */}
@@ -293,6 +295,7 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
           </View>
         </View>
       </View>
+      </FormKeyboardAvoid>
     </Modal>
   );
 };

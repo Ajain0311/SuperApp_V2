@@ -5,6 +5,7 @@ export interface AdminDashboardData {
   totalFoodOrders: number;
   totalRides: number;
   activeListings: number;
+  pendingRoleApplications?: number;
   grossFoodSales: number;
   grossRideFares: number;
   platformRevenue: number;
