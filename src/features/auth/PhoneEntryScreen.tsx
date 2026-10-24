@@ -11,6 +11,7 @@ import {
   StatusBar,
   Keyboard,
   Platform,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -273,9 +274,20 @@ export const PhoneEntryScreen: React.FC<PhoneEntryScreenProps> = ({ navigation }
               </View>
 
               <Text style={styles.termsText}>
-                By continuing, you agree to SuperApp's{' '}
-                <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>.
+                By continuing, you agree to RJ09 SEWA's{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL('https://superapp-website-ashen.vercel.app/terms-and-conditions')}
+                >
+                  Terms of Service
+                </Text>{' '}
+                and{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => Linking.openURL('https://superapp-website-ashen.vercel.app/privacy-policy')}
+                >
+                  Privacy Policy
+                </Text>.
               </Text>
             </>
           ) : null}

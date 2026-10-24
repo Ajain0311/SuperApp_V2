@@ -14,6 +14,7 @@ import { configService } from './src/services/configService';
 import { polyfillAlert } from './src/utils/alertPolyfill';
 
 polyfillAlert();
+import { useAppUpdateChecker } from './src/hooks/useAppUpdateChecker';
 
 const CustomDarkTheme = {
   ...DarkTheme,
@@ -31,6 +32,7 @@ const CustomDarkTheme = {
 import { AppAlert } from './src/components/common/AppAlert';
 
 export default function App() {
+  useAppUpdateChecker();
   useEffect(() => {
     configService.fetchConfig().then(() => {
       if ((Platform.OS === 'ios' || Platform.OS === 'android') && AppEnvironment.hasMapboxToken) {

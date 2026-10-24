@@ -203,6 +203,83 @@ export const HelpSupportScreen: React.FC = () => {
             <MaterialIcons name="chevron-right" size={22} color={colors.textTertiary} />
           </TouchableOpacity>
 
+          <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>Legal & Statutory Policies</Text>
+
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => Linking.openURL('https://superapp-website-ashen.vercel.app/privacy-policy')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+              <MaterialIcons name="privacy-tip" size={20} color="#10B981" />
+            </View>
+            <View style={styles.actionTextCol}>
+              <Text style={styles.actionTitle}>Privacy Policy</Text>
+              <Text style={styles.actionSub}>Data collection, permissions & security</Text>
+            </View>
+            <MaterialIcons name="open-in-new" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => Linking.openURL('https://superapp-website-ashen.vercel.app/terms-and-conditions')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
+              <MaterialIcons name="description" size={20} color="#3B82F6" />
+            </View>
+            <View style={styles.actionTextCol}>
+              <Text style={styles.actionTitle}>Terms & Conditions</Text>
+              <Text style={styles.actionSub}>User agreement & terms of use</Text>
+            </View>
+            <MaterialIcons name="open-in-new" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => Linking.openURL('https://superapp-website-ashen.vercel.app/refund-cancellation')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+              <MaterialIcons name="replay" size={20} color="#F59E0B" />
+            </View>
+            <View style={styles.actionTextCol}>
+              <Text style={styles.actionTitle}>Refund & Cancellation</Text>
+              <Text style={styles.actionSub}>Policy on cancelled rides & food orders</Text>
+            </View>
+            <MaterialIcons name="open-in-new" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => Linking.openURL('https://superapp-website-ashen.vercel.app/delete-account')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: 'rgba(239,68,68,0.15)' }]}>
+              <MaterialIcons name="delete-forever" size={20} color="#EF4444" />
+            </View>
+            <View style={styles.actionTextCol}>
+              <Text style={styles.actionTitle}>Delete Account / Data Erasure</Text>
+              <Text style={styles.actionSub}>Submit account & data deletion request</Text>
+            </View>
+            <MaterialIcons name="open-in-new" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => Linking.openURL('https://superapp-website-ashen.vercel.app')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: 'rgba(139,92,246,0.15)' }]}>
+              <MaterialIcons name="language" size={20} color="#8B5CF6" />
+            </View>
+            <View style={styles.actionTextCol}>
+              <Text style={styles.actionTitle}>Official Website</Text>
+              <Text style={styles.actionSub}>superapp-website-ashen.vercel.app</Text>
+            </View>
+            <MaterialIcons name="open-in-new" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+
           <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>FAQ</Text>
           {faqBlocks.length === 0 ? (
             <Text style={styles.emptyFaq}>No FAQ configured by admin yet.</Text>

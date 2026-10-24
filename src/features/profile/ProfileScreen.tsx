@@ -412,7 +412,7 @@ export const ProfileScreen: React.FC = () => {
         </TouchableOpacity>
 
         {/* App Version Info */}
-        <Text style={styles.versionText}>SuperApp v2.0.0 (Unified Multi-Role)</Text>
+        <Text style={styles.versionText}>RJ09 SEWA v1.0.0 (Unified Multi-Role)</Text>
       </ScrollView>
 
       <RoleSwitchModal
