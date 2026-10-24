@@ -12,6 +12,9 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -320,48 +323,60 @@ export const ProfileScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => !savingName && setEditVisible(false)}
       >
-        <View style={styles.editOverlay}>
-          <View style={styles.editSheet}>
-            <View style={styles.editHeader}>
-              <Text style={styles.editTitle}>Edit name</Text>
-              <TouchableOpacity
-                onPress={() => !savingName && setEditVisible(false)}
-                disabled={savingName}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <MaterialIcons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
+        <KeyboardAvoidingView
+          style={styles.editKeyboardRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={styles.editOverlay}>
+              <View style={styles.editSheet}>
+                <View style={styles.editHeader}>
+                  <Text style={styles.editTitle}>Edit name</Text>
+                  <TouchableOpacity
+                    onPress={() => !savingName && setEditVisible(false)}
+                    disabled={savingName}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="close" size={22} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.editHint}>
+                  Only your display name can be changed. Phone number stays fixed.
+                </Text>
+                <Text style={styles.editLabel}>Name</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.textTertiary}
+                  maxLength={100}
+                  autoFocus
+                  editable={!savingName}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleSaveName()}
+                />
+                <Text style={styles.editLabel}>Phone</Text>
+                <View style={styles.editPhoneBox}>
+                  <Text style={styles.editPhoneText}>{phone}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.editSaveBtn, savingName && { opacity: 0.7 }]}
+                  onPress={() => void handleSaveName()}
+                  disabled={savingName}
+                  activeOpacity={0.85}
+                >
+                  {savingName ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.editSaveText}>Save name</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={styles.editHint}>Only your display name can be changed. Phone number stays fixed.</Text>
-            <Text style={styles.editLabel}>Name</Text>
-            <TextInput
-              style={styles.editInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Your name"
-              placeholderTextColor={colors.textTertiary}
-              maxLength={100}
-              autoFocus
-              editable={!savingName}
-            />
-            <Text style={styles.editLabel}>Phone</Text>
-            <View style={styles.editPhoneBox}>
-              <Text style={styles.editPhoneText}>{phone}</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.editSaveBtn, savingName && { opacity: 0.7 }]}
-              onPress={() => void handleSaveName()}
-              disabled={savingName}
-              activeOpacity={0.85}
-            >
-              {savingName ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.editSaveText}>Save name</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -561,6 +576,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  editKeyboardRoot: {
+    flex: 1,
+  },
   editOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -575,6 +593,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
     borderTopWidth: 1,
     borderColor: colors.border,
+    maxHeight: '92%',
   },
   editHeader: {
     flexDirection: 'row',
