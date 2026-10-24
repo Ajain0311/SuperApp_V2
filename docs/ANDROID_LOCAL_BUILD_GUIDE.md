@@ -52,7 +52,17 @@ cd ..
 
 ---
 
-## 4. Size Clarification (APK vs Play Store)
+## 4. App Restart / Reload on Phone (Bina Dobara Build Kiye)
+Phone par chal rahe app ko close karke turant fresh reopen/reload karne ke liye:
+
+```powershell
+adb shell am force-stop com.superapp.v2
+adb shell am start -n com.superapp.v2/.MainActivity
+```
+
+---
+
+## 5. Size Clarification (APK vs Play Store)
 - **Kyu abhi APK 168 MB ki hai?**
   Ye "FAT APK" (Universal APK) hai jisme 4 alag-alag CPU architecture ka code ek sath hai (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`) taaki har mobile me chal sake.
 - **Play Store par kitni size dikhegi?**
