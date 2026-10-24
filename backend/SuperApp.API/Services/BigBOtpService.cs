@@ -14,6 +14,7 @@ namespace SuperApp.API.Services;
 public class BigBOtpService : IOtpService
 {
     private readonly AppDbContext _db;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ISmsService _smsService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<BigBOtpService> _logger;
@@ -26,12 +27,14 @@ public class BigBOtpService : IOtpService
         AppDbContext db,
         ISmsService smsService,
         IConfiguration configuration,
-        ILogger<BigBOtpService> logger)
+        ILogger<BigBOtpService> logger,
+        IServiceProvider serviceProvider)
     {
         _db = db;
         _smsService = smsService;
         _configuration = configuration;
         _logger = logger;
+        _serviceProvider = serviceProvider;
         _templateId = Environment.GetEnvironmentVariable("SMS_TEMPLATE_ID")
             ?? configuration["Sms:TemplateId"]
             ?? "1407177633307627182";
@@ -93,16 +96,34 @@ public class BigBOtpService : IOtpService
         // 4. Construct registered DLT message with dynamic OTP
         var message = $"Your login OTP is {otpCode}. Valid for 3 mins. Do not share this code with anyone. Govt. of Punjab";
 
-        // 5. Dispatch SMS via BIGB Gateway
-        var sent = await _smsService.SendSmsAsync(cleanMobile, message, _templateId);
-        if (sent)
+        // 5. Dispatch SMS via Gateway asynchronously in background so mobile client transitions instantly
+        var targetMobile = cleanMobile;
+        var targetMsg = message;
+        var targetTid = _templateId;
+        var sp = _serviceProvider;
+        var log = _logger;
+
+        _ = Task.Run(async () =>
         {
-            _logger.LogInformation("[BigBOtpService] Live OTP SMS sent successfully to {Mobile}", cleanMobile);
-        }
-        else
-        {
-            _logger.LogWarning("[BigBOtpService] Live SMS send returned false for {Mobile}. OTP is saved in database.", cleanMobile);
-        }
+            try
+            {
+                using var scope = sp.CreateScope();
+                var scopedSms = scope.ServiceProvider.GetRequiredService<ISmsService>();
+                var sent = await scopedSms.SendSmsAsync(targetMobile, targetMsg, targetTid);
+                if (sent)
+                {
+                    log.LogInformation("[BigBOtpService] Live OTP SMS dispatched successfully to {Mobile}", targetMobile);
+                }
+                else
+                {
+                    log.LogWarning("[BigBOtpService] Live SMS gateway returned false for {Mobile}. OTP is already saved in database.", targetMobile);
+                }
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "[BigBOtpService] Background SMS delivery failed for {Mobile}", targetMobile);
+            }
+        });
 
         return otpCode;
     }
