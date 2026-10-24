@@ -8,6 +8,8 @@ public class AdminDashboardDto
     public int TotalFoodOrders { get; set; }
     public int TotalRides { get; set; }
     public int ActiveListings { get; set; }
+    /// <summary>Citizen DRIVER / RESTAURANT_OWNER applications awaiting admin review.</summary>
+    public int PendingRoleApplications { get; set; }
     public decimal GrossFoodSales { get; set; }
     public decimal GrossRideFares { get; set; }
     public decimal PlatformRevenue { get; set; }

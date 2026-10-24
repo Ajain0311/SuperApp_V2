@@ -319,10 +319,23 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         >
           <View style={[styles.quickNavIcon, { backgroundColor: '#22D3EE20' }]}>
             <Ionicons name="people-circle-outline" size={22} color="#22D3EE" />
+            {(overview.pendingRoleApplications ?? 0) > 0 ? (
+              <View style={styles.roleAppBadge}>
+                <Text style={styles.roleAppBadgeText}>
+                  {(overview.pendingRoleApplications ?? 0) > 99
+                    ? '99+'
+                    : String(overview.pendingRoleApplications)}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.quickNavTitle}>Role Applications</Text>
-            <Text style={styles.quickNavSub}>Approve rider / hotel citizen requests</Text>
+            <Text style={styles.quickNavSub}>
+              {(overview.pendingRoleApplications ?? 0) > 0
+                ? `${overview.pendingRoleApplications} waiting for approval`
+                : 'Approve rider / hotel citizen requests'}
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
         </TouchableOpacity>
@@ -1219,6 +1232,26 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  roleAppBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.surface || '#0F172A',
+  },
+  roleAppBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   quickNavTitle: {
     fontSize: 14,

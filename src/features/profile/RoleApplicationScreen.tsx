@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,12 @@ import {
   Alert,
   Image,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { AppColors } from '../../theme/colors';
@@ -24,6 +25,80 @@ import { ApiEndpoints } from '../../constants/api';
 import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 
 type RoleKind = 'DRIVER' | 'RESTAURANT_OWNER';
+
+type RoleApp = {
+  id: number;
+  requestedRole?: string;
+  status?: string;
+  licenseNumber?: string;
+  vehicleType?: string;
+  vehicleRegistrationNumber?: string;
+  vehicleMake?: string;
+  vehicleModel?: string;
+  hotelName?: string;
+  hotelAddress?: string;
+  hotelCity?: string;
+  hotelPhone?: string;
+  applicantNotes?: string;
+  adminNotes?: string;
+  reviewedByAdminName?: string;
+  reviewedAt?: string;
+  createdAt?: string;
+};
+
+function statusMeta(status?: string) {
+  const s = (status || '').toUpperCase();
+  if (s === 'PENDING') {
+    return {
+      label: 'Pending review',
+      color: '#F59E0B',
+      bg: '#F59E0B22',
+      icon: 'time-outline' as const,
+      hint: 'Admin is reviewing your application. You will get a notification when it is decided.',
+    };
+  }
+  if (s === 'APPROVED') {
+    return {
+      label: 'Approved',
+      color: '#10B981',
+      bg: '#10B98122',
+      icon: 'checkmark-circle-outline' as const,
+      hint: 'Role granted. Open Profile and switch role to start using it.',
+    };
+  }
+  if (s === 'REJECTED') {
+    return {
+      label: 'Rejected',
+      color: '#EF4444',
+      bg: '#EF444422',
+      icon: 'close-circle-outline' as const,
+      hint: 'You can fix details and submit a new application below.',
+    };
+  }
+  if (s === 'CANCELLED') {
+    return {
+      label: 'Cancelled',
+      color: '#94A3B8',
+      bg: '#94A3B822',
+      icon: 'ban-outline' as const,
+      hint: 'You cancelled this application. Submit again anytime.',
+    };
+  }
+  return {
+    label: status || 'Unknown',
+    color: AppColors.textSecondary,
+    bg: AppColors.surface,
+    icon: 'help-circle-outline' as const,
+    hint: '',
+  };
+}
+
+function formatDate(value?: string) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString();
+}
 
 export const RoleApplicationScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -45,11 +120,54 @@ export const RoleApplicationScreen: React.FC = () => {
   const [docNo, setDocNo] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [loadingApp, setLoadingApp] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [latestApp, setLatestApp] = useState<RoleApp | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const title = useMemo(
     () => (isDriver ? 'Become a Rider / Captain' : 'Open a Hotel / Restaurant'),
     [isDriver]
   );
+
+  const loadMine = useCallback(
+    async (pull = false) => {
+      if (pull) setRefreshing(true);
+      else setLoadingApp(true);
+      setLoadError(null);
+      try {
+        const res = await apiClient.get<any>(ApiEndpoints.roleApplications.mine);
+        const data = res?.data?.data ?? res?.data;
+        const list: RoleApp[] = Array.isArray(data) ? data : [];
+        const forRole = list
+          .filter((a) => String(a.requestedRole || '').toUpperCase() === requestedRole)
+          .sort((a, b) => {
+            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return tb - ta;
+          });
+        setLatestApp(forRole[0] || null);
+      } catch (e: any) {
+        setLoadError(e?.response?.data?.message || e?.message || 'Could not load application status');
+      } finally {
+        setLoadingApp(false);
+        setRefreshing(false);
+      }
+    },
+    [requestedRole]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMine();
+    }, [loadMine])
+  );
+
+  const status = String(latestApp?.status || '').toUpperCase();
+  const meta = statusMeta(status);
+  const blocksNewSubmit = status === 'PENDING' || status === 'APPROVED';
+  const showForm = !blocksNewSubmit;
 
   const pickDocument = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -82,7 +200,10 @@ export const RoleApplicationScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!docNo) {
-      Alert.alert('Document required', isDriver ? 'Please upload your driving license photo.' : 'Please upload business / FSSAI document.');
+      Alert.alert(
+        'Document required',
+        isDriver ? 'Please upload your driving license photo.' : 'Please upload business / FSSAI document.'
+      );
       return;
     }
     setSubmitting(true);
@@ -111,14 +232,37 @@ export const RoleApplicationScreen: React.FC = () => {
       await apiClient.post(ApiEndpoints.roleApplications.submit, body);
       Alert.alert(
         'Submitted',
-        'Your application is pending admin approval. You will get the role after approval.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        'Your application is pending admin approval. Status will update on this screen, and you will get a notification when it is decided.'
       );
+      await loadMine();
     } catch (e: any) {
       Alert.alert('Could not submit', e?.response?.data?.message || e?.message || 'Try again');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCancel = () => {
+    if (!latestApp?.id) return;
+    Alert.alert('Cancel application?', 'You can submit again later from this same screen.', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel application',
+        style: 'destructive',
+        onPress: async () => {
+          setCancelling(true);
+          try {
+            await apiClient.post(ApiEndpoints.roleApplications.cancel(latestApp.id), {});
+            Alert.alert('Cancelled', 'Your application was cancelled.');
+            await loadMine();
+          } catch (e: any) {
+            Alert.alert('Could not cancel', e?.response?.data?.message || e?.message || 'Try again');
+          } finally {
+            setCancelling(false);
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -132,80 +276,248 @@ export const RoleApplicationScreen: React.FC = () => {
       </View>
 
       <FormKeyboardAvoid>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.intro}>
-          Default mode is Citizen. Admin must approve this request before the new role is added to your
-          account. Marketplace selling does not need approval — anyone can list items.
-        </Text>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadMine(true)}
+              tintColor={AppColors.primary}
+            />
+          }
+        >
+          <Text style={styles.intro}>
+            Default mode is Citizen. Admin must approve this request before the new role is added to your
+            account. Marketplace selling does not need approval — anyone can list items.
+          </Text>
 
-        {isDriver ? (
-          <>
-            <Text style={styles.label}>Driving License Number *</Text>
-            <TextInput style={styles.input} value={licenseNumber} onChangeText={setLicenseNumber} autoCapitalize="characters" placeholder="e.g. RJ-14201100XXXX" placeholderTextColor="#777" />
+          {loadingApp ? (
+            <View style={styles.statusLoading}>
+              <ActivityIndicator color={AppColors.primary} />
+              <Text style={styles.statusLoadingText}>Checking your application status…</Text>
+            </View>
+          ) : loadError ? (
+            <View style={styles.statusCard}>
+              <Text style={styles.errorText}>{loadError}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={() => loadMine()}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : latestApp ? (
+            <View style={[styles.statusCard, { borderColor: meta.color + '55', backgroundColor: meta.bg }]}>
+              <View style={styles.statusHeader}>
+                <Ionicons name={meta.icon} size={22} color={meta.color} />
+                <Text style={[styles.statusLabel, { color: meta.color }]}>{meta.label}</Text>
+              </View>
+              <Text style={styles.statusHint}>{meta.hint}</Text>
+              <Text style={styles.statusMeta}>Submitted: {formatDate(latestApp.createdAt)}</Text>
+              {latestApp.reviewedAt ? (
+                <Text style={styles.statusMeta}>
+                  Reviewed: {formatDate(latestApp.reviewedAt)}
+                  {latestApp.reviewedByAdminName ? ` · ${latestApp.reviewedByAdminName}` : ''}
+                </Text>
+              ) : null}
+              {latestApp.adminNotes ? (
+                <Text style={styles.adminNotes}>Admin note: {latestApp.adminNotes}</Text>
+              ) : null}
 
-            <Text style={styles.label}>Vehicle Type *</Text>
-            <View style={styles.chipRow}>
-              {(['BIKE', 'AUTO', 'CAB'] as const).map((t) => (
-                <TouchableOpacity key={t} style={[styles.chip, vehicleType === t && styles.chipActive]} onPress={() => setVehicleType(t)}>
-                  <Text style={[styles.chipText, vehicleType === t && styles.chipTextActive]}>{t}</Text>
+              {isDriver ? (
+                <View style={styles.summaryBox}>
+                  {latestApp.licenseNumber ? (
+                    <Text style={styles.summaryLine}>License: {latestApp.licenseNumber}</Text>
+                  ) : null}
+                  {latestApp.vehicleType ? (
+                    <Text style={styles.summaryLine}>
+                      Vehicle: {latestApp.vehicleType}
+                      {latestApp.vehicleRegistrationNumber
+                        ? ` · ${latestApp.vehicleRegistrationNumber}`
+                        : ''}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : (
+                <View style={styles.summaryBox}>
+                  {latestApp.hotelName ? (
+                    <Text style={styles.summaryLine}>{latestApp.hotelName}</Text>
+                  ) : null}
+                  {latestApp.hotelAddress ? (
+                    <Text style={styles.summaryLine}>{latestApp.hotelAddress}</Text>
+                  ) : null}
+                  {latestApp.hotelPhone ? (
+                    <Text style={styles.summaryLine}>Phone: {latestApp.hotelPhone}</Text>
+                  ) : null}
+                </View>
+              )}
+
+              {status === 'PENDING' ? (
+                <TouchableOpacity
+                  style={[styles.cancelBtn, cancelling && { opacity: 0.7 }]}
+                  onPress={handleCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.cancelText}>Cancel this application</Text>
+                  )}
                 </TouchableOpacity>
-              ))}
+              ) : null}
             </View>
-
-            <Text style={styles.label}>Vehicle Registration *</Text>
-            <TextInput style={styles.input} value={vehicleReg} onChangeText={setVehicleReg} autoCapitalize="characters" placeholder="RJ14AB1234" placeholderTextColor="#777" />
-
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Make</Text>
-                <TextInput style={styles.input} value={vehicleMake} onChangeText={setVehicleMake} placeholder="Hero" placeholderTextColor="#777" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Model</Text>
-                <TextInput style={styles.input} value={vehicleModel} onChangeText={setVehicleModel} placeholder="Splendor" placeholderTextColor="#777" />
-              </View>
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.label}>Hotel / Restaurant Name *</Text>
-            <TextInput style={styles.input} value={hotelName} onChangeText={setHotelName} placeholder="Spice Hub" placeholderTextColor="#777" />
-            <Text style={styles.label}>Address *</Text>
-            <TextInput style={[styles.input, { minHeight: 70 }]} value={hotelAddress} onChangeText={setHotelAddress} multiline placeholder="Full address" placeholderTextColor="#777" />
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>City</Text>
-                <TextInput style={styles.input} value={hotelCity} onChangeText={setHotelCity} placeholder="Jaipur" placeholderTextColor="#777" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Phone *</Text>
-                <TextInput style={styles.input} value={hotelPhone} onChangeText={setHotelPhone} keyboardType="phone-pad" placeholder="98XXXXXXXX" placeholderTextColor="#777" />
-              </View>
-            </View>
-          </>
-        )}
-
-        <Text style={styles.label}>{isDriver ? 'License Photo *' : 'Business / FSSAI Document *'}</Text>
-        <TouchableOpacity style={styles.uploadBtn} onPress={pickDocument} disabled={uploading}>
-          {uploading ? (
-            <ActivityIndicator color="#FFF" />
           ) : (
-            <>
-              <Ionicons name="cloud-upload-outline" size={20} color="#FFF" />
-              <Text style={styles.uploadText}>{docNo ? 'Replace document' : 'Upload document photo'}</Text>
-            </>
+            <View style={styles.emptyStatus}>
+              <Ionicons name="document-text-outline" size={20} color={AppColors.textSecondary} />
+              <Text style={styles.emptyStatusText}>No application yet for this role. Fill the form below.</Text>
+            </View>
           )}
-        </TouchableOpacity>
-        {docUri ? <Image source={{ uri: docUri }} style={styles.preview} /> : null}
-        {docNo ? <Text style={styles.docOk}>Uploaded ✓ ({docNo})</Text> : null}
 
-        <Text style={styles.label}>Notes (optional)</Text>
-        <TextInput style={[styles.input, { minHeight: 70 }]} value={notes} onChangeText={setNotes} multiline placeholder="Anything admin should know" placeholderTextColor="#777" />
+          {showForm ? (
+            <>
+              {status === 'REJECTED' || status === 'CANCELLED' ? (
+                <Text style={styles.reapplyTitle}>Submit a new application</Text>
+              ) : null}
 
-        <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting || uploading}>
-          {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitText}>Submit for Admin Approval</Text>}
-        </TouchableOpacity>
-      </ScrollView>
+              {isDriver ? (
+                <>
+                  <Text style={styles.label}>Driving License Number *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={licenseNumber}
+                    onChangeText={setLicenseNumber}
+                    autoCapitalize="characters"
+                    placeholder="e.g. RJ-14201100XXXX"
+                    placeholderTextColor="#777"
+                  />
+
+                  <Text style={styles.label}>Vehicle Type *</Text>
+                  <View style={styles.chipRow}>
+                    {(['BIKE', 'AUTO', 'CAB'] as const).map((t) => (
+                      <TouchableOpacity
+                        key={t}
+                        style={[styles.chip, vehicleType === t && styles.chipActive]}
+                        onPress={() => setVehicleType(t)}
+                      >
+                        <Text style={[styles.chipText, vehicleType === t && styles.chipTextActive]}>{t}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.label}>Vehicle Registration *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={vehicleReg}
+                    onChangeText={setVehicleReg}
+                    autoCapitalize="characters"
+                    placeholder="RJ14AB1234"
+                    placeholderTextColor="#777"
+                  />
+
+                  <View style={styles.row}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Make</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={vehicleMake}
+                        onChangeText={setVehicleMake}
+                        placeholder="Hero"
+                        placeholderTextColor="#777"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Model</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={vehicleModel}
+                        onChangeText={setVehicleModel}
+                        placeholder="Splendor"
+                        placeholderTextColor="#777"
+                      />
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>Hotel / Restaurant Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={hotelName}
+                    onChangeText={setHotelName}
+                    placeholder="Spice Hub"
+                    placeholderTextColor="#777"
+                  />
+                  <Text style={styles.label}>Address *</Text>
+                  <TextInput
+                    style={[styles.input, { minHeight: 70 }]}
+                    value={hotelAddress}
+                    onChangeText={setHotelAddress}
+                    multiline
+                    placeholder="Full address"
+                    placeholderTextColor="#777"
+                  />
+                  <View style={styles.row}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>City</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={hotelCity}
+                        onChangeText={setHotelCity}
+                        placeholder="Jaipur"
+                        placeholderTextColor="#777"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Phone *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={hotelPhone}
+                        onChangeText={setHotelPhone}
+                        keyboardType="phone-pad"
+                        placeholder="98XXXXXXXX"
+                        placeholderTextColor="#777"
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
+
+              <Text style={styles.label}>{isDriver ? 'License Photo *' : 'Business / FSSAI Document *'}</Text>
+              <TouchableOpacity style={styles.uploadBtn} onPress={pickDocument} disabled={uploading}>
+                {uploading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={20} color="#FFF" />
+                    <Text style={styles.uploadText}>{docNo ? 'Replace document' : 'Upload document photo'}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {docUri ? <Image source={{ uri: docUri }} style={styles.preview} /> : null}
+              {docNo ? <Text style={styles.docOk}>Uploaded ✓ ({docNo})</Text> : null}
+
+              <Text style={styles.label}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.input, { minHeight: 70 }]}
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                placeholder="Anything admin should know"
+                placeholderTextColor="#777"
+              />
+
+              <TouchableOpacity
+                style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+                onPress={handleSubmit}
+                disabled={submitting || uploading}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.submitText}>Submit for Admin Approval</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </ScrollView>
       </FormKeyboardAvoid>
     </SafeAreaView>
   );
@@ -227,6 +539,69 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFF', fontSize: 16, fontWeight: '700', flexShrink: 1, textAlign: 'center' },
   content: { padding: 16, paddingBottom: 40 },
   intro: { color: AppColors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 16 },
+  statusLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: AppColors.surface,
+    marginBottom: 16,
+  },
+  statusLoadingText: { color: AppColors.textSecondary, fontSize: 13 },
+  statusCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  statusLabel: { fontSize: 16, fontWeight: '800' },
+  statusHint: { color: AppColors.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 8 },
+  statusMeta: { color: '#94A3B8', fontSize: 12, marginTop: 2 },
+  adminNotes: { color: '#FCA5A5', fontSize: 13, marginTop: 8, lineHeight: 18 },
+  summaryBox: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148,163,184,0.25)',
+    gap: 4,
+  },
+  summaryLine: { color: '#E2E8F0', fontSize: 13 },
+  cancelBtn: {
+    marginTop: 14,
+    backgroundColor: '#7F1D1D',
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  cancelText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+  emptyStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: AppColors.surface,
+    marginBottom: 16,
+  },
+  emptyStatusText: { color: AppColors.textSecondary, fontSize: 13, flex: 1 },
+  errorText: { color: '#FCA5A5', fontSize: 13, marginBottom: 8 },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#334155',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryText: { color: '#FFF', fontWeight: '700', fontSize: 12 },
+  reapplyTitle: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+    marginTop: 4,
+  },
   label: { color: AppColors.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 10 },
   input: {
     backgroundColor: AppColors.surface,

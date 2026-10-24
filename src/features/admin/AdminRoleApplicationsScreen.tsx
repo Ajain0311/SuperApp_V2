@@ -39,6 +39,7 @@ function formatDate(value?: string) {
 
 export const AdminRoleApplicationsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [items, setItems] = useState<any[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'PENDING' | 'ALL'>('PENDING');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,9 +55,21 @@ export const AdminRoleApplicationsScreen: React.FC<{ navigation: any }> = ({ nav
           statusFilter === 'PENDING'
             ? `${ApiEndpoints.admin.roleApplications}?status=PENDING`
             : ApiEndpoints.admin.roleApplications;
-        const res = await apiClient.get<any>(url);
+        const [res, pendingRes] = await Promise.all([
+          apiClient.get<any>(url),
+          statusFilter === 'PENDING'
+            ? Promise.resolve(null)
+            : apiClient.get<any>(`${ApiEndpoints.admin.roleApplications}?status=PENDING`),
+        ]);
         const data = res.data?.data ?? res.data;
-        setItems(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setItems(list);
+        if (statusFilter === 'PENDING') {
+          setPendingCount(list.length);
+        } else {
+          const pendingData = pendingRes?.data?.data ?? pendingRes?.data;
+          setPendingCount(Array.isArray(pendingData) ? pendingData.length : 0);
+        }
       } catch (e: any) {
         const msg =
           e?.response?.data?.message ||
@@ -121,9 +134,18 @@ export const AdminRoleApplicationsScreen: React.FC<{ navigation: any }> = ({ nav
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Role Applications</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.headerTitle}>Role Applications</Text>
+            {pendingCount > 0 ? (
+              <View style={styles.headerBadge}>
+                <Text style={styles.headerBadgeText}>{pendingCount > 99 ? '99+' : pendingCount}</Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={styles.headerSub}>
-            Citizen requests for Rider or Hotel Owner — approve to grant role
+            {pendingCount > 0
+              ? `${pendingCount} waiting for approval — approve to grant role`
+              : 'Citizen requests for Rider or Hotel Owner — approve to grant role'}
           </Text>
         </View>
       </View>
@@ -136,6 +158,11 @@ export const AdminRoleApplicationsScreen: React.FC<{ navigation: any }> = ({ nav
             onPress={() => setStatusFilter(t)}
           >
             <Text style={[styles.tabText, statusFilter === t && styles.tabTextActive]}>{t}</Text>
+            {t === 'PENDING' && pendingCount > 0 ? (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{pendingCount > 99 ? '99+' : pendingCount}</Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
         ))}
       </View>
@@ -277,10 +304,38 @@ const styles = StyleSheet.create({
     borderBottomColor: AppColors.border,
   },
   backBtn: { padding: 4 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  headerBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  headerBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
   headerSub: { fontSize: 11, color: AppColors.textSecondary, marginTop: 2 },
+  tabBadge: {
+    marginLeft: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  tabBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
   tabBar: { flexDirection: 'row', backgroundColor: AppColors.surface },
-  tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
   tabItemActive: { borderBottomWidth: 2, borderBottomColor: AppColors.primary },
   tabText: { color: AppColors.textSecondary, fontWeight: '700' },
   tabTextActive: { color: AppColors.primary },
