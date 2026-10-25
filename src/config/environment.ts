@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 export class AppEnvironment {
   /** Target environment: 'dev', 'staging', 'prod' */
   static get environment(): string {
-    return (process.env.EXPO_PUBLIC_ENV || 'dev').toLowerCase();
+    return (process.env.EXPO_PUBLIC_ENV || 'prod').toLowerCase();
   }
 
   static get isProduction(): boolean {
@@ -32,16 +32,8 @@ export class AppEnvironment {
       return explicitUrl.trim();
     }
 
-    // 2. Select default based on environment (hosted production/staging domain)
-    if (this.isProduction || this.isStaging) {
-      return 'https://makemytree.duckdns.org/api';
-    }
-
-    // 3. Dev fallbacks (Android emulator maps localhost to 10.0.2.2)
-    if (Platform.OS === 'android') {
-      return 'http://10.0.2.2:80/api';
-    }
-    return 'http://localhost:80/api';
+    // 2. Default to production Azure / DuckDNS hosted domain
+    return 'https://makemytree.duckdns.org/api';
   }
 
   /**

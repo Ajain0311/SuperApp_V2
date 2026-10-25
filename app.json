@@ -2,7 +2,7 @@
   "expo": {
     "name": "RJ09 SEWA",
     "slug": "HTTP-EXPNAT-NET",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.superapp.v2",
-      "versionCode": 1,
+      "versionCode": 2,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "backgroundColor": "#0A0E21",
@@ -31,7 +31,8 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "REQUEST_INSTALL_PACKAGES"
       ],
       "googleServicesFile": "./google-services.json"
     },
