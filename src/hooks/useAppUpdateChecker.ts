@@ -38,8 +38,12 @@ export function useAppUpdateChecker(): void {
 
         if (!latestTag || !isMounted) return;
 
-        // Current version from app config
-        const currentVersion = Constants.expoConfig?.version || '1.0.0';
+        // Current version from app config / manifest
+        const currentVersion =
+          Constants.expoConfig?.version ||
+          (Constants.manifest as any)?.version ||
+          (Constants.manifest2 as any)?.extra?.expoClient?.version ||
+          '1.0.2';
 
         // Check if user already dismissed or installed this exact release tag
         const [dismissedTag, installedTag] = await Promise.all([
@@ -52,8 +56,16 @@ export function useAppUpdateChecker(): void {
           return;
         }
 
-        // If release tag starts with 'v' + currentVersion, consider it already on this version
-        if (latestTag === `v${currentVersion}` || latestTag.startsWith(`v${currentVersion}-`)) {
+        // Normalize version strings (e.g. "v1.0.2-577906c" -> "1.0.2")
+        const cleanLatest = latestTag.replace(/^v/, '');
+        const cleanCurrent = currentVersion.replace(/^v/, '');
+
+        // If release tag matches or starts with the current version, app is up to date
+        if (
+          cleanLatest === cleanCurrent ||
+          cleanLatest.startsWith(`${cleanCurrent}-`) ||
+          cleanLatest.startsWith(cleanCurrent)
+        ) {
           return;
         }
 
