@@ -3,7 +3,7 @@ name: Build Android Release APK & Publish Update
 on:
   push:
     branches:
-      - dev
+      - main
     paths:
       - 'src/**'
       - 'App.tsx'
