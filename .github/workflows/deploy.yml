@@ -72,6 +72,7 @@ jobs:
       - name: Execute Deployment on VM via SSH
         env:
           SSH_HOST: ${{ secrets.VM_HOST }}
+          SSH_HOST_2: ${{ secrets.VM_HOST_2 }}
           SSH_USER: ${{ secrets.VM_USER }}
           SSH_KEY: ${{ secrets.VM_SSH_KEY }}
           ACTION: ${{ steps.vars.outputs.action }}
@@ -96,7 +97,15 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          echo "Connecting to $SSH_USER@$SSH_HOST to trigger $ACTION ($TAG)..."
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
-            "sudo chmod +x /opt/SuperApp_V2/scripts/manage.sh && sudo /opt/SuperApp_V2/scripts/manage.sh '$ACTION' '$TAG'"
+          HOSTS="$SSH_HOST"
+          if [ -n "$SSH_HOST_2" ]; then
+            HOSTS="$SSH_HOST $SSH_HOST_2"
+          fi
 
+          for HOST in $HOSTS; do
+            echo "=========================================================="
+            echo "🚀 Connecting to $SSH_USER@$HOST to trigger $ACTION ($TAG)..."
+            echo "=========================================================="
+            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 -i ~/.ssh/deploy_key "$SSH_USER@$HOST" \
+              "sudo chmod +x /opt/SuperApp_V2/scripts/manage.sh && sudo /opt/SuperApp_V2/scripts/manage.sh '$ACTION' '$TAG'"
+          done
