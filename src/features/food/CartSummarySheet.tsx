@@ -220,7 +220,13 @@ export const CartSummarySheet: React.FC<CartSummarySheetProps> = ({
 
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>Delivery Partner Fee</Text>
-                <Text style={[styles.billValue, styles.freeDeliveryText]}>FREE</Text>
+                {deliveryFee === 0 ? (
+                  <Text style={[styles.billValue, styles.freeDeliveryText]}>FREE</Text>
+                ) : (
+                  <Text style={styles.billValue}>
+                    {AppConstants.currency}{deliveryFee.toFixed(0)}
+                  </Text>
+                )}
               </View>
 
               <View style={styles.billRow}>
