@@ -25,13 +25,13 @@ public static class ProductionSecurityValidator
         if (!isProduction) return;
 
         var isMock = string.IsNullOrWhiteSpace(provider) || string.Equals(provider, "Mock", StringComparison.OrdinalIgnoreCase);
-        var hasValidEasebuzz = string.Equals(provider, "Easebuzz", StringComparison.OrdinalIgnoreCase)
+        var hasValidRazorpay = string.Equals(provider, "Razorpay", StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrWhiteSpace(key)
             && !string.IsNullOrWhiteSpace(salt);
 
-        if (isMock || !hasValidEasebuzz)
+        if (isMock || !hasValidRazorpay)
         {
-            throw new InvalidOperationException("CRITICAL: MockPaymentService or unconfigured payment gateway cannot be used in a Production environment. Configure Easebuzz with valid credentials.");
+            throw new InvalidOperationException("CRITICAL: MockPaymentService or unconfigured payment gateway cannot be used in a Production environment. Configure Razorpay with valid credentials.");
         }
     }
 
@@ -65,3 +65,4 @@ public static class ProductionSecurityValidator
         }
     }
 }
+

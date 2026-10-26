@@ -1,5 +1,5 @@
 import { paymentApi } from './paymentApi';
-import { openEasebuzzCheckout } from './easebuzzCheckout';
+import { openRazorpayCheckout } from './razorpayCheckout';
 import {
   PaymentKitInfo,
   PaymentModule,
@@ -22,9 +22,9 @@ class PaymentService {
     });
   }
 
-  usesEasebuzz(order: PaymentOrderResult, kit?: PaymentKitInfo): boolean {
-    if (kit?.checkoutMode === 'easebuzz') return true;
-    return Boolean(order.accessKey && order.keyId);
+  usesRazorpay(order: PaymentOrderResult, kit?: PaymentKitInfo): boolean {
+    if (kit?.checkoutMode === 'razorpay') return true;
+    return Boolean(order.keyId && order.orderId);
   }
 
   async verify(
@@ -46,23 +46,28 @@ class PaymentService {
   async processPayment(
     amount: number,
     method: string,
-    module: PaymentModule
+    module: PaymentModule,
+    userDetails?: { name?: string; email?: string; contact?: string }
   ): Promise<PaymentResult> {
     const kit = await this.getKit().catch(() => undefined);
     const order = await this.createOrder(amount, module);
 
-    if (this.usesEasebuzz(order, kit)) {
-      const checkout = await openEasebuzzCheckout(order);
-      const verified = await this.verify(checkout.txnid, order.orderId, checkout.hash);
+    if (this.usesRazorpay(order, kit)) {
+      const checkout = await openRazorpayCheckout(order, userDetails);
+      const verified = await this.verify(
+        checkout.razorpay_payment_id,
+        checkout.razorpay_order_id,
+        checkout.razorpay_signature
+      );
       const ok = verified.isVerified === true;
       return {
         isSuccess: ok,
-        transactionId: checkout.txnid,
-        method: 'EASEBUZZ',
+        transactionId: checkout.razorpay_payment_id,
+        method: 'RAZORPAY',
         amount,
-        orderId: order.orderId,
+        orderId: checkout.razorpay_order_id,
         status: verified.status,
-        errorMessage: ok ? undefined : verified.message || 'Payment not successful',
+        errorMessage: ok ? undefined : verified.message || 'Payment verification failed',
       };
     }
 

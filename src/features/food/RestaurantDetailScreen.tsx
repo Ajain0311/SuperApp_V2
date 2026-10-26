@@ -257,18 +257,18 @@ export const RestaurantDetailScreen: React.FC<RestaurantDetailScreenProps> = ({
           }
         }
         if (!pay?.accessKey || !pay?.keyId) {
-          throw new Error(pay?.errorMessage || pay?.message || 'Online payment could not be started. Check Easebuzz keys on the server.');
+          throw new Error(pay?.errorMessage || pay?.message || 'Online payment could not be started. Check Razorpay keys on the server.');
         }
-        const { openEasebuzzCheckout } = await import('../../services/easebuzzCheckout');
-        const checkout = await openEasebuzzCheckout(pay);
+        const { openRazorpayCheckout } = await import('../../services/razorpayCheckout');
+        const checkout = await openRazorpayCheckout(pay);
         const verified = await apiClient.post<any>(ApiEndpoints.common.paymentsVerify, {
-          transactionId: checkout.txnid,
-          orderId: pay.orderId,
-          paymentSignature: checkout.hash || '',
+          transactionId: checkout.razorpay_payment_id,
+          orderId: checkout.razorpay_order_id || pay.orderId,
+          paymentSignature: checkout.razorpay_signature || '',
         });
         const verifiedBody = verified.data?.data || verified.data;
         if (!verifiedBody?.isVerified) {
-          throw new Error(verifiedBody?.message || 'Easebuzz did not confirm this payment. The order stays unpaid.');
+          throw new Error(verifiedBody?.message || 'Razorpay did not confirm this payment. The order stays unpaid.');
         }
       }
       clearCart();

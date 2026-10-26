@@ -95,7 +95,7 @@ export const AdminPaymentsScreen: React.FC<AdminPaymentsScreenProps> = ({ naviga
       <View style={styles.gatewayBanner}>
         <View style={styles.gatewayRow}>
           <Ionicons name="checkmark-circle" size={16} color={AppColors.secondary} />
-          <Text style={styles.gatewayText}>Gateway: Easebuzz Payment Gateway (Production)</Text>
+          <Text style={styles.gatewayText}>Gateway: Razorpay Payment Gateway (Standard Web Checkout)</Text>
         </View>
         <Text style={styles.gatewaySub}>Direct UPI, Cards, and NetBanking Settlements</Text>
       </View>

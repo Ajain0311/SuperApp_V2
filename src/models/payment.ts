@@ -1,6 +1,6 @@
 export type PaymentModule = 'FOOD' | 'RIDE' | 'MARKETPLACE' | 'TEST';
 
-export type PaymentCheckoutMode = 'mock' | 'easebuzz' | 'razorpay';
+export type PaymentCheckoutMode = 'mock' | 'razorpay';
 
 export interface PaymentKitInfo {
   configuredProvider: string;

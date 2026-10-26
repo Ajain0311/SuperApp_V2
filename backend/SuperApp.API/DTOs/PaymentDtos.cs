@@ -25,7 +25,7 @@ public class PaymentKitInfo
 {
     public string ConfiguredProvider { get; set; } = "Mock";
     public string ActiveProvider { get; set; } = "Mock";
-    public string CheckoutMode { get; set; } = "mock"; // mock | easebuzz
+    public string CheckoutMode { get; set; } = "mock"; // mock | razorpay
     public string? KeyId { get; set; }
     public bool HasCredentials { get; set; }
     public string CheckoutUrl { get; set; } = "/pay-test/";
@@ -36,3 +36,4 @@ public class PaymentKitInfo
         "success@razorpay"
     ];
 }
+

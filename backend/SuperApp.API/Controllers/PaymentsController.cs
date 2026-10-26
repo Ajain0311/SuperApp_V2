@@ -16,18 +16,20 @@ public class PaymentsController : ControllerBase
     private readonly IPaymentService _paymentService;
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
-
+    private readonly ILogger<PaymentsController> _logger;
     private readonly Microsoft.AspNetCore.SignalR.IHubContext<SuperApp.API.Hubs.OrderStatusHub>? _orderHub;
 
     public PaymentsController(
         IPaymentService paymentService,
         AppDbContext db,
         IConfiguration configuration,
+        ILogger<PaymentsController> logger,
         Microsoft.AspNetCore.SignalR.IHubContext<SuperApp.API.Hubs.OrderStatusHub>? orderHub = null)
     {
         _paymentService = paymentService;
         _db = db;
         _configuration = configuration;
+        _logger = logger;
         _orderHub = orderHub;
     }
 
@@ -43,19 +45,24 @@ public class PaymentsController : ControllerBase
     {
         var configured = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER")
             ?? _configuration["Providers:Payment"]
-            ?? "Mock";
-        var key = Environment.GetEnvironmentVariable("PAYMENT_KEY")
+            ?? "Razorpay";
+        var key = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
+            ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
+            ?? _configuration["Razorpay:KeyId"]
             ?? _configuration["Payment:Key"]
             ?? string.Empty;
-        var salt = Environment.GetEnvironmentVariable("PAYMENT_SECRET")
-            ?? _configuration["Payment:Salt"]
+        var secret = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
+            ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+            ?? _configuration["Razorpay:KeySecret"]
             ?? _configuration["Payment:Secret"]
             ?? string.Empty;
-        var hasCredentials = !string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(salt);
-        var useEasebuzz = string.Equals(configured, "Easebuzz", StringComparison.OrdinalIgnoreCase)
-            && hasCredentials;
-        var active = useEasebuzz ? "Easebuzz" : "Mock";
-        var mode = useEasebuzz ? "easebuzz" : "mock";
+
+        var hasCredentials = !string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(secret);
+        var useRazorpay = (string.Equals(configured, "Razorpay", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(configured, "Easebuzz", StringComparison.OrdinalIgnoreCase))
+                          && hasCredentials;
+        var active = useRazorpay ? "Razorpay" : "Mock";
+        var mode = useRazorpay ? "razorpay" : "mock";
         return (configured, active, string.IsNullOrWhiteSpace(key) ? null : key, hasCredentials, mode);
     }
 
@@ -75,9 +82,8 @@ public class PaymentsController : ControllerBase
             CheckoutUrl = isProd ? "" : "/pay-test/",
             TestCards = isProd ? [] :
             [
-                "Visa 4012 0010 3714 1112",
-                "CVV any 3 digits, expiry any future date",
-                "UPI success@easebuzz (test)"
+                "Cards, Netbanking, UPI, Wallets",
+                "UPI: success@razorpay (test)"
             ]
         }));
     }
@@ -134,6 +140,11 @@ public class PaymentsController : ControllerBase
             }
             authoritativeAmount = ride.ActualFare ?? ride.EstimatedFare;
         }
+        else if (string.Equals(request.Module, "TEST", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(request.Module, "MARKETPLACE", StringComparison.OrdinalIgnoreCase))
+        {
+            if (authoritativeAmount < 1.00m) authoritativeAmount = 1.00m;
+        }
         else
         {
             return BadRequest(ApiResponse<PaymentOrderResult>.Fail("Invalid payment module or receipt ID"));
@@ -161,15 +172,17 @@ public class PaymentsController : ControllerBase
     [HttpPost("verify")]
     public async Task<ActionResult<ApiResponse<PaymentVerificationResult>>> VerifyPayment([FromBody] VerifyPaymentRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.TransactionId))
-            return BadRequest(ApiResponse<PaymentVerificationResult>.Fail("TransactionId is required"));
+        if (string.IsNullOrWhiteSpace(request.TransactionId) && string.IsNullOrWhiteSpace(request.OrderId))
+            return BadRequest(ApiResponse<PaymentVerificationResult>.Fail("TransactionId or OrderId is required"));
 
         var userId = GetCurrentUserId();
         if (!userId.HasValue)
             return Unauthorized(ApiResponse<PaymentVerificationResult>.Fail("Authentication required"));
 
         var payment = await _db.Payments.FirstOrDefaultAsync(p =>
-            p.TransactionId == request.TransactionId || p.TransactionId == request.OrderId);
+            p.TransactionId == request.OrderId ||
+            p.TransactionId == request.TransactionId ||
+            (request.OrderId != null && p.TransactionId == request.OrderId));
 
         if (payment == null)
             return NotFound(ApiResponse<PaymentVerificationResult>.Fail("Payment order not found"));
@@ -183,11 +196,15 @@ public class PaymentsController : ControllerBase
             request.PaymentSignature);
 
         if (result.IsVerified)
-            await FoodPaymentSync.ApplyAsync(_db, result.TransactionId, true, _orderHub);
+        {
+            await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, true, _orderHub);
+            return Ok(ApiResponse<PaymentVerificationResult>.Ok(result));
+        }
         else
-            await FoodPaymentSync.ApplyAsync(_db, request.TransactionId, false, _orderHub);
-
-        return Ok(ApiResponse<PaymentVerificationResult>.Ok(result));
+        {
+            await FoodPaymentSync.ApplyAsync(_db, payment.TransactionId, false, _orderHub);
+            return BadRequest(ApiResponse<PaymentVerificationResult>.Fail(result.Message ?? "Payment verification failed"));
+        }
     }
 
     [Authorize]
@@ -210,7 +227,7 @@ public class PaymentsController : ControllerBase
         if (!string.Equals(active, "Mock", StringComparison.OrdinalIgnoreCase))
         {
             return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<PaymentVerificationResult>.Fail(
-                "Live gateway is active. Complete payment in Easebuzz Checkout."));
+                "Live gateway is active. Complete payment in Razorpay Checkout."));
         }
 
         var userId = GetCurrentUserId();
@@ -257,143 +274,78 @@ public class PaymentsController : ControllerBase
         return Ok(ApiResponse<PaymentVerificationResult>.Ok(result));
     }
 
-    /// <summary>Easebuzz surl/furl browser return.</summary>
-    [AllowAnonymous]
-    [HttpGet("easebuzz-return")]
-    [HttpPost("easebuzz-return")]
-    public async Task<IActionResult> EasebuzzReturn()
-    {
-        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var kv in Request.HasFormContentType ? (IEnumerable<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>)Request.Form : Array.Empty<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>())
-            fields[kv.Key] = kv.Value.ToString();
-        foreach (var kv in Request.Query)
-            fields[kv.Key] = kv.Value.ToString();
-
-        fields.TryGetValue("txnid", out var txnid);
-        fields.TryGetValue("status", out var status);
-        txnid ??= "";
-        status ??= "";
-
-        var hashOk = false;
-        if (_paymentService is EasebuzzPaymentService ease && fields.Count > 0)
-            hashOk = ease.VerifyCallbackHash(fields);
-
-        if (!string.IsNullOrWhiteSpace(txnid))
-            await ApplyGatewayFieldsAsync(txnid, status, hashOk, fields);
-
-        var paidFlag = string.Equals(status, "success", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
-        var html = $@"<!DOCTYPE html><html><head><meta charset='utf-8'><title>Payment</title></head>
-<body style='font-family:sans-serif;background:#0A0E21;color:#fff;padding:40px'>
-<h2>{(paidFlag == "1" ? "Payment successful" : "Payment closed")}</h2>
-<p>txnid: {System.Net.WebUtility.HtmlEncode(txnid)}</p>
-<p>status: {System.Net.WebUtility.HtmlEncode(status)}</p>
-<p><a style='color:#FF6B35' href='http://localhost:8081'>Back to SuperApp</a></p>
-<script>
-try {{ window.opener && window.opener.postMessage({{ source:'easebuzz', txnid:'{System.Net.WebUtility.HtmlEncode(txnid)}', status:'{System.Net.WebUtility.HtmlEncode(status)}' }}, '*'); }} catch(e) {{}}
-setTimeout(function(){{ window.close(); }}, 1200);
-</script>
-</body></html>";
-        return Content(html, "text/html");
-    }
-
-    /// <summary>Easebuzz S2S webhook.</summary>
+    /// <summary>Razorpay Webhook endpoint.</summary>
     [AllowAnonymous]
     [HttpPost("webhook")]
     public async Task<IActionResult> Webhook()
     {
-        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (Request.HasFormContentType)
+        string body;
+        using (var reader = new StreamReader(Request.Body))
         {
-            foreach (var kv in Request.Form)
-                fields[kv.Key] = kv.Value.ToString();
+            body = await reader.ReadToEndAsync();
         }
 
-        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
-        bool hashVerified = false;
+        var webhookSecret = Environment.GetEnvironmentVariable("RAZORPAY_WEBHOOK_SECRET")
+            ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+            ?? _configuration["Razorpay:WebhookSecret"]
+            ?? _configuration["Payment:Secret"]
+            ?? string.Empty;
 
-        if (_paymentService is EasebuzzPaymentService ease)
+        Request.Headers.TryGetValue("X-Razorpay-Signature", out var signatureHeader);
+        var signature = signatureHeader.ToString();
+
+        if (_paymentService is RazorpayPaymentService rzpService)
         {
-            if (!ease.VerifyCallbackHash(fields))
+            if (!rzpService.VerifyWebhookSignature(body, signature, webhookSecret))
+            {
+                _logger.LogWarning("Razorpay webhook signature verification failed.");
                 return Unauthorized();
-            hashVerified = true;
-        }
-        else if (isProd)
-        {
-            return Unauthorized();
-        }
-        else
-        {
-            hashVerified = true;
+            }
         }
 
-        fields.TryGetValue("txnid", out var txnid);
-        fields.TryGetValue("status", out var status);
-        if (!string.IsNullOrWhiteSpace(txnid))
-            await ApplyGatewayFieldsAsync(txnid, status ?? "", hashVerified, fields);
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var eventType = root.TryGetProperty("event", out var ev) ? ev.GetString() : "";
+
+            if (root.TryGetProperty("payload", out var payload) &&
+                payload.TryGetProperty("payment", out var paymentObj) &&
+                paymentObj.TryGetProperty("entity", out var entity))
+            {
+                var paymentId = entity.TryGetProperty("id", out var idProp) ? idProp.GetString() : "";
+                var orderId = entity.TryGetProperty("order_id", out var orderIdProp) ? orderIdProp.GetString() : "";
+                var status = entity.TryGetProperty("status", out var statusProp) ? statusProp.GetString() : "";
+
+                if (!string.IsNullOrWhiteSpace(orderId))
+                {
+                    var payment = await _db.Payments.FirstOrDefaultAsync(p => p.TransactionId == orderId);
+                    if (payment != null && !string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (eventType == "payment.captured" || string.Equals(status, "captured", StringComparison.OrdinalIgnoreCase))
+                        {
+                            payment.Status = "PAID";
+                            payment.UpdatedAt = DateTime.UtcNow;
+                            await _db.SaveChangesAsync();
+                            await FoodPaymentSync.ApplyAsync(_db, orderId, true, _orderHub);
+                        }
+                        else if (eventType == "payment.failed" || string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
+                        {
+                            payment.Status = "FAILED";
+                            payment.UpdatedAt = DateTime.UtcNow;
+                            await _db.SaveChangesAsync();
+                            await FoodPaymentSync.ApplyAsync(_db, orderId, false, _orderHub);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing Razorpay webhook payload");
+        }
 
         return Ok(new { received = true });
-    }
-
-    /// <summary>
-    /// Idempotent gateway apply. Success becomes PAID only when callback hash was verified
-    /// and callback amount matches the stored payment amount.
-    /// Unknown statuses are left unchanged.
-    /// </summary>
-    private async Task ApplyGatewayFieldsAsync(string txnid, string status, bool hashVerified, IDictionary<string, string>? fields = null)
-    {
-        var payment = await _db.Payments.FirstOrDefaultAsync(p => p.TransactionId == txnid);
-        if (payment == null)
-            return;
-        if (string.Equals(payment.Status, "PAID", StringComparison.OrdinalIgnoreCase))
-        {
-            await FoodPaymentSync.ApplyAsync(_db, txnid, true, _orderHub);
-            return;
-        }
-
-        var normalized = (status ?? "").Trim().ToLowerInvariant();
-        if (normalized == "success")
-        {
-            if (!hashVerified)
-                return;
-
-            // Enforce required amount and parity on live success callback
-            if (fields == null)
-                return;
-
-            if (!fields.TryGetValue("amount", out var amtStr) && !fields.TryGetValue("net_amount_debit", out amtStr))
-                return; // Amount is mandatory on success callbacks
-
-            if (string.IsNullOrWhiteSpace(amtStr) || !decimal.TryParse(amtStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var callbackAmount))
-                return; // Malformed amount
-
-            if (Math.Abs(callbackAmount - payment.Amount) > 0.01m)
-                return; // Amount mismatch! Fail closed to prevent underpayment spoofing
-
-            // Enforce currency is INR if currency field is present
-            if (fields.TryGetValue("currency", out var currStr) && !string.IsNullOrWhiteSpace(currStr))
-            {
-                if (!string.Equals(currStr.Trim(), "INR", StringComparison.OrdinalIgnoreCase))
-                    return; // Currency mismatch
-            }
-
-            payment.Status = "PAID";
-        }
-        else if (normalized is "usercancelled" or "user_cancelled" or "cancelled")
-        {
-            payment.Status = "CANCELLED";
-        }
-        else if (normalized is "failure" or "failed" or "dropped" or "bounced")
-        {
-            payment.Status = "FAILED";
-        }
-        else
-        {
-            return;
-        }
-
-        payment.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-        await FoodPaymentSync.ApplyAsync(_db, txnid, payment.Status == "PAID", _orderHub);
     }
 
     [Authorize]

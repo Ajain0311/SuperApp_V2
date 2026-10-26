@@ -267,7 +267,7 @@ export const AdminDashboardHome: React.FC<AdminDashboardHomeProps> = ({ navigati
           </View>
           <View style={styles.navCardInfo}>
             <Text style={styles.navCardTitle}>Payments & Payouts</Text>
-            <Text style={styles.navCardSubtitle}>Easebuzz settlements and gross intake</Text>
+            <Text style={styles.navCardSubtitle}>Razorpay settlements and gross intake</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={AppColors.textSecondary} />
         </TouchableOpacity>

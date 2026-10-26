@@ -1,83 +1,103 @@
 import { Platform } from 'react-native';
 import { PaymentOrderResult } from '../models/payment';
 
-export interface RazorpayCheckoutSuccess {
+export interface RazorpayCheckoutSuccessResult {
   razorpay_payment_id: string;
   razorpay_order_id: string;
   razorpay_signature: string;
 }
 
-type RazorpayCtor = new (options: Record<string, unknown>) => {
-  open: () => void;
-  on: (event: string, handler: (resp: any) => void) => void;
-};
-
-function getRazorpayCtor(): RazorpayCtor | null {
-  if (typeof window === 'undefined') return null;
-  return (window as any).Razorpay ?? null;
-}
-
-export function loadRazorpayScript(): Promise<RazorpayCtor> {
-  if (Platform.OS !== 'web') {
-    return Promise.reject(new Error('Razorpay Checkout is only wired for web in this test kit.'));
+function loadRazorpayScript(): Promise<void> {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('Razorpay Web Checkout is only supported in web runtime'));
+  }
+  if ((window as any).Razorpay) {
+    return Promise.resolve();
   }
 
-  const existing = getRazorpayCtor();
-  if (existing) return Promise.resolve(existing);
-
   return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Could not load Razorpay checkout script')));
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;
-    script.onload = () => {
-      const ctor = getRazorpayCtor();
-      if (ctor) resolve(ctor);
-      else reject(new Error('Razorpay script loaded but Razorpay is missing'));
-    };
-    script.onerror = () => reject(new Error('Could not load Razorpay Checkout'));
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Razorpay checkout.js'));
     document.body.appendChild(script);
   });
 }
 
-export function openRazorpayCheckout(
+export async function openRazorpayCheckout(
   order: PaymentOrderResult,
-  prefillName?: string
-): Promise<RazorpayCheckoutSuccess> {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const Razorpay = await loadRazorpayScript();
-      const key = order.keyId;
-      if (!key || !key.startsWith('rzp_')) {
-        reject(new Error('Razorpay test key missing on order'));
-        return;
-      }
+  userDetails?: { name?: string; email?: string; contact?: string }
+): Promise<RazorpayCheckoutSuccessResult> {
+  if (Platform.OS !== 'web' && typeof window === 'undefined') {
+    throw new Error('Please open SuperApp Web or use web browser for standard web checkout.');
+  }
 
-      const rzp = new Razorpay({
-        key,
-        amount: Math.round(order.amount * 100),
-        currency: order.currency || 'INR',
-        name: 'SuperApp Test',
-        description: 'Test payment kit',
-        order_id: order.orderId,
-        prefill: { name: prefillName || 'Test User' },
-        theme: { color: '#FF6B35' },
-        handler: (response: RazorpayCheckoutSuccess) => resolve(response),
-        modal: {
-          ondismiss: () => reject(new Error('Checkout closed without paying')),
+  const key = order.keyId || process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
+  if (!key) {
+    throw new Error('Razorpay Key ID is missing.');
+  }
+
+  if (!order.orderId) {
+    throw new Error('Razorpay Order ID is missing.');
+  }
+
+  await loadRazorpayScript();
+  const Razorpay = (window as any).Razorpay;
+  if (!Razorpay) {
+    throw new Error('Razorpay SDK failed to initialize');
+  }
+
+  return new Promise((resolve, reject) => {
+    const amountInPaise = Math.round(order.amount * 100);
+
+    const options: any = {
+      key,
+      amount: amountInPaise,
+      currency: order.currency || 'INR',
+      name: 'RJ09 SEWA',
+      description: 'Order Payment',
+      order_id: order.orderId,
+      prefill: {
+        name: userDetails?.name || '',
+        email: userDetails?.email || '',
+        contact: userDetails?.contact || '',
+      },
+      theme: {
+        color: '#FF6B35',
+      },
+      handler: function (response: any) {
+        if (response && response.razorpay_payment_id) {
+          resolve({
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id || order.orderId,
+            razorpay_signature: response.razorpay_signature || '',
+          });
+        } else {
+          reject(new Error('Razorpay payment response missing payment_id'));
+        }
+      },
+      modal: {
+        ondismiss: function () {
+          reject(new Error('Payment modal closed by user'));
         },
-      });
+      },
+    };
 
-      rzp.on('payment.failed', (resp: any) => {
-        reject(new Error(resp?.error?.description || 'Payment failed'));
-      });
+    const rzp = new Razorpay(options);
 
-      rzp.open();
-    } catch (err: any) {
-      reject(err);
-    }
+    rzp.on('payment.failed', function (response: any) {
+      const desc = response?.error?.description || response?.error?.reason || 'Payment failed';
+      reject(new Error(`Razorpay payment failed: ${desc}`));
+    });
+
+    rzp.open();
   });
-}
-
-export function isRazorpayKey(key?: string | null): boolean {
-  return Boolean(key && key.startsWith('rzp_') && !key.includes('mock'));
 }

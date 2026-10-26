@@ -232,29 +232,32 @@ else
     builder.Services.AddScoped<IOtpService, BigBOtpService>();
 }
 
-// 3. Payment Gateway Provider (Easebuzz test/live; Mock fallback)
+// 3. Payment Gateway Provider (Razorpay test/live; Mock fallback)
 var paymentProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER")
     ?? builder.Configuration["Providers:Payment"]
-    ?? "Mock";
-var paymentKey = Environment.GetEnvironmentVariable("PAYMENT_KEY")
+    ?? "Razorpay";
+var paymentKey = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
+    ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
+    ?? builder.Configuration["Razorpay:KeyId"]
     ?? builder.Configuration["Payment:Key"];
-var paymentSalt = Environment.GetEnvironmentVariable("PAYMENT_SECRET")
-    ?? builder.Configuration["Payment:Salt"]
+var paymentSecret = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
+    ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+    ?? builder.Configuration["Razorpay:KeySecret"]
     ?? builder.Configuration["Payment:Secret"];
+
 builder.Services.AddScoped<MockPaymentService>();
-builder.Services.AddHttpClient<EasebuzzPaymentService>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-var useEasebuzz = string.Equals(paymentProvider, "Easebuzz", StringComparison.OrdinalIgnoreCase)
+builder.Services.AddScoped<RazorpayPaymentService>();
+
+var useRazorpay = (string.Equals(paymentProvider, "Razorpay", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(paymentProvider, "Easebuzz", StringComparison.OrdinalIgnoreCase))
     && !string.IsNullOrWhiteSpace(paymentKey)
-    && !string.IsNullOrWhiteSpace(paymentSalt);
+    && !string.IsNullOrWhiteSpace(paymentSecret);
 
-ProductionSecurityValidator.ValidatePaymentProvider(paymentProvider, paymentKey, paymentSalt, isProduction);
+ProductionSecurityValidator.ValidatePaymentProvider(paymentProvider, paymentKey, paymentSecret, isProduction);
 
-if (useEasebuzz)
+if (useRazorpay)
 {
-    builder.Services.AddScoped<IPaymentService>(sp => sp.GetRequiredService<EasebuzzPaymentService>());
+    builder.Services.AddScoped<IPaymentService>(sp => sp.GetRequiredService<RazorpayPaymentService>());
 }
 else
 {

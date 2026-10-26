@@ -60,7 +60,7 @@ public class ConfigController : ControllerBase
 
         var paymentProvider = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER")
             ?? _config["Providers:Payment"]
-            ?? "Easebuzz";
+            ?? "Razorpay";
 
         var paymentKey = Environment.GetEnvironmentVariable("PAYMENT_KEY")
             ?? _config["Payment:Key"]
@@ -87,3 +87,4 @@ public class ConfigController : ControllerBase
         return Ok(ApiResponse<ClientConfigDto>.Ok(dto));
     }
 }
+

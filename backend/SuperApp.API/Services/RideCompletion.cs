@@ -13,7 +13,7 @@ public static class RideCompletion
 
         var method = (ride.PaymentMethod ?? "CASH").Trim().ToUpperInvariant();
         var payment = (ride.PaymentStatus ?? string.Empty).Trim().ToUpperInvariant();
-        if (method is "ONLINE" or "EASEBUZZ")
+        if (method is "ONLINE" or "RAZORPAY")
         {
             if (payment is "PAID" or "COMPLETED")
                 ride.PaymentStatus = "COMPLETED";
@@ -23,3 +23,4 @@ public static class RideCompletion
         ride.PaymentStatus = "COMPLETED";
     }
 }
+

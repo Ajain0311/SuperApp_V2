@@ -839,7 +839,7 @@ public class FoodOrdersController : ControllerBase
     }
 
     /// <summary>
-    /// Start an Easebuzz (or configured gateway) session for an ONLINE food order.
+    /// Start an Razorpay (or configured gateway) session for an ONLINE food order.
     /// The order stays PENDING_PAYMENT until the gateway verifies the payment.
     /// </summary>
     [HttpPost("{id:long}/pay")]
@@ -869,7 +869,7 @@ public class FoodOrdersController : ControllerBase
         if (!result.Success)
             return BadRequest(ApiResponse<PaymentOrderResult>.Fail(result.ErrorMessage ?? "Could not start payment"));
 
-        return Ok(ApiResponse<PaymentOrderResult>.Ok(result, "Complete payment in Easebuzz. The order is paid only after verification."));
+        return Ok(ApiResponse<PaymentOrderResult>.Ok(result, "Complete payment in Razorpay. The order is paid only after verification."));
     }
 
     private async Task<string?> ResolveRestaurantOwnerPhoneAsync(long restaurantId, string? restaurantPhone)
@@ -976,3 +976,4 @@ public class FoodOrdersController : ControllerBase
         };
     }
 }
+

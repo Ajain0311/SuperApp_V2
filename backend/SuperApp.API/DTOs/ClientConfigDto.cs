@@ -4,7 +4,7 @@ public class ClientConfigDto
 {
     public string MapProvider { get; set; } = "Mapbox";
     public string MapboxAccessToken { get; set; } = string.Empty;
-    public string PaymentProvider { get; set; } = "Easebuzz";
+    public string PaymentProvider { get; set; } = "Razorpay";
     public string? PaymentKeyId { get; set; }
     public string Environment { get; set; } = "prod";
     public bool ShowTestOtp { get; set; } = false;
@@ -23,3 +23,4 @@ public class SupportConfigDto
     /// <summary>Default home marquee visibility window when a broadcast omits DisplayHours.</summary>
     public int BroadcastDefaultDisplayHours { get; set; } = 24;
 }
+
