@@ -16,12 +16,14 @@ public class AuthController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IOtpService _otpService;
     private readonly ITokenService _tokenService;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(AppDbContext db, IOtpService otpService, ITokenService tokenService)
+    public AuthController(AppDbContext db, IOtpService otpService, ITokenService tokenService, IConfiguration configuration)
     {
         _db = db;
         _otpService = otpService;
         _tokenService = tokenService;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -53,9 +55,13 @@ public class AuthController : ControllerBase
 
         // Generate OTP for both Citizen and Admin (Admin requires Password + OTP)
         string devOtp = await _otpService.GenerateAndSendOtpAsync(cleanMobile);
+        var otpMode = Environment.GetEnvironmentVariable("OTP_MODE")
+            ?? _configuration["Otp:Mode"]
+            ?? (string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase) ? "test" : null);
+        var isTestMode = string.Equals(otpMode, "test", StringComparison.OrdinalIgnoreCase);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
-        bool isRealSms = otpProvider.Equals("BIGB", StringComparison.OrdinalIgnoreCase);
-        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+        bool isRealSms = otpProvider.Equals("BIGB", StringComparison.OrdinalIgnoreCase) && !isTestMode;
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase) && !isTestMode;
 
         return Ok(new SendOtpResponse
         {
@@ -273,9 +279,13 @@ public class AuthController : ControllerBase
             return BadRequest(new SendOtpResponse { Success = false, Message = "Account is deactivated" });
 
         string devOtp = await _otpService.GenerateAndSendOtpAsync(cleanMobile);
+        var otpMode = Environment.GetEnvironmentVariable("OTP_MODE")
+            ?? _configuration["Otp:Mode"]
+            ?? (string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase) ? "test" : null);
+        var isTestMode = string.Equals(otpMode, "test", StringComparison.OrdinalIgnoreCase);
         var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") ?? "Mock";
-        bool isRealSms = otpProvider.Equals("BIGB", StringComparison.OrdinalIgnoreCase);
-        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
+        bool isRealSms = otpProvider.Equals("BIGB", StringComparison.OrdinalIgnoreCase) && !isTestMode;
+        var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase) && !isTestMode;
 
         return Ok(new SendOtpResponse
         {

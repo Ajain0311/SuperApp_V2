@@ -45,13 +45,10 @@ export const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   } = route.params;
 
   const { width: windowWidth } = useWindowDimensions();
-  const apiBase = (process.env.EXPO_PUBLIC_API_BASE_URL || '').toLowerCase();
-  const isLiveApi = apiBase.includes('makemytree.duckdns.org') || apiBase.includes('duckdns.org');
-  const showTestOtp =
-    !isLiveApi && process.env.EXPO_PUBLIC_SHOW_TEST_OTP === 'true';
+  const showTestOtp = process.env.EXPO_PUBLIC_SHOW_TEST_OTP === 'true' || Boolean(initialDevOtp);
   const defaultTestOtp = process.env.EXPO_PUBLIC_TEST_OTP;
   const [displayedOtp, setDisplayedOtp] = useState<string | undefined>(
-    showTestOtp ? (initialDevOtp || defaultTestOtp) : undefined
+    initialDevOtp || (showTestOtp ? defaultTestOtp : undefined)
   );
 
   const [isLoading, setIsLoading] = useState(false);

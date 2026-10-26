@@ -46,16 +46,49 @@ public class PaymentsController : ControllerBase
         var configured = Environment.GetEnvironmentVariable("PAYMENT_PROVIDER")
             ?? _configuration["Providers:Payment"]
             ?? "Razorpay";
-        var key = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
-            ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
-            ?? _configuration["Razorpay:KeyId"]
-            ?? _configuration["Payment:Key"]
-            ?? string.Empty;
-        var secret = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
-            ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
-            ?? _configuration["Razorpay:KeySecret"]
-            ?? _configuration["Payment:Secret"]
-            ?? string.Empty;
+
+        var paymentMode = Environment.GetEnvironmentVariable("PAYMENT_MODE")
+            ?? _configuration["Payment:Mode"]
+            ?? _configuration["Payment:Env"]
+            ?? "test";
+
+        var isTestMode = string.Equals(paymentMode, "test", StringComparison.OrdinalIgnoreCase);
+
+        string key;
+        string secret;
+
+        if (isTestMode)
+        {
+            key = Environment.GetEnvironmentVariable("RAZORPAY_TEST_KEY_ID")
+                ?? _configuration["Payment:Test:Key"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
+                ?? _configuration["Payment:Key"]
+                ?? string.Empty;
+
+            secret = Environment.GetEnvironmentVariable("RAZORPAY_TEST_KEY_SECRET")
+                ?? _configuration["Payment:Test:Secret"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+                ?? _configuration["Payment:Secret"]
+                ?? string.Empty;
+        }
+        else
+        {
+            key = Environment.GetEnvironmentVariable("RAZORPAY_LIVE_KEY_ID")
+                ?? _configuration["Payment:Live:Key"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
+                ?? _configuration["Payment:Key"]
+                ?? string.Empty;
+
+            secret = Environment.GetEnvironmentVariable("RAZORPAY_LIVE_KEY_SECRET")
+                ?? _configuration["Payment:Live:Secret"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+                ?? _configuration["Payment:Secret"]
+                ?? string.Empty;
+        }
 
         var hasCredentials = !string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(secret);
         var useRazorpay = (string.Equals(configured, "Razorpay", StringComparison.OrdinalIgnoreCase) ||

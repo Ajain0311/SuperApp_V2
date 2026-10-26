@@ -23,17 +23,46 @@ public class RazorpayPaymentService : IPaymentService
     {
         _db = db;
         _logger = logger;
-        _key = Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
-            ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
-            ?? configuration["Razorpay:KeyId"]
-            ?? configuration["Payment:Key"]
-            ?? string.Empty;
 
-        _secret = Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
-            ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
-            ?? configuration["Razorpay:KeySecret"]
-            ?? configuration["Payment:Secret"]
-            ?? string.Empty;
+        var mode = Environment.GetEnvironmentVariable("PAYMENT_MODE")
+            ?? configuration["Payment:Mode"]
+            ?? configuration["Payment:Env"]
+            ?? "test";
+
+        var isTestMode = string.Equals(mode, "test", StringComparison.OrdinalIgnoreCase);
+
+        if (isTestMode)
+        {
+            _key = Environment.GetEnvironmentVariable("RAZORPAY_TEST_KEY_ID")
+                ?? configuration["Payment:Test:Key"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
+                ?? configuration["Payment:Key"]
+                ?? string.Empty;
+
+            _secret = Environment.GetEnvironmentVariable("RAZORPAY_TEST_KEY_SECRET")
+                ?? configuration["Payment:Test:Secret"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+                ?? configuration["Payment:Secret"]
+                ?? string.Empty;
+        }
+        else
+        {
+            _key = Environment.GetEnvironmentVariable("RAZORPAY_LIVE_KEY_ID")
+                ?? configuration["Payment:Live:Key"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_ID")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_KEY")
+                ?? configuration["Payment:Key"]
+                ?? string.Empty;
+
+            _secret = Environment.GetEnvironmentVariable("RAZORPAY_LIVE_KEY_SECRET")
+                ?? configuration["Payment:Live:Secret"]
+                ?? Environment.GetEnvironmentVariable("RAZORPAY_KEY_SECRET")
+                ?? Environment.GetEnvironmentVariable("PAYMENT_SECRET")
+                ?? configuration["Payment:Secret"]
+                ?? string.Empty;
+        }
     }
 
     public async Task<PaymentOrderResult> CreatePaymentOrderAsync(

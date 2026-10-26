@@ -45,8 +45,17 @@ public class BigBOtpService : IOtpService
             : envTestOtp.Trim();
     }
 
-    private static bool IsOtpTestModeEnabled()
+    private bool IsOtpTestModeEnabled()
     {
+        var mode = Environment.GetEnvironmentVariable("OTP_MODE")
+            ?? _configuration["Otp:Mode"]
+            ?? (string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase) ? "test" : null);
+
+        if (!string.IsNullOrWhiteSpace(mode))
+        {
+            return string.Equals(mode, "test", StringComparison.OrdinalIgnoreCase);
+        }
+
         var isTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
         var isProd = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase);
         return isTestMode && !isProd;
