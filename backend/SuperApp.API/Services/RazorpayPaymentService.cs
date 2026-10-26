@@ -219,37 +219,76 @@ public class RazorpayPaymentService : IPaymentService
         };
     }
 
-    public Task<PaymentRefundResult> RefundPaymentAsync(string transactionId, decimal amount, string reason)
+    public async Task<PaymentRefundResult> RefundPaymentAsync(string transactionId, decimal amount, string reason)
     {
         try
         {
-            var client = new RazorpayClient(_key, _secret);
+            var targetPaymentId = transactionId;
             var amountInPaise = (long)Math.Round(amount * 100m, MidpointRounding.AwayFromZero);
-            var options = new Dictionary<string, object>
+
+            using var httpClient = new HttpClient();
+            var authBytes = Encoding.ASCII.GetBytes($"{_key}:{_secret}");
+            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(authBytes));
+
+            // If transactionId is an order ID (order_xxx), fetch the actual payment ID (pay_xxx) from Razorpay
+            if (targetPaymentId.StartsWith("order_", StringComparison.OrdinalIgnoreCase))
             {
-                { "amount", amountInPaise },
-                { "notes", new Dictionary<string, string> { { "reason", reason } } }
+                var orderPaymentsRes = await httpClient.GetAsync($"https://api.razorpay.com/v1/orders/{targetPaymentId}/payments");
+                if (orderPaymentsRes.IsSuccessStatusCode)
+                {
+                    var orderPaymentsJson = await orderPaymentsRes.Content.ReadAsStringAsync();
+                    using var orderDoc = JsonDocument.Parse(orderPaymentsJson);
+                    if (orderDoc.RootElement.TryGetProperty("items", out var items) && items.GetArrayLength() > 0)
+                    {
+                        var firstItem = items[0];
+                        if (firstItem.TryGetProperty("id", out var idProp))
+                        {
+                            targetPaymentId = idProp.GetString() ?? targetPaymentId;
+                        }
+                    }
+                }
+            }
+
+            var payload = new
+            {
+                amount = amountInPaise,
+                notes = new Dictionary<string, string> { { "reason", reason } }
             };
 
-            var refund = client.Payment.Fetch(transactionId).Refund(options);
-            var refundId = refund["id"]?.ToString() ?? string.Empty;
+            var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            var response = await httpClient.PostAsync($"https://api.razorpay.com/v1/payments/{targetPaymentId}/refund", jsonContent);
+            var responseBody = await response.Content.ReadAsStringAsync();
 
-            return Task.FromResult(new PaymentRefundResult
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Razorpay refund HTTP {Code}: {Body}", response.StatusCode, responseBody);
+                return new PaymentRefundResult
+                {
+                    Success = false,
+                    Amount = amount,
+                    ErrorMessage = responseBody
+                };
+            }
+
+            using var refundDoc = JsonDocument.Parse(responseBody);
+            var refundId = refundDoc.RootElement.TryGetProperty("id", out var rId) ? rId.GetString() ?? "" : "";
+
+            return new PaymentRefundResult
             {
                 Success = true,
                 RefundId = refundId,
                 Amount = amount
-            });
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Razorpay refund failed for transaction {TransactionId}", transactionId);
-            return Task.FromResult(new PaymentRefundResult
+            return new PaymentRefundResult
             {
                 Success = false,
                 Amount = amount,
                 ErrorMessage = ex.Message
-            });
+            };
         }
     }
 
