@@ -33,7 +33,7 @@ export class AppEnvironment {
     }
 
     // 2. Default to production Azure / DuckDNS hosted domain
-    return 'https://makemytree.duckdns.org/api';
+    return 'https://makemyfree.duckdns.org/api';
   }
 
   /**
@@ -79,7 +79,7 @@ export class AppEnvironment {
   static get showTestOtp(): boolean {
     // Never show bypass OTP on a live/public API host.
     const apiBase = (process.env.EXPO_PUBLIC_API_BASE_URL || this.baseUrl || '').toLowerCase();
-    if (apiBase.includes('makemytree.duckdns.org') || apiBase.includes('duckdns.org')) {
+    if (apiBase.includes('makemyfree.duckdns.org') || apiBase.includes('duckdns.org')) {
       return false;
     }
     if (this.isProduction) {

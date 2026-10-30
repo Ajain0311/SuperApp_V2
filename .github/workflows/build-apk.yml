@@ -41,8 +41,8 @@ jobs:
         run: |
           cat << 'EOF' > .env
           EXPO_PUBLIC_ENV=prod
-          EXPO_PUBLIC_API_BASE_URL=https://makemytree.duckdns.org/api
-          EXPO_PUBLIC_SIGNALR_HUB_URL=https://makemytree.duckdns.org
+          EXPO_PUBLIC_API_BASE_URL=https://makemyfree.duckdns.org/api
+          EXPO_PUBLIC_SIGNALR_HUB_URL=https://makemyfree.duckdns.org
           EXPO_PUBLIC_SHOW_TEST_OTP=false
           EXPO_PUBLIC_ENABLE_LOGS=false
           EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
@@ -53,8 +53,8 @@ jobs:
         run: npx expo prebuild --platform android --clean
         env:
           EXPO_PUBLIC_ENV: prod
-          EXPO_PUBLIC_API_BASE_URL: https://makemytree.duckdns.org/api
-          EXPO_PUBLIC_SIGNALR_HUB_URL: https://makemytree.duckdns.org
+          EXPO_PUBLIC_API_BASE_URL: https://makemyfree.duckdns.org/api
+          EXPO_PUBLIC_SIGNALR_HUB_URL: https://makemyfree.duckdns.org
           EXPO_PUBLIC_SHOW_TEST_OTP: "false"
           EXPO_PUBLIC_ENABLE_LOGS: "false"
 
@@ -67,8 +67,8 @@ jobs:
           ./gradlew assembleRelease --no-daemon
         env:
           EXPO_PUBLIC_ENV: prod
-          EXPO_PUBLIC_API_BASE_URL: https://makemytree.duckdns.org/api
-          EXPO_PUBLIC_SIGNALR_HUB_URL: https://makemytree.duckdns.org
+          EXPO_PUBLIC_API_BASE_URL: https://makemyfree.duckdns.org/api
+          EXPO_PUBLIC_SIGNALR_HUB_URL: https://makemyfree.duckdns.org
           EXPO_PUBLIC_SHOW_TEST_OTP: "false"
           EXPO_PUBLIC_ENABLE_LOGS: "false"
 

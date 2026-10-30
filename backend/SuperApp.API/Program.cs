@@ -370,7 +370,7 @@ builder.Services.AddSwaggerGen(c =>
 
 // --- CORS (Compatible with Web SignalR credentials & Mobile) ---
 var configuredOrigins = builder.Configuration.GetSection("AppSettings:CorsAllowedOrigins").Get<string[]>()
-    ?? new[] { "https://makemytree.duckdns.org", "http://localhost:8081", "http://127.0.0.1:8081" };
+    ?? new[] { "https://makemyfree.duckdns.org", "http://localhost:8081", "http://127.0.0.1:8081" };
 
 builder.Services.AddCors(options =>
 {
