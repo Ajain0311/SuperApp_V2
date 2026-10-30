@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { signalRService } from '../../services/signalr';
 import { FormKeyboardAvoid } from '../../components/common/FormKeyboardAvoid';
 import { mapHotelCommission, mapSettlementBatch, money } from './adminFinanceMappers';
 
@@ -23,21 +24,30 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
   const [activeTab, setActiveTab] = useState<'HOTELS' | 'BATCHES'>('HOTELS');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'ALL' | 'PENDING' | 'SETTLED'>('ALL');
+
+  // Rate Modal
   const [rateModalVisible, setRateModalVisible] = useState(false);
   const [selectedHotel, setSelectedHotel] = useState<ReturnType<typeof mapHotelCommission> | null>(null);
   const [newRate, setNewRate] = useState('');
   const [isSavingRate, setIsSavingRate] = useState(false);
 
+  // Settlement Batch Creation Modal
   const [settlementModalVisible, setSettlementModalVisible] = useState(false);
   const [settlementHotel, setSettlementHotel] = useState<ReturnType<typeof mapHotelCommission> | null>(null);
   const [collectionRef, setCollectionRef] = useState('');
   const [isCreatingBatch, setIsCreatingBatch] = useState(false);
 
-  const fetchData = useCallback(async (refreshing = false) => {
+  const fetchData = useCallback(async (refreshing = false, silent = false) => {
     if (refreshing) setIsRefreshing(true);
-    else setIsLoading(true);
+    else if (!silent) setIsLoading(true);
+    else setIsLiveSyncing(true);
+
     setErrorMessage(null);
     try {
       const [hotelsRes, batchesRes] = await Promise.all([
@@ -49,18 +59,105 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
       setHotels(Array.isArray(hotelsData) ? hotelsData.map(mapHotelCommission) : []);
       setBatches(Array.isArray(batchesData) ? batchesData.map(mapSettlementBatch) : []);
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Could not load commission data';
-      setErrorMessage(msg);
-      console.warn('[AdminHotelCommissions] Fetch error:', msg);
+      if (!silent) {
+        const msg = err?.response?.data?.message || err?.message || 'Could not load commission data';
+        setErrorMessage(msg);
+        console.warn('[AdminHotelCommissions] Fetch error:', msg);
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
+      setIsLiveSyncing(false);
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Real-Time Listener & Background Polling
+  useEffect(() => {
+    let unregisterStatus: (() => void) | null = null;
+
+    // 1. Listen for Order Status updates via SignalR Order Hub (e.g. order delivered / commission logged)
+    signalRService
+      .connectOrderHub()
+      .then(() => {
+        unregisterStatus = signalRService.onOrderStatusUpdated(() => {
+          fetchData(false, true);
+        });
+      })
+      .catch((err) => {
+        console.warn('[AdminHotelCommissions] SignalR connection notice:', err?.message);
+      });
+
+    // 2. Fallback real-time polling every 12 seconds
+    const interval = setInterval(() => {
+      fetchData(false, true);
+    }, 12000);
+
+    return () => {
+      clearInterval(interval);
+      if (unregisterStatus) {
+        unregisterStatus();
+      }
+    };
+  }, [fetchData]);
+
+  // Summary Metrics
+  const summary = useMemo(() => {
+    const totalPendingCommission = hotels.reduce((sum, h) => sum + (h.pendingBalance || 0), 0);
+    const totalGrossSales = hotels.reduce((sum, h) => sum + (h.grossSales || 0), 0);
+    const totalBatchedCount = batches.length;
+    const pendingApprovalBatches = batches.filter((b) => b.status.toUpperCase() !== 'APPROVED').length;
+
+    return {
+      totalPendingCommission,
+      totalGrossSales,
+      totalBatchedCount,
+      pendingApprovalBatches,
+    };
+  }, [hotels, batches]);
+
+  // Filtered Hotels
+  const filteredHotels = useMemo(() => {
+    let list = hotels;
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      list = list.filter(
+        (h) =>
+          h.restaurantName.toLowerCase().includes(query) ||
+          String(h.restaurantId).includes(query)
+      );
+    }
+    if (filterMode === 'PENDING') {
+      list = list.filter((h) => (h.pendingBalance || 0) > 0);
+    } else if (filterMode === 'SETTLED') {
+      list = list.filter((h) => (h.pendingBalance || 0) <= 0);
+    }
+    return list;
+  }, [hotels, searchQuery, filterMode]);
+
+  // Filtered Batches
+  const filteredBatches = useMemo(() => {
+    let list = batches;
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      list = list.filter(
+        (b) =>
+          b.restaurantName.toLowerCase().includes(query) ||
+          b.batchNumber.toLowerCase().includes(query) ||
+          (b.reference && b.reference.toLowerCase().includes(query))
+      );
+    }
+    if (filterMode === 'PENDING') {
+      list = list.filter((b) => b.status.toUpperCase() !== 'APPROVED');
+    } else if (filterMode === 'SETTLED') {
+      list = list.filter((b) => b.status.toUpperCase() === 'APPROVED');
+    }
+    return list;
+  }, [batches, searchQuery, filterMode]);
 
   const openRateModal = (h: ReturnType<typeof mapHotelCommission>) => {
     setSelectedHotel(h);
@@ -100,7 +197,6 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
     if (!settlementHotel) return;
     setIsCreatingBatch(true);
     try {
-      // Backend computes amount from PENDING ledger rows; amount is not accepted on create.
       await apiClient.post<any>('/admin/settlement-batches', {
         restaurantId: settlementHotel.restaurantId,
         referenceProof: collectionRef.trim() || undefined,
@@ -144,26 +240,94 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityRole="button">
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Hotel Commissions & Settlement</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.titleWrapper}>
+          <Text style={styles.headerTitle}>Hotel Commissions & Settlement</Text>
+          <View style={styles.liveIndicatorRow}>
+            <View style={[styles.liveDot, { backgroundColor: isLiveSyncing ? AppColors.yellow : '#10B981' }]} />
+            <Text style={styles.liveText}>{isLiveSyncing ? 'Syncing...' : 'Real-Time Active'}</Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => fetchData(true)} style={styles.refreshIconBtn}>
+          <Ionicons name="refresh" size={20} color={AppColors.primary} />
+        </TouchableOpacity>
       </View>
 
+      {/* Summary KPI Strip */}
+      <View style={styles.kpiContainer}>
+        <View style={styles.kpiBox}>
+          <Text style={styles.kpiLabel}>Pending Balance</Text>
+          <Text style={[styles.kpiVal, { color: AppColors.yellow }]}>₹{money(summary.totalPendingCommission)}</Text>
+        </View>
+        <View style={styles.kpiDivider} />
+        <View style={styles.kpiBox}>
+          <Text style={styles.kpiLabel}>Gross Sales</Text>
+          <Text style={styles.kpiVal}>₹{money(summary.totalGrossSales)}</Text>
+        </View>
+        <View style={styles.kpiDivider} />
+        <View style={styles.kpiBox}>
+          <Text style={styles.kpiLabel}>Pending Batches</Text>
+          <Text style={[styles.kpiVal, { color: summary.pendingApprovalBatches > 0 ? '#F87171' : '#10B981' }]}>
+            {summary.pendingApprovalBatches}
+          </Text>
+        </View>
+      </View>
+
+      {/* Search and Quick Filters */}
+      <View style={styles.controlsSection}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color={AppColors.textSecondary} style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={activeTab === 'HOTELS' ? 'Search hotel name or ID...' : 'Search batch #, hotel or ref...'}
+            placeholderTextColor="#888"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={16} color={AppColors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.filterChipRow}>
+          {(['ALL', 'PENDING', 'SETTLED'] as const).map((mode) => (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.filterChip, filterMode === mode && styles.filterChipActive]}
+              onPress={() => setFilterMode(mode)}
+            >
+              <Text style={[styles.filterChipText, filterMode === mode && styles.filterChipTextActive]}>
+                {mode === 'ALL' ? 'All' : mode === 'PENDING' ? 'Pending' : 'Settled'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Tab Switcher */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'HOTELS' && styles.tabItemActive]}
           onPress={() => setActiveTab('HOTELS')}
         >
-          <Text style={[styles.tabText, activeTab === 'HOTELS' && styles.tabTextActive]}>Hotels Ledger</Text>
+          <Text style={[styles.tabText, activeTab === 'HOTELS' && styles.tabTextActive]}>
+            Hotels Ledger ({filteredHotels.length})
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'BATCHES' && styles.tabItemActive]}
           onPress={() => setActiveTab('BATCHES')}
         >
-          <Text style={[styles.tabText, activeTab === 'BATCHES' && styles.tabTextActive]}>Settlement Batches</Text>
+          <Text style={[styles.tabText, activeTab === 'BATCHES' && styles.tabTextActive]}>
+            Settlement Batches ({filteredBatches.length})
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -187,13 +351,13 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
             <RefreshControl refreshing={isRefreshing} onRefresh={() => fetchData(true)} tintColor={AppColors.primary} />
           }
         >
-          {hotels.length === 0 ? (
+          {filteredHotels.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="business-outline" size={48} color={AppColors.textSecondary} />
-              <Text style={styles.emptyText}>No hotels found yet.</Text>
+              <Text style={styles.emptyText}>No matching hotels found.</Text>
             </View>
           ) : (
-            hotels.map((h) => (
+            filteredHotels.map((h) => (
               <View key={h.restaurantId} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
@@ -244,13 +408,13 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
             <RefreshControl refreshing={isRefreshing} onRefresh={() => fetchData(true)} tintColor={AppColors.primary} />
           }
         >
-          {batches.length === 0 ? (
+          {filteredBatches.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="documents-outline" size={48} color={AppColors.textSecondary} />
-              <Text style={styles.emptyText}>No settlement batches created yet.</Text>
+              <Text style={styles.emptyText}>No matching settlement batches found.</Text>
             </View>
           ) : (
-            batches.map((b) => (
+            filteredBatches.map((b) => (
               <View key={b.id} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
@@ -292,33 +456,35 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
         </ScrollView>
       )}
 
+      {/* Commission Rate Modal */}
       <Modal visible={rateModalVisible} transparent animationType="fade" onRequestClose={() => setRateModalVisible(false)}>
         <FormKeyboardAvoid>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalHeading}>Set Prospective Commission Rate</Text>
-            <Text style={styles.modalSub}>{selectedHotel?.restaurantName}</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newRate}
-              onChangeText={setNewRate}
-              keyboardType="numeric"
-              placeholder="e.g. 15.0"
-              placeholderTextColor="#777"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setRateModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleSaveRate} disabled={isSavingRate}>
-                {isSavingRate ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>Save Rate</Text>}
-              </TouchableOpacity>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalHeading}>Set Prospective Commission Rate</Text>
+              <Text style={styles.modalSub}>{selectedHotel?.restaurantName}</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={newRate}
+                onChangeText={setNewRate}
+                keyboardType="numeric"
+                placeholder="e.g. 15.0"
+                placeholderTextColor="#777"
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setRateModalVisible(false)}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.confirmBtn} onPress={handleSaveRate} disabled={isSavingRate}>
+                  {isSavingRate ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>Save Rate</Text>}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
         </FormKeyboardAvoid>
       </Modal>
 
+      {/* Settlement Batch Modal */}
       <Modal
         visible={settlementModalVisible}
         transparent
@@ -326,37 +492,37 @@ export const AdminHotelCommissionsScreen: React.FC<{ navigation: any }> = ({ nav
         onRequestClose={() => setSettlementModalVisible(false)}
       >
         <FormKeyboardAvoid>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalHeading}>Create Collection Batch</Text>
-            <Text style={styles.modalSub}>{settlementHotel?.restaurantName}</Text>
-            <Text style={styles.hintText}>
-              Pending balance ₹{money(settlementHotel?.pendingBalance)} will be batched from ledger entries.
-            </Text>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalHeading}>Create Collection Batch</Text>
+              <Text style={styles.modalSub}>{settlementHotel?.restaurantName}</Text>
+              <Text style={styles.hintText}>
+                Pending balance ₹{money(settlementHotel?.pendingBalance)} will be batched from ledger entries.
+              </Text>
 
-            <Text style={styles.inputLabel}>Collection Reference / Receipt</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={collectionRef}
-              onChangeText={setCollectionRef}
-              placeholder="e.g. CHEQUE-10294 or CASH-REC"
-              placeholderTextColor="#777"
-            />
+              <Text style={styles.inputLabel}>Collection Reference / Receipt</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={collectionRef}
+                onChangeText={setCollectionRef}
+                placeholder="e.g. CHEQUE-10294 or CASH-REC"
+                placeholderTextColor="#777"
+              />
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setSettlementModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleCreateSettlement} disabled={isCreatingBatch}>
-                {isCreatingBatch ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.confirmBtnText}>Create Batch</Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setSettlementModalVisible(false)}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.confirmBtn} onPress={handleCreateSettlement} disabled={isCreatingBatch}>
+                  {isCreatingBatch ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.confirmBtnText}>Create Batch</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
         </FormKeyboardAvoid>
       </Modal>
     </View>
@@ -377,11 +543,61 @@ const styles = StyleSheet.create({
     borderBottomColor: AppColors.border,
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFF', flexShrink: 1, textAlign: 'center' },
-  tabBar: { flexDirection: 'row', backgroundColor: AppColors.surface, borderBottomWidth: 1, borderBottomColor: AppColors.border },
+  refreshIconBtn: { padding: 6, borderRadius: 8, backgroundColor: AppColors.surfaceLight },
+  titleWrapper: { alignItems: 'center', flexShrink: 1 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#FFF', textAlign: 'center' },
+  liveIndicatorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  liveDot: { width: 7, height: 7, borderRadius: 4 },
+  liveText: { fontSize: 11, color: AppColors.textSecondary, fontWeight: '500' },
+  kpiContainer: {
+    flexDirection: 'row',
+    backgroundColor: AppColors.surface,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    alignItems: 'center',
+  },
+  kpiBox: { flex: 1, alignItems: 'center' },
+  kpiLabel: { fontSize: 11, color: AppColors.textSecondary },
+  kpiVal: { fontSize: 15, fontWeight: '800', color: '#FFF', marginTop: 3 },
+  kpiDivider: { width: 1, height: 26, backgroundColor: AppColors.border },
+  controlsSection: { marginHorizontal: 16, marginTop: 12 },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AppColors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  searchInput: { flex: 1, color: '#FFF', fontSize: 13, padding: 0 },
+  filterChipRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  filterChipActive: { backgroundColor: AppColors.primary + '25', borderColor: AppColors.primary },
+  filterChipText: { fontSize: 12, color: AppColors.textSecondary, fontWeight: '600' },
+  filterChipTextActive: { color: AppColors.primary, fontWeight: '700' },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: AppColors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.border,
+    marginTop: 12,
+  },
   tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center' },
   tabItemActive: { borderBottomWidth: 2, borderBottomColor: AppColors.primary },
-  tabText: { color: AppColors.textSecondary, fontSize: 14, fontWeight: '600' },
+  tabText: { color: AppColors.textSecondary, fontSize: 13, fontWeight: '600' },
   tabTextActive: { color: AppColors.primary },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   loadingText: { marginTop: 12, color: AppColors.textSecondary },
