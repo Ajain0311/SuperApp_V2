@@ -19,7 +19,7 @@ public static class SupportSettings
     {
         (PhoneKey, "18001234567", "Help & Support phone (toll-free or mobile, digits)"),
         (WhatsAppKey, "919876543210", "Help & Support WhatsApp number with country code (no +)"),
-        (EmailKey, "support@makemytree.com", "Help & Support email address"),
+        (EmailKey, "support@makemyfree.com", "Help & Support email address"),
         (HoursKey, "24x7 Customer Support", "Support hours shown on Help screen"),
         (FaqKey,
             "Q: How do I track my order?\nA: Open Activity or order confirmation for live tracking.\n\nQ: How do I cancel?\nA: Cancel from order details before the restaurant accepts.\n\nQ: Payment failed but money deducted?\nA: Contact support with your order ID; refunds usually settle in 3-5 days.",

@@ -1328,6 +1328,39 @@ public class AdminController : ControllerBase
             await _db.SaveChangesAsync();
         }
 
+        // Ensure default commission and platform settings exist
+        var requiredKeys = new (string Key, string Val, string Desc)[]
+        {
+            ("platform_commission_percent", "15", "Default platform commission on hotel/restaurant orders (%)"),
+            ("driver_commission_percent", "10", "Default platform cut on ride fares (%)"),
+            ("marketplace_commission_percent", "2", "Platform success fee on sold Bazaar listings (%)"),
+            ("marketplace_min_fee", "10", "Minimum platform fee on sold Bazaar listings (INR)"),
+            ("surge_pricing_multiplier", "1.0", "Global ride surge multiplier"),
+            ("free_delivery_threshold", "500", "Order value for free delivery in INR"),
+            ("maintenance_mode", "false", "App maintenance downtime mode (true/false)")
+        };
+
+        var existingKeys = await _db.AppSettings
+            .Where(s => requiredKeys.Select(r => r.Key).Contains(s.SettingKey))
+            .Select(s => s.SettingKey)
+            .ToListAsync();
+
+        var missingDefaults = requiredKeys.Where(r => !existingKeys.Contains(r.Key)).ToList();
+        if (missingDefaults.Count > 0)
+        {
+            foreach (var m in missingDefaults)
+            {
+                _db.AppSettings.Add(new AppSetting
+                {
+                    SettingKey = m.Key,
+                    SettingValue = m.Val,
+                    Description = m.Desc,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+            await _db.SaveChangesAsync();
+        }
+
         // Always ensure Help & Support keys exist (even when other settings already seeded).
         await SupportSettings.EnsureDefaultsAsync(_db);
 

@@ -89,4 +89,47 @@ public static class HotelCommissionLedgerService
             Gate.Release();
         }
     }
+
+    /// <summary>
+    /// Resolves driver ride platform fee percentage from AppSettings (default: 10%).
+    /// </summary>
+    public static async Task<decimal> ResolveDriverCommissionRateAsync(AppDbContext db)
+    {
+        var setting = await db.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.SettingKey == "driver_commission_percent");
+        if (setting != null && decimal.TryParse(setting.SettingValue, out var val) && val >= 0)
+        {
+            return val;
+        }
+        return 10.00m;
+    }
+
+    /// <summary>
+    /// Resolves marketplace sale success commission fee percentage from AppSettings (default: 2%).
+    /// </summary>
+    public static async Task<decimal> ResolveMarketplaceCommissionRateAsync(AppDbContext db)
+    {
+        var setting = await db.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.SettingKey == "marketplace_commission_percent");
+        if (setting != null && decimal.TryParse(setting.SettingValue, out var val) && val >= 0)
+        {
+            return val;
+        }
+        return 2.00m;
+    }
+
+    /// <summary>
+    /// Resolves marketplace minimum platform fee in INR (default: 10 INR).
+    /// </summary>
+    public static async Task<decimal> ResolveMarketplaceMinFeeAsync(AppDbContext db)
+    {
+        var setting = await db.AppSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.SettingKey == "marketplace_min_fee");
+        if (setting != null && decimal.TryParse(setting.SettingValue, out var val) && val >= 0)
+        {
+            return val;
+        }
+        return 10.00m;
+    }
+
 }

@@ -568,6 +568,13 @@ CREATE TABLE IF NOT EXISTS hotel_commission_ledgers (
 );
 CREATE INDEX IF NOT EXISTS idx_commission_restaurant ON hotel_commission_ledgers (restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_commission_status ON hotel_commission_ledgers (status);
+CREATE TABLE IF NOT EXISTS app_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value VARCHAR(1000) NULL,
+    description VARCHAR(255) NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NULL
+);
 CREATE TABLE IF NOT EXISTS marketplace_commission_ledgers (
     id BIGSERIAL PRIMARY KEY,
     listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,

@@ -955,8 +955,9 @@ public class DriverController : ControllerBase
             CustomerPhone = r.User?.MobileNumber ?? string.Empty
         }).ToList();
 
+        var driverFeePercent = await SuperApp.API.Services.HotelCommissionLedgerService.ResolveDriverCommissionRateAsync(_db);
         var totalGross = completedRides.Sum(r => r.ActualFare ?? r.EstimatedFare);
-        var platformCommission = Math.Round(totalGross * 0.10m, 2); // 10% platform fare commission
+        var platformCommission = Math.Round(totalGross * (driverFeePercent / 100m), 2);
         var netDriverEarnings = totalGross - platformCommission;
 
         // Group completed rides by day for payout history
@@ -967,7 +968,7 @@ public class DriverController : ControllerBase
             .Select(g =>
             {
                 var dayGross = g.Sum(r => r.ActualFare ?? r.EstimatedFare);
-                var dayFee = Math.Round(dayGross * 0.10m, 2);
+                var dayFee = Math.Round(dayGross * (driverFeePercent / 100m), 2);
                 return new DriverSettlementRecordDto
                 {
                     ReferenceId = $"SETTL-DRV-{g.Key:yyyyMMdd}-{driver.Id}",

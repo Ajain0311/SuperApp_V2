@@ -505,9 +505,10 @@ public class MarketplaceController : ControllerBase
 
                     if (existingLedger == null)
                     {
-                        var commissionRate = 2.0m; // 2% marketplace success fee
+                        var commissionRate = await SuperApp.API.Services.HotelCommissionLedgerService.ResolveMarketplaceCommissionRateAsync(_db);
+                        var minFee = await SuperApp.API.Services.HotelCommissionLedgerService.ResolveMarketplaceMinFeeAsync(_db);
                         var commissionAmount = Math.Round(listingStatus.Price * (commissionRate / 100m), 2);
-                        if (commissionAmount < 10 && listingStatus.Price > 0) commissionAmount = 10; // minimum ₹10 fee
+                        if (commissionAmount < minFee && listingStatus.Price > 0) commissionAmount = minFee;
 
                         _db.MarketplaceCommissionLedgers.Add(new MarketplaceCommissionLedger
                         {

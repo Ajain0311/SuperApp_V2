@@ -49,6 +49,9 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
   const [displayHours, setDisplayHours] = useState(24);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
 
+  // Configuration category filter
+  const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'COMMISSION' | 'RIDE_FARES' | 'SYSTEM'>('ALL');
+
   // Edit setting modal
   const [editingSetting, setEditingSetting] = useState<AdminSetting | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -209,7 +212,21 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
       </View>
 
       <FlatList
-        data={settings.filter((s) => !String(s.key || '').startsWith('support_'))}
+        data={settings
+          .filter((s) => !String(s.key || '').startsWith('support_'))
+          .filter((s) => {
+            const k = s.key.toLowerCase();
+            if (selectedCategory === 'COMMISSION') {
+              return k.includes('commission') || k.includes('fee');
+            }
+            if (selectedCategory === 'RIDE_FARES') {
+              return k.includes('ride_') || k.includes('arrived');
+            }
+            if (selectedCategory === 'SYSTEM') {
+              return !k.includes('commission') && !k.includes('fee') && !k.includes('ride_') && !k.includes('arrived');
+            }
+            return true;
+          })}
         keyExtractor={(item) => item.key}
         renderItem={renderSettingCard}
         contentContainerStyle={styles.listContent}
@@ -258,7 +275,7 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
             <Text style={styles.inputLabel}>Support Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. support@makemytree.com"
+              placeholder="e.g. support@makemyfree.com"
               placeholderTextColor={AppColors.textSecondary}
               value={supportEmail}
               onChangeText={setSupportEmail}
@@ -387,7 +404,35 @@ export const AdminSettingsScreen: React.FC<AdminSettingsScreenProps> = ({ naviga
               )}
             </TouchableOpacity>
 
-            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>PLATFORM CONFIGURATION</Text>
+            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>PLATFORM CONFIGURATION & COMMISSIONS</Text>
+            
+            {/* Category Filter Chips */}
+            <View style={styles.catChipsRow}>
+              {[
+                { id: 'ALL', label: 'All Settings' },
+                { id: 'COMMISSION', label: '% Commissions & Dues' },
+                { id: 'RIDE_FARES', label: 'Ride Fares' },
+                { id: 'SYSTEM', label: 'System & Surge' },
+              ].map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[
+                    styles.catChip,
+                    selectedCategory === c.id && styles.catChipActive,
+                  ]}
+                  onPress={() => setSelectedCategory(c.id as any)}
+                >
+                  <Text
+                    style={[
+                      styles.catChipText,
+                      selectedCategory === c.id && styles.catChipTextActive,
+                    ]}
+                  >
+                    {c.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
           </View>
         }
@@ -562,6 +607,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+  catChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  catChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: AppColors.surfaceLight,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  catChipActive: {
+    backgroundColor: AppColors.primary,
+    borderColor: AppColors.primary,
+  },
+  catChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AppColors.textSecondary,
+  },
+  catChipTextActive: {
+    color: '#FFFFFF',
   },
   sectionTitle: {
     fontSize: 12,

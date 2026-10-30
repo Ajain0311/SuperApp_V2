@@ -594,8 +594,9 @@ public class VendorController : ControllerBase
             .Where(o => o.RestaurantId == restaurant.Id && o.Status == OrderStatus.Delivered)
             .ToListAsync();
 
+        var hotelRatePercent = await SuperApp.API.Services.HotelCommissionLedgerService.ResolveCommissionRateAsync(_db, restaurant.Id);
         var totalRevenue = deliveredOrders.Sum(o => o.SubTotal - o.DiscountAmount);
-        var commission = totalRevenue * 0.15m; // 15% platform commission
+        var commission = Math.Round(totalRevenue * (hotelRatePercent / 100m), 2);
         var netPayout = totalRevenue - commission;
 
         var ledgers = await _db.HotelCommissionLedgers
