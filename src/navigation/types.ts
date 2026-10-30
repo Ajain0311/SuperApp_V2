@@ -69,6 +69,8 @@ export type RootStackParamList = {
   };
   KitchenOrders: undefined;
   VendorMenu: undefined;
+  VendorSettlements: undefined;
+  SellerSettlements: undefined;
   DriverRides: undefined;
   DriverEarnings: undefined;
   AdminCoupons: undefined;

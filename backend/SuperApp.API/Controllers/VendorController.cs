@@ -598,14 +598,66 @@ public class VendorController : ControllerBase
         var commission = totalRevenue * 0.15m; // 15% platform commission
         var netPayout = totalRevenue - commission;
 
+        var ledgers = await _db.HotelCommissionLedgers
+            .Where(l => l.RestaurantId == restaurant.Id)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(50)
+            .Select(l => new
+            {
+                id = l.Id,
+                orderNumber = l.OrderNumber,
+                grossAmount = l.CommissionBaseAmount,
+                commissionRate = l.CommissionRatePercent,
+                commissionAmount = l.CommissionAmount,
+                netProceeds = l.NetHotelProceeds,
+                status = l.Status,
+                settlementBatchId = l.SettlementBatchId,
+                createdAt = l.CreatedAt,
+                settledAt = l.SettledAt
+            })
+            .ToListAsync();
+
+        var batches = await _db.HotelSettlementBatches
+            .Where(b => b.RestaurantId == restaurant.Id)
+            .OrderByDescending(b => b.CreatedAt)
+            .Take(20)
+            .Select(b => new
+            {
+                id = b.Id,
+                batchNumber = b.BatchNumber,
+                orderCount = b.OrderCount,
+                settledAmount = b.TotalSettledAmount,
+                referenceProof = b.ReferenceProof,
+                status = b.Status,
+                createdAt = b.CreatedAt,
+                approvedAt = b.ApprovedAt
+            })
+            .ToListAsync();
+
+        var pendingCollectible = await _db.HotelCommissionLedgers
+            .Where(l => l.RestaurantId == restaurant.Id && l.Status == "PENDING")
+            .SumAsync(l => (decimal?)l.CommissionAmount) ?? 0;
+
         return Ok(ApiResponse<object>.Ok(new
         {
             totalOrders = deliveredOrders.Count,
             grossSales = totalRevenue,
             commissionDeducted = commission,
+            pendingCommissionDues = pendingCollectible,
             netEarnings = netPayout,
-            settlementStatus = "SETTLED"
+            settlementStatus = pendingCollectible > 0 ? "PENDING_DUES" : "UP_TO_DATE",
+            batches = batches,
+            ledger = ledgers
         }));
+    }
+
+    /// <summary>
+    /// Get vendor settlements and approved payout batches
+    /// </summary>
+    [HttpGet("settlements")]
+    public async Task<ActionResult<ApiResponse<object>>> GetSettlements()
+    {
+        return await GetEarnings();
     }
 
     /// <summary>

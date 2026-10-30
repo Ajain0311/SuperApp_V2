@@ -46,6 +46,15 @@ export interface DriverRideItem {
   dropoffLongitude?: number;
 }
 
+export interface DriverSettlementRecord {
+  referenceId: string;
+  date: string;
+  tripsCount: number;
+  grossFares: number;
+  netPayout: number;
+  status: string;
+}
+
 export interface DriverEarnings {
   todayEarnings: number;
   todayRides: number;
@@ -53,7 +62,11 @@ export interface DriverEarnings {
   weeklyRides: number;
   totalEarnings: number;
   totalRides: number;
+  platformFee?: number;
+  netSettledPayout?: number;
+  settlementStatus?: string;
   recentTrips: DriverRideItem[];
+  settlementHistory?: DriverSettlementRecord[];
 }
 
 class DriverService {

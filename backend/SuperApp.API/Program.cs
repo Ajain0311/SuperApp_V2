@@ -568,6 +568,22 @@ CREATE TABLE IF NOT EXISTS hotel_commission_ledgers (
 );
 CREATE INDEX IF NOT EXISTS idx_commission_restaurant ON hotel_commission_ledgers (restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_commission_status ON hotel_commission_ledgers (status);
+CREATE TABLE IF NOT EXISTS marketplace_commission_ledgers (
+    id BIGSERIAL PRIMARY KEY,
+    listing_id BIGINT NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+    seller_id BIGINT NOT NULL REFERENCES users(id),
+    sold_price DECIMAL(12,2) NOT NULL,
+    commission_rate_percent DECIMAL(5,2) NOT NULL DEFAULT 2.0,
+    commission_amount DECIMAL(12,2) NOT NULL DEFAULT 0.0,
+    net_seller_proceeds DECIMAL(12,2) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    settlement_batch_id BIGINT NULL,
+    reference_proof VARCHAR(100) NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    settled_at TIMESTAMP WITH TIME ZONE NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mkt_commission_seller ON marketplace_commission_ledgers (seller_id);
+CREATE INDEX IF NOT EXISTS idx_mkt_commission_status ON marketplace_commission_ledgers (status);
 ALTER TABLE banners ADD COLUMN IF NOT EXISTS subtitle VARCHAR(300) NULL;
 ALTER TABLE banners ADD COLUMN IF NOT EXISTS cta_text VARCHAR(80) NULL;
 ALTER TABLE coupons DROP CONSTRAINT IF EXISTS chk_coupons_module;

@@ -53,7 +53,21 @@ public class DriverEarningsDto
     public int WeeklyRides { get; set; }
     public decimal TotalEarnings { get; set; }
     public int TotalRides { get; set; }
+    public decimal PlatformFee { get; set; }
+    public decimal NetSettledPayout { get; set; }
+    public string SettlementStatus { get; set; } = "SETTLED";
     public List<DriverRideSummaryDto> RecentTrips { get; set; } = new();
+    public List<DriverSettlementRecordDto> SettlementHistory { get; set; } = new();
+}
+
+public class DriverSettlementRecordDto
+{
+    public string ReferenceId { get; set; } = string.Empty;
+    public DateTime Date { get; set; }
+    public int TripsCount { get; set; }
+    public decimal GrossFares { get; set; }
+    public decimal NetPayout { get; set; }
+    public string Status { get; set; } = "SETTLED";
 }
 
 public class DriverRideSummaryDto

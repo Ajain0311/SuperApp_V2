@@ -176,6 +176,21 @@ export const VendorDashboardScreen: React.FC<{ navigation: any }> = ({ navigatio
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionRow}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('VendorSettlements')}
+          >
+            <View style={[styles.actionIconBox, { backgroundColor: '#10B98120' }]}>
+              <Ionicons name="card" size={22} color="#10B981" />
+            </View>
+            <View style={styles.actionText}>
+              <Text style={styles.actionTitle}>Settlements & Commission</Text>
+              <Text style={styles.actionSubtitle}>View cleared batches, pending dues, ledger</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

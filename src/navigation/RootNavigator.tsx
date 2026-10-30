@@ -19,6 +19,8 @@ import { NotificationsScreen } from '../features/notifications/NotificationsScre
 import { ActivityScreen } from '../features/activity/ActivityScreen';
 import { VendorOrdersScreen } from '../features/vendor/VendorOrdersScreen';
 import { VendorMenuScreen } from '../features/vendor/VendorMenuScreen';
+import { VendorSettlementsScreen } from '../features/vendor/VendorSettlementsScreen';
+import { SellerSettlementsScreen } from '../features/marketplace/SellerSettlementsScreen';
 import { DriverRidesScreen } from '../features/driver/DriverRidesScreen';
 import { DriverEarningsScreen } from '../features/driver/DriverEarningsScreen';
 import { AdminCouponsScreen } from '../features/admin/AdminCouponsScreen';
@@ -56,6 +58,8 @@ export const RootNavigator: React.FC = () => {
       <Stack.Screen name="Activity" component={ActivityScreen} />
       <Stack.Screen name="KitchenOrders" component={VendorOrdersScreen} />
       <Stack.Screen name="VendorMenu" component={VendorMenuScreen} />
+      <Stack.Screen name="VendorSettlements" component={VendorSettlementsScreen} />
+      <Stack.Screen name="SellerSettlements" component={SellerSettlementsScreen} />
       <Stack.Screen name="DriverRides" component={DriverRidesScreen} />
       <Stack.Screen name="DriverEarnings" component={DriverEarningsScreen} />
       <Stack.Screen name="AdminCoupons" component={AdminCouponsScreen} />

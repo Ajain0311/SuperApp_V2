@@ -317,6 +317,14 @@ export const ProfileScreen: React.FC = () => {
             color={colors.primary}
             onPress={() => navigation.navigate('Activity', { initialTab: 2 })}
           />
+          <View style={styles.itemDivider} />
+          <MenuItem
+            icon="account-balance-wallet"
+            title="Bazaar Seller Settlements"
+            subtitle="View sold listings fee and dues"
+            color="#059669"
+            onPress={() => navigation.navigate('SellerSettlements')}
+          />
         </View>
 
         {/* Grow with SuperApp — role requests */}

@@ -493,8 +493,36 @@ public class MarketplaceController : ControllerBase
                 if (listingStatus.UserId != userId && !User.IsInRole(RoleNames.Admin))
                     return Forbid();
 
-                listingStatus.Status = request.Status.Trim().ToUpperInvariant();
+                var newStatus = request.Status.Trim().ToUpperInvariant();
+                listingStatus.Status = newStatus;
                 listingStatus.UpdatedAt = DateTime.UtcNow;
+
+                // When listing is marked as SOLD, create a marketplace platform commission ledger entry if not already exists
+                if (newStatus == ListingStatus.Sold)
+                {
+                    var existingLedger = await _db.MarketplaceCommissionLedgers
+                        .FirstOrDefaultAsync(m => m.ListingId == listingStatus.Id);
+
+                    if (existingLedger == null)
+                    {
+                        var commissionRate = 2.0m; // 2% marketplace success fee
+                        var commissionAmount = Math.Round(listingStatus.Price * (commissionRate / 100m), 2);
+                        if (commissionAmount < 10 && listingStatus.Price > 0) commissionAmount = 10; // minimum ₹10 fee
+
+                        _db.MarketplaceCommissionLedgers.Add(new MarketplaceCommissionLedger
+                        {
+                            ListingId = listingStatus.Id,
+                            SellerId = listingStatus.UserId,
+                            SoldPrice = listingStatus.Price,
+                            CommissionRatePercent = commissionRate,
+                            CommissionAmount = commissionAmount,
+                            NetSellerProceeds = Math.Max(0, listingStatus.Price - commissionAmount),
+                            Status = "PENDING",
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+
                 await _db.SaveChangesAsync();
 
                 return Ok(ApiResponse<ListingSummaryDto>.Ok(null!, $"Status updated to {listingStatus.Status}"));
@@ -507,6 +535,53 @@ public class MarketplaceController : ControllerBase
     /// <summary>
     /// Get all listings posted by the current user
     /// </summary>
+    /// <summary>
+    /// Get seller settlements and commission dues for sold items
+    /// </summary>
+    [HttpGet("seller-settlements")]
+    public async Task<ActionResult<ApiResponse<object>>> GetSellerSettlements()
+    {
+        var currentUserId = GetCurrentUserId();
+        if (!currentUserId.HasValue)
+            return Unauthorized(ApiResponse<object>.Fail("Authentication required"));
+
+        var userId = currentUserId.Value;
+
+        var ledgers = await _db.MarketplaceCommissionLedgers
+            .Include(m => m.Listing)
+            .Where(m => m.SellerId == userId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Select(m => new
+            {
+                id = m.Id,
+                listingId = m.ListingId,
+                title = m.Listing.Title,
+                soldPrice = m.SoldPrice,
+                commissionRate = m.CommissionRatePercent,
+                platformFee = m.CommissionAmount,
+                netProceeds = m.NetSellerProceeds,
+                status = m.Status,
+                reference = m.ReferenceProof,
+                createdAt = m.CreatedAt,
+                settledAt = m.SettledAt
+            })
+            .ToListAsync();
+
+        var totalSold = ledgers.Sum(l => l.soldPrice);
+        var totalFees = ledgers.Sum(l => l.platformFee);
+        var pendingFees = ledgers.Where(l => l.status == "PENDING").Sum(l => l.platformFee);
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            soldItemsCount = ledgers.Count,
+            totalSoldValue = totalSold,
+            totalPlatformFees = totalFees,
+            pendingFeesDue = pendingFees,
+            status = pendingFees > 0 ? "PENDING_DUES" : "CLEAR",
+            records = ledgers
+        }));
+    }
+
     [HttpGet("my-listings")]
     public async Task<ActionResult<ApiResponse<List<ListingSummaryDto>>>> GetMyListings()
     {

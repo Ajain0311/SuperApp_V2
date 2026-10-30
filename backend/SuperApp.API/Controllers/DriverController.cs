@@ -955,15 +955,44 @@ public class DriverController : ControllerBase
             CustomerPhone = r.User?.MobileNumber ?? string.Empty
         }).ToList();
 
+        var totalGross = completedRides.Sum(r => r.ActualFare ?? r.EstimatedFare);
+        var platformCommission = Math.Round(totalGross * 0.10m, 2); // 10% platform fare commission
+        var netDriverEarnings = totalGross - platformCommission;
+
+        // Group completed rides by day for payout history
+        var settlements = completedRides
+            .GroupBy(r => (r.CompletedAt ?? r.CreatedAt).Date)
+            .OrderByDescending(g => g.Key)
+            .Take(14)
+            .Select(g =>
+            {
+                var dayGross = g.Sum(r => r.ActualFare ?? r.EstimatedFare);
+                var dayFee = Math.Round(dayGross * 0.10m, 2);
+                return new DriverSettlementRecordDto
+                {
+                    ReferenceId = $"SETTL-DRV-{g.Key:yyyyMMdd}-{driver.Id}",
+                    Date = g.Key,
+                    TripsCount = g.Count(),
+                    GrossFares = dayGross,
+                    NetPayout = dayGross - dayFee,
+                    Status = "SETTLED"
+                };
+            })
+            .ToList();
+
         return Ok(ApiResponse<DriverEarningsDto>.Ok(new DriverEarningsDto
         {
             TodayEarnings = todayRides.Sum(r => r.ActualFare ?? r.EstimatedFare),
             TodayRides = todayRides.Count,
             WeeklyEarnings = weekRides.Sum(r => r.ActualFare ?? r.EstimatedFare),
             WeeklyRides = weekRides.Count,
-            TotalEarnings = completedRides.Sum(r => r.ActualFare ?? r.EstimatedFare),
+            TotalEarnings = totalGross,
             TotalRides = driver.TotalRides,
-            RecentTrips = recent
+            PlatformFee = platformCommission,
+            NetSettledPayout = netDriverEarnings,
+            SettlementStatus = "SETTLED",
+            RecentTrips = recent,
+            SettlementHistory = settlements
         }));
     }
 

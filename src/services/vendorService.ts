@@ -53,6 +53,11 @@ class VendorService {
     return res.data;
   }
 
+  async getSettlements(): Promise<any> {
+    const res = await apiClient.get<any>(ApiEndpoints.vendor.settlements);
+    return res.data?.data || res.data || {};
+  }
+
   async toggleStatus(isOpen: boolean): Promise<boolean> {
     const res = await apiClient.post<{ success: boolean; data: boolean }>(ApiEndpoints.vendor.toggleStatus, {
       isOpen,

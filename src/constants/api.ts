@@ -48,6 +48,7 @@ export const ApiEndpoints = {
     makeOffer: (id: string | number) => '/marketplace/listings/' + id + '/offer',
     listingOffers: (id: string | number) => '/marketplace/listings/' + id + '/offers',
     myOffers: '/marketplace/my-offers',
+    sellerSettlements: '/marketplace/seller-settlements',
     updateOfferStatus: (id: string | number) => '/marketplace/offers/' + id + '/status',
   },
 
@@ -102,6 +103,7 @@ export const ApiEndpoints = {
     updateOrderStatus: (id: string | number) => `/vendor/orders/${id}/status`,
     manageFoodItems: '/vendor/food-items',
     earnings: '/vendor/earnings',
+    settlements: '/vendor/settlements',
   },
 
   // Role applications (citizen → rider/hotel; admin approves)

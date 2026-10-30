@@ -43,6 +43,7 @@ public class AppDbContext : DbContext
     public DbSet<RideFareOption> RideFareOptions => Set<RideFareOption>();
     public DbSet<HotelCommissionLedger> HotelCommissionLedgers => Set<HotelCommissionLedger>();
     public DbSet<HotelSettlementBatch> HotelSettlementBatches => Set<HotelSettlementBatch>();
+    public DbSet<MarketplaceCommissionLedger> MarketplaceCommissionLedgers => Set<MarketplaceCommissionLedger>();
     public DbSet<RoleApplication> RoleApplications => Set<RoleApplication>();
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)

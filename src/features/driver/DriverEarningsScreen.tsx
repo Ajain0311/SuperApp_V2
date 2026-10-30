@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ export const DriverEarningsScreen: React.FC = () => {
   const [earnings, setEarnings] = useState<DriverEarnings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'SETTLEMENTS' | 'TRIPS'>('SETTLEMENTS');
 
   const loadEarnings = useCallback(async () => {
     try {
@@ -52,6 +54,9 @@ export const DriverEarningsScreen: React.FC = () => {
     );
   }
 
+  const settlements = earnings?.settlementHistory || [];
+  const trips = earnings?.recentTrips || [];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -62,8 +67,8 @@ export const DriverEarningsScreen: React.FC = () => {
           <View style={styles.headerTop}>
             <ScreenBackButton accessibilityLabel="Back" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Earnings & Payouts</Text>
-              <Text style={styles.subtitle}>Direct settlements from your completed rides</Text>
+              <Text style={styles.title}>Earnings & Settlements</Text>
+              <Text style={styles.subtitle}>Direct settlements from your completed rides & food deliveries</Text>
             </View>
           </View>
         </View>
@@ -96,22 +101,85 @@ export const DriverEarningsScreen: React.FC = () => {
               <Ionicons name="trophy" size={20} color="#8B5CF6" />
             </View>
             <Text style={styles.statVal}>₹{earnings?.totalEarnings.toFixed(0) || '0'}</Text>
-            <Text style={styles.statLabel}>All-Time Gross</Text>
+            <Text style={styles.statLabel}>Gross Lifetime</Text>
             <Text style={styles.statSub}>{earnings?.totalRides || 0} trips</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={[styles.statIconBox, { backgroundColor: '#10B98120' }]}>
+              <Ionicons name="checkmark-done" size={20} color="#10B981" />
+            </View>
+            <Text style={[styles.statVal, { color: '#10B981' }]}>
+              ₹{(earnings?.netSettledPayout ?? earnings?.totalEarnings ?? 0).toFixed(0)}
+            </Text>
+            <Text style={styles.statLabel}>Net Settled</Text>
+            <Text style={styles.statSub}>10% fee applied</Text>
           </View>
         </View>
 
-        {/* Recent Trips Receipts */}
-        <View style={styles.recentSection}>
-          <Text style={styles.sectionTitle}>Recent Trip Receipts</Text>
+        {/* Switcher Tab */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'SETTLEMENTS' && styles.tabItemActive]}
+            onPress={() => setActiveTab('SETTLEMENTS')}
+          >
+            <Text style={[styles.tabText, activeTab === 'SETTLEMENTS' && styles.tabTextActive]}>
+              Settlement Records ({settlements.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'TRIPS' && styles.tabItemActive]}
+            onPress={() => setActiveTab('TRIPS')}
+          >
+            <Text style={[styles.tabText, activeTab === 'TRIPS' && styles.tabTextActive]}>
+              Recent Trips ({trips.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-          {(!earnings?.recentTrips || earnings.recentTrips.length === 0) ? (
+        {activeTab === 'SETTLEMENTS' ? (
+          settlements.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="card-outline" size={32} color={colors.textTertiary} />
+              <Text style={styles.emptyText}>No settlement payout records found.</Text>
+            </View>
+          ) : (
+            settlements.map((s, idx) => (
+              <View key={idx} style={styles.settlementCard}>
+                <View style={styles.settlementTop}>
+                  <View>
+                    <Text style={styles.settlementRef}>{s.referenceId}</Text>
+                    <Text style={styles.settlementDate}>
+                      {new Date(s.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} • {s.tripsCount} trips
+                    </Text>
+                  </View>
+                  <View style={styles.settledBadge}>
+                    <Text style={styles.settledBadgeText}>{s.status}</Text>
+                  </View>
+                </View>
+                <View style={styles.settlementValues}>
+                  <View>
+                    <Text style={styles.sLabel}>Gross Fares</Text>
+                    <Text style={styles.sVal}>₹{s.grossFares.toFixed(0)}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.sLabel}>Net Payout Settled</Text>
+                    <Text style={[styles.sVal, { color: '#10B981', fontWeight: '800' }]}>
+                      ₹{s.netPayout.toFixed(0)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )
+        ) : (
+          trips.length === 0 ? (
             <View style={styles.emptyCard}>
               <Ionicons name="receipt-outline" size={32} color={colors.textTertiary} />
               <Text style={styles.emptyText}>No completed trips yet today.</Text>
             </View>
           ) : (
-            earnings.recentTrips.map((trip) => (
+            trips.map((trip) => (
               <View key={trip.id} style={styles.tripReceiptRow}>
                 <View style={styles.receiptLeft}>
                   <Text style={styles.receiptRideNum}>#{trip.rideNumber}</Text>
@@ -123,8 +191,8 @@ export const DriverEarningsScreen: React.FC = () => {
                 </View>
               </View>
             ))
-          )}
-        </View>
+          )
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -151,6 +219,7 @@ const styles = StyleSheet.create({
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
   title: {
     ...typography.h2,
@@ -224,7 +293,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   statVal: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.textPrimary,
   },
@@ -238,13 +307,73 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     marginTop: 2,
   },
-  recentSection: {
-    marginTop: spacing.xs,
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  sectionTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
+  tabItem: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabItemActive: {
+    backgroundColor: '#10B98125',
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  tabTextActive: {
+    color: '#10B981',
+    fontWeight: '700',
+  },
+  settlementCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: spacing.md,
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  settlementTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settlementRef: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  settlementDate: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    marginTop: 2,
+  },
+  settlementValues: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  sLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  sVal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: 2,
   },
   emptyCard: {
     backgroundColor: colors.surface,
