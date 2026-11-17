@@ -168,6 +168,36 @@ public class NotificationsController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok(ApiResponse.Ok("Device token registered successfully"));
     }
+
+    /// <summary>
+    /// Unregister a specific device push token on logout
+    /// </summary>
+    [HttpPost("unregister-device-token")]
+    public async Task<ActionResult<ApiResponse>> UnregisterDeviceToken([FromBody] RegisterDeviceTokenRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Token))
+        {
+            return BadRequest(ApiResponse.Fail("Device token is required"));
+        }
+
+        var cleanToken = request.Token.Trim();
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+            return Unauthorized(ApiResponse.Fail("Authentication required"));
+
+        var tokens = await _db.UserDeviceTokens
+            .Where(t => t.UserId == userId.Value && t.DeviceToken == cleanToken)
+            .ToListAsync();
+
+        foreach (var t in tokens)
+        {
+            t.IsActive = false;
+            t.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(ApiResponse.Ok("Device token unregistered successfully"));
+    }
 }
 
 

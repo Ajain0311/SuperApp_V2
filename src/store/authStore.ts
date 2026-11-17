@@ -4,6 +4,7 @@ import { storage } from '../services/storage';
 import { apiClient, ApiError } from '../services/apiClient';
 import { ApiEndpoints } from '../constants/api';
 import { signalRService } from '../services/signalr';
+import { notificationService } from '../services/notificationService';
 import { useRoleStore } from './roleStore';
 import { useCartStore } from './cartStore';
 import { useMarketplaceStore } from './marketplaceStore';
@@ -128,6 +129,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (response.user?.roles) {
           await useRoleStore.getState().syncWithUserRoles(response.user.roles);
         }
+        // Register push token with backend after successful authentication
+        notificationService.getExpoPushToken().then((pushToken) => {
+          if (pushToken) {
+            notificationService.registerDeviceTokenWithBackend(pushToken);
+          }
+        }).catch(() => {});
       }
 
       return response;
@@ -162,6 +169,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (response.user?.roles) {
           await useRoleStore.getState().syncWithUserRoles(response.user.roles);
         }
+        notificationService.getExpoPushToken().then((pushToken) => {
+          if (pushToken) {
+            notificationService.registerDeviceTokenWithBackend(pushToken);
+          }
+        }).catch(() => {});
       }
 
       return response;
@@ -203,6 +215,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    try {
+      await notificationService.unregisterDeviceToken();
+    } catch {
+      // Ignore unregister errors so logout proceeds
+    }
     try {
       await storage.clearAll();
     } catch {

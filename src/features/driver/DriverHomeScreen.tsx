@@ -93,7 +93,18 @@ export const DriverHomeScreen: React.FC = () => {
 
     const checkAndPromptRide = async () => {
       try {
+        // If driver was offline when opening push, bring them online so they can accept
+        if (!isOnline) {
+          try {
+            await driverService.toggleOnline(true);
+            setIsOnline(true);
+          } catch {
+            // Non-blocking if toggle fails
+          }
+        }
+
         const available = await driverService.getAvailableRides();
+        setAvailableRides(available);
         const matched = available.find((r) => r.id === focusRideId);
         if (matched) {
           Alert.alert(
