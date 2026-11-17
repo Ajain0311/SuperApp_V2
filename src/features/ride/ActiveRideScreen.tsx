@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -20,6 +22,8 @@ import { signalRService, DriverLocationEvent, RideStatusEvent } from '../../serv
 import { apiClient } from '../../services/apiClient';
 import { ApiEndpoints } from '../../constants/api';
 import { RatingModal } from '../../components/RatingModal';
+import { LocationMapPicker } from '../../components/maps/LocationMapPicker';
+import { locationService } from '../../services/locationService';
 
 export const ActiveRideScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -28,32 +32,142 @@ export const ActiveRideScreen: React.FC = () => {
   const rideNumericId = route.params?.rideNumericId;
   const initialRideData = route.params?.rideData;
 
-  const [driverId, setDriverId] = useState<number>(initialRideData?.driver?.id || 1);
+  const [driverId, setDriverId] = useState<number | null>(initialRideData?.driver?.id || null);
+  const [driverPhone, setDriverPhone] = useState<string>(initialRideData?.driver?.phone || '');
   const [showRatingModal, setShowRatingModal] = useState<boolean>(false);
-  const [otpCode, setOtpCode] = useState<string>(initialRideData?.otpCode || '4829');
-  const [driverName, setDriverName] = useState<string>(initialRideData?.driver?.fullName || 'Searching Driver...');
+  const [otpCode, setOtpCode] = useState<string>(initialRideData?.otpCode || '');
+  const [driverName, setDriverName] = useState<string>(initialRideData?.driver?.fullName || '');
   const [driverRating, setDriverRating] = useState<string>(
-    initialRideData?.driver?.rating ? String(initialRideData.driver.rating) : '4.9'
+    initialRideData?.driver?.rating ? String(initialRideData.driver.rating) : ''
   );
   const [driverTrips, setDriverTrips] = useState<string>(
-    initialRideData?.driver?.totalRides ? `(${initialRideData.driver.totalRides} trips)` : '(1,240 trips)'
+    initialRideData?.driver?.totalRides ? `(${initialRideData.driver.totalRides} trips)` : ''
   );
   const [vehicleModel, setVehicleModel] = useState<string>(
-    initialRideData?.driver?.vehicleModel || 'Standard Vehicle'
+    initialRideData?.driver?.vehicleModel || ''
   );
   const [registrationNumber, setRegistrationNumber] = useState<string>(
-    initialRideData?.driver?.registrationNumber || 'DL 04 AB 9821'
+    initialRideData?.driver?.registrationNumber || ''
+  );
+  const [vehicleType, setVehicleType] = useState<string>(
+    initialRideData?.vehicleType || 'BIKE'
+  );
+  const [pickupAddress, setPickupAddress] = useState<string>(
+    initialRideData?.pickupAddress || ''
+  );
+  const [dropoffAddress, setDropoffAddress] = useState<string>(
+    initialRideData?.dropoffAddress || ''
+  );
+  const [pickupCoords, setPickupCoords] = useState<{ latitude: number; longitude: number } | null>(
+    initialRideData?.pickupLatitude && initialRideData?.pickupLongitude
+      ? { latitude: Number(initialRideData.pickupLatitude), longitude: Number(initialRideData.pickupLongitude) }
+      : null
+  );
+  const [driverCoords, setDriverCoords] = useState<{ latitude: number; longitude: number } | null>(
+    initialRideData?.driver?.currentLatitude && initialRideData?.driver?.currentLongitude
+      ? {
+          latitude: Number(initialRideData.driver.currentLatitude),
+          longitude: Number(initialRideData.driver.currentLongitude),
+        }
+      : null
   );
   const [transitStatus, setTransitStatus] = useState<string>(
-    initialRideData?.driver ? 'Driver Assigned & In Transit' : 'Searching for Nearest Driver'
+    initialRideData?.driver ? 'Driver Assigned & Approaching' : 'Finding your driver…'
   );
-  const [arrivalEta, setArrivalEta] = useState<string>('3 mins away (0.8 km)');
+  const [arrivalEta, setArrivalEta] = useState<string>(
+    initialRideData?.driver ? 'Driver is on the way' : 'Waiting for driver assignment'
+  );
   const [fareText, setFareText] = useState<string>(
-    initialRideData?.estimatedFare ? `₹${initialRideData.estimatedFare}` : '₹45'
+    initialRideData?.estimatedFare ? `₹${initialRideData.estimatedFare}` : '--'
   );
   const [rideStatus, setRideStatus] = useState<string>(initialRideData?.status || 'REQUESTED');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isLocationUpdating, setIsLocationUpdating] = useState(false);
+  const isMountedRef = useRef(true);
 
+  // Synchronize state from API ride details
+  const applyRideDetails = (ride: any) => {
+    if (!ride || !isMountedRef.current) return;
+    if (ride.status) setRideStatus(ride.status);
+    if (ride.otpCode) setOtpCode(ride.otpCode);
+    if (ride.vehicleType) setVehicleType(ride.vehicleType);
+    if (ride.pickupAddress) setPickupAddress(ride.pickupAddress);
+    if (ride.dropoffAddress) setDropoffAddress(ride.dropoffAddress);
+    if (ride.estimatedFare) setFareText(`₹${ride.estimatedFare}`);
+    if (ride.pickupLatitude && ride.pickupLongitude) {
+      setPickupCoords({
+        latitude: Number(ride.pickupLatitude),
+        longitude: Number(ride.pickupLongitude),
+      });
+    }
+
+    if (ride.driver) {
+      const d = ride.driver;
+      if (d.id) setDriverId(d.id);
+      if (d.fullName) setDriverName(d.fullName);
+      if (d.phone) setDriverPhone(d.phone);
+      if (d.rating) setDriverRating(String(d.rating));
+      if (d.totalRides) setDriverTrips(`(${d.totalRides} trips)`);
+      if (d.vehicleModel) setVehicleModel(d.vehicleModel);
+      if (d.registrationNumber) setRegistrationNumber(d.registrationNumber);
+      if (d.currentLatitude && d.currentLongitude) {
+        setDriverCoords({
+          latitude: Number(d.currentLatitude),
+          longitude: Number(d.currentLongitude),
+        });
+      }
+
+      if (ride.status === 'REQUESTED' || ride.status === 'SEARCHING') {
+        setTransitStatus('Finding your driver…');
+        setArrivalEta('Waiting for driver assignment');
+      } else if (ride.status === 'ACCEPTED') {
+        setTransitStatus('Driver Assigned & Approaching');
+        setArrivalEta('Driver is on the way');
+      } else if (ride.status === 'ARRIVING') {
+        setTransitStatus('Driver Arrived at Pickup');
+        setArrivalEta('Waiting for passenger');
+      } else if (ride.status === 'STARTED') {
+        setTransitStatus('Ride in Progress');
+        setArrivalEta('Heading to Destination');
+      } else if (ride.status === 'COMPLETED') {
+        setTransitStatus('Ride Completed');
+        setArrivalEta('Arrived at Destination');
+      } else if (ride.status === 'CANCELLED') {
+        setTransitStatus('Ride Cancelled');
+        setArrivalEta('Trip Terminated');
+      }
+    } else {
+      setDriverId(null);
+      setDriverName('');
+      setDriverPhone('');
+      setTransitStatus('Finding your driver…');
+      setArrivalEta('Waiting for driver assignment');
+    }
+  };
+
+  // Initial hydrate from authorized backend endpoint
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (!rideNumericId) return;
+
+    apiClient
+      .get<any>(ApiEndpoints.ride.detail(rideNumericId))
+      .then((res) => {
+        const data = res.data?.data || res.data;
+        if (data) {
+          applyRideDetails(data);
+        }
+      })
+      .catch((err) => {
+        console.warn('[ActiveRide] Initial ride hydration error:', err);
+      });
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [rideNumericId]);
+
+  // Subscribe to SignalR events and join group
   useEffect(() => {
     if (!rideNumericId) return;
 
@@ -67,15 +181,36 @@ export const ActiveRideScreen: React.FC = () => {
         signalRService.joinRide(rideNumericId);
 
         unsubLocation = signalRService.onDriverLocationUpdated((data: DriverLocationEvent) => {
-          if (data.rideId === rideNumericId) {
-            setArrivalEta(`Driver updating: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`);
+          if (data.rideId === rideNumericId && isMountedRef.current) {
+            setDriverCoords({ latitude: data.latitude, longitude: data.longitude });
+            setIsLocationUpdating(true);
+            setTimeout(() => {
+              if (isMountedRef.current) setIsLocationUpdating(false);
+            }, 2000);
+
+            // Compute distance to pickup if available
+            if (pickupCoords) {
+              const distKm = locationService.calculateDistanceKm(
+                data.latitude,
+                data.longitude,
+                pickupCoords.latitude,
+                pickupCoords.longitude
+              );
+              const mins = locationService.estimateDurationMinutes(distKm);
+              setArrivalEta(`~${mins} mins away (${distKm} km)`);
+            } else {
+              setArrivalEta('Driver is on the way');
+            }
           }
         });
 
         unsubStatus = signalRService.onRideStatusChanged((data: RideStatusEvent) => {
-          if (data.rideId === rideNumericId) {
+          if (data.rideId === rideNumericId && isMountedRef.current) {
             setRideStatus(data.status);
-            if (data.status === 'ARRIVING') {
+            if (data.status === 'ACCEPTED') {
+              setTransitStatus('Driver Assigned & Approaching');
+              setArrivalEta('Driver is on the way');
+            } else if (data.status === 'ARRIVING') {
               setTransitStatus('Driver Arrived at Pickup');
               setArrivalEta('Waiting for passenger');
             } else if (data.status === 'STARTED') {
@@ -92,19 +227,29 @@ export const ActiveRideScreen: React.FC = () => {
         });
 
         unsubAssigned = signalRService.onDriverAssigned((driver: any) => {
-          if (driver) {
+          if (driver && isMountedRef.current) {
             if (driver.id) setDriverId(driver.id);
             if (driver.fullName) setDriverName(driver.fullName);
+            if (driver.phone) setDriverPhone(driver.phone);
             if (driver.rating) setDriverRating(String(driver.rating));
             if (driver.totalRides) setDriverTrips(`(${driver.totalRides} trips)`);
             if (driver.vehicleModel) setVehicleModel(driver.vehicleModel);
             if (driver.registrationNumber) setRegistrationNumber(driver.registrationNumber);
-            setTransitStatus('Driver Assigned & In Transit');
+            if (driver.currentLatitude && driver.currentLongitude) {
+              setDriverCoords({
+                latitude: Number(driver.currentLatitude),
+                longitude: Number(driver.currentLongitude),
+              });
+            }
+            setTransitStatus('Driver Assigned & Approaching');
             setRideStatus('ACCEPTED');
+            setArrivalEta('Driver is on the way');
           }
         });
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('[ActiveRide] SignalR subscription error:', err);
+      });
 
     return () => {
       if (rideNumericId) {
@@ -114,7 +259,38 @@ export const ActiveRideScreen: React.FC = () => {
       if (unsubStatus) unsubStatus();
       if (unsubAssigned) unsubAssigned();
     };
-  }, [rideNumericId]);
+  }, [rideNumericId, pickupCoords]);
+
+  const handleCallDriver = () => {
+    if (!driverPhone || !driverPhone.trim()) {
+      Alert.alert('Phone Unavailable', 'Driver phone number is not available yet.');
+      return;
+    }
+    const cleanNumber = driverPhone.replace(/[^\d+]/g, '');
+    if (!cleanNumber || cleanNumber.length < 5) {
+      Alert.alert('Invalid Number', 'Driver phone number is not valid.');
+      return;
+    }
+    const telUrl = `tel:${cleanNumber}`;
+    Linking.canOpenURL(telUrl)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(telUrl);
+        } else {
+          Alert.alert('Driver Phone', `Your driver's phone number is:\n${driverPhone}`);
+        }
+      })
+      .catch(() => {
+        Alert.alert('Driver Phone', `Your driver's phone number is:\n${driverPhone}`);
+      });
+  };
+
+  const handleOpenChat = () => {
+    Alert.alert(
+      'In-App Chat',
+      'Driver chat is currently in maintenance. Please use the Call button to contact your driver.'
+    );
+  };
 
   const handleCancelRide = () => {
     Alert.alert(
@@ -174,74 +350,120 @@ export const ActiveRideScreen: React.FC = () => {
         <View style={styles.arrivalCard}>
           <View style={styles.arrivalInfo}>
             <View style={styles.transitStatusRow}>
-              <View style={styles.greenPulseDot} />
-              <Text style={styles.transitStatusText}>{transitStatus}</Text>
+              <View style={[styles.greenPulseDot, !driverId && { backgroundColor: colors.primary }]} />
+              <Text style={[styles.transitStatusText, !driverId && { color: colors.primary }]}>{transitStatus}</Text>
+              {isLocationUpdating && (
+                <View style={styles.liveLocationBadge}>
+                  <ActivityIndicator size="small" color={colors.secondary} />
+                  <Text style={styles.liveLocationText}>Live GPS</Text>
+                </View>
+              )}
             </View>
             <Text style={styles.arrivalEtaText}>{arrivalEta}</Text>
           </View>
           <View style={styles.vehicleTypeCircle}>
-            <MaterialIcons name="two-wheeler" size={28} color={colors.secondary} />
+            <MaterialIcons
+              name={vehicleType === 'CAB' ? 'directions-car' : vehicleType === 'AUTO' ? 'electric-rickshaw' : 'two-wheeler'}
+              size={28}
+              color={colors.secondary}
+            />
           </View>
         </View>
+
+        {/* Live Driver & Pickup Map */}
+        {(driverCoords || pickupCoords) && (
+          <View style={styles.mapContainer}>
+            <LocationMapPicker
+              label={driverCoords ? 'LIVE DRIVER LOCATION' : 'PICKUP LOCATION'}
+              initialCoordinate={driverCoords || pickupCoords || undefined}
+              initialAddress={driverCoords ? 'Driver Location' : pickupAddress}
+              height={220}
+              hideSearchInput={true}
+              onSelect={() => {}}
+            />
+          </View>
+        )}
 
         {/* Start Ride OTP Box */}
-        <View style={styles.otpBox}>
-          <Text style={styles.otpTitle}>START RIDE OTP</Text>
-          <View style={styles.otpDigitsRow}>
-            {otpDigits.map((digit, idx) => (
-              <View key={idx} style={styles.otpDigitBox}>
-                <Text style={styles.otpDigitText}>{digit}</Text>
+        {otpCode ? (
+          <View style={styles.otpBox}>
+            <Text style={styles.otpTitle}>START RIDE OTP</Text>
+            <View style={styles.otpDigitsRow}>
+              {otpDigits.map((digit, idx) => (
+                <View key={idx} style={styles.otpDigitBox}>
+                  <Text style={styles.otpDigitText}>{digit}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.otpSubtitle}>
+              Share this code only after sitting on the vehicle
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Driver & Vehicle Card - Rendered only when driver is assigned */}
+        {driverId ? (
+          <View style={styles.driverCard}>
+            <View style={styles.driverHeaderRow}>
+              <View style={styles.driverAvatar}>
+                <MaterialIcons name="person" size={30} color={colors.secondary} />
               </View>
-            ))}
-          </View>
-          <Text style={styles.otpSubtitle}>
-            Share this code only after sitting on the vehicle
-          </Text>
-        </View>
 
-        {/* Driver & Vehicle Card */}
-        <View style={styles.driverCard}>
-          <View style={styles.driverHeaderRow}>
-            <View style={styles.driverAvatar}>
-              <MaterialIcons name="person" size={30} color={colors.secondary} />
-            </View>
-
-            <View style={styles.driverMeta}>
-              <Text style={styles.driverName}>{driverName}</Text>
-              <View style={styles.ratingRow}>
-                <MaterialIcons name="star" size={14} color={colors.yellow} />
-                <Text style={styles.ratingNumber}>{driverRating}</Text>
-                <Text style={styles.tripsCount}> {driverTrips}</Text>
+              <View style={styles.driverMeta}>
+                <Text style={styles.driverName}>{driverName || 'Captain'}</Text>
+                {driverRating ? (
+                  <View style={styles.ratingRow}>
+                    <MaterialIcons name="star" size={14} color={colors.yellow} />
+                    <Text style={styles.ratingNumber}>{driverRating}</Text>
+                    {driverTrips ? <Text style={styles.tripsCount}> {driverTrips}</Text> : null}
+                  </View>
+                ) : (
+                  <Text style={styles.tripsCount}>Verified Driver</Text>
+                )}
               </View>
+
+              <TouchableOpacity
+                style={[styles.callButton, !driverPhone && { opacity: 0.5 }]}
+                onPress={handleCallDriver}
+                accessibilityRole="button"
+                accessibilityLabel="Call Driver"
+              >
+                <MaterialIcons name="call" size={20} color={colors.secondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.chatButton}
+                onPress={handleOpenChat}
+                accessibilityRole="button"
+                accessibilityLabel="Chat Driver"
+              >
+                <MaterialIcons name="chat-bubble-outline" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.callButton}
-              onPress={() => Alert.alert('Calling Driver', `Calling ${driverName}...`)}
-            >
-              <MaterialIcons name="call" size={20} color={colors.secondary} />
-            </TouchableOpacity>
+            <View style={styles.cardDivider} />
 
-            <TouchableOpacity
-              style={styles.chatButton}
-              onPress={() => Alert.alert('Chat Driver', `Opening chat with ${driverName}...`)}
-            >
-              <MaterialIcons name="chat-bubble-outline" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
+            <View style={styles.vehicleRow}>
+              <View style={styles.vehicleModelInfo}>
+                <Text style={styles.vehicleModelText}>{vehicleModel || 'Standard Vehicle'}</Text>
+                <Text style={styles.vehicleColorText}>Verified Commercial Vehicle</Text>
+              </View>
+              {registrationNumber ? (
+                <View style={styles.regNumberBadge}>
+                  <Text style={styles.regNumberText}>{registrationNumber}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-
-          <View style={styles.cardDivider} />
-
-          <View style={styles.vehicleRow}>
-            <View style={styles.vehicleModelInfo}>
-              <Text style={styles.vehicleModelText}>{vehicleModel}</Text>
-              <Text style={styles.vehicleColorText}>Verified Commercial Vehicle</Text>
-            </View>
-            <View style={styles.regNumberBadge}>
-              <Text style={styles.regNumberText}>{registrationNumber}</Text>
-            </View>
+        ) : (
+          <View style={styles.searchingCard}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.searchingCardTitle}>Connecting with nearby drivers</Text>
+            <Text style={styles.searchingCardSubtitle}>
+              Please hold on while drivers in your area review your ride request.
+            </Text>
           </View>
-        </View>
+        )}
 
         {/* Live Trip Timeline */}
         <View style={styles.timelineCard}>
@@ -250,15 +472,19 @@ export const ActiveRideScreen: React.FC = () => {
           <View style={styles.timelineSteps}>
             {/* Step 1 */}
             <View style={styles.stepItem}>
-              <View style={[styles.stepCircle, styles.stepCircleDone]}>
-                <MaterialIcons name="check" size={12} color="#FFFFFF" />
+              <View style={[styles.stepCircle, driverId ? styles.stepCircleDone : styles.stepCircleActive]}>
+                <MaterialIcons name={driverId ? 'check' : 'hourglass-empty'} size={12} color={driverId ? '#FFFFFF' : colors.primary} />
               </View>
               <View style={styles.stepTextContent}>
-                <Text style={styles.stepTitleDone}>Driver Assigned</Text>
-                <Text style={styles.stepSubtitle}>{driverName} accepted your ride request</Text>
+                <Text style={driverId ? styles.stepTitleDone : styles.stepTitleActive}>
+                  {driverId ? 'Driver Assigned' : 'Finding Driver'}
+                </Text>
+                <Text style={styles.stepSubtitle}>
+                  {driverId ? `${driverName} accepted your ride request` : 'Searching nearest drivers in pool'}
+                </Text>
               </View>
             </View>
-            <View style={[styles.stepLine, styles.stepLineDone]} />
+            <View style={[styles.stepLine, driverId ? styles.stepLineDone : null]} />
 
             {/* Step 2 */}
             <View style={styles.stepItem}>
@@ -377,14 +603,16 @@ export const ActiveRideScreen: React.FC = () => {
       </ScrollView>
 
       {/* Driver Rating Modal */}
-      <RatingModal
-        visible={showRatingModal}
-        targetType="DRIVER"
-        targetId={driverId}
-        title="Rate Your Driver"
-        subtitle={driverName}
-        onClose={() => setShowRatingModal(false)}
-      />
+      {driverId ? (
+        <RatingModal
+          visible={showRatingModal}
+          targetType="DRIVER"
+          targetId={driverId}
+          title="Rate Your Driver"
+          subtitle={driverName}
+          onClose={() => setShowRatingModal(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -713,5 +941,48 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.textSecondary,
     fontWeight: '600',
+  },
+  liveLocationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 200, 83, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  liveLocationText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.secondary,
+  },
+  mapContainer: {
+    marginTop: spacing.md,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  searchingCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchingCardTitle: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  searchingCardSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: spacing.sm,
   },
 });

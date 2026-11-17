@@ -281,19 +281,14 @@ public class RidesController : ControllerBase
                 ride.Id.ToString());
 
             // Broadcast real push notification to ALL registered captains (regardless of online/offline status)
-            // Fire-and-forget safely so passenger booking response is fast and not delayed
-            _ = Task.Run(async () =>
+            try
             {
-                try
-                {
-                    await _notificationService.BroadcastRideToAllCaptainsAsync(ride);
-                }
-                catch (Exception ex)
-                {
-                    // Ensure background failure does not impact passenger booking or log sensitive data
-                    Console.WriteLine($"[PushDispatch] Error broadcasting ride {ride.Id} to captains: {ex.Message}");
-                }
-            });
+                await _notificationService.BroadcastRideToAllCaptainsAsync(ride);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PushDispatch] Error broadcasting ride {ride.Id} to captains: {ex.Message}");
+            }
         }
 
         // Broadcast to all drivers in drivers-pool via SignalR for connected captains
@@ -307,21 +302,6 @@ public class RidesController : ControllerBase
             status = ride.Status,
             createdAt = ride.CreatedAt
         });
-
-
-        var driverSummary = new DriverSummaryDto
-        {
-            Id = 1,
-            FullName = "Driver Pool",
-            Phone = string.Empty,
-            Rating = 4.9m,
-            TotalRides = 120,
-            VehicleModel = "Pending Driver Dispatch",
-            RegistrationNumber = "SEARCHING",
-            VehicleColor = "Standard",
-            CurrentLatitude = request.PickupLatitude,
-            CurrentLongitude = request.PickupLongitude
-        };
 
         return Ok(ApiResponse<RideDto>.Ok(new RideDto
         {
@@ -337,7 +317,7 @@ public class RidesController : ControllerBase
             PaymentMethod = ride.PaymentMethod,
             PaymentStatus = ride.PaymentStatus,
             CreatedAt = ride.CreatedAt,
-            Driver = driverSummary
+            Driver = null
         }));
     }
 

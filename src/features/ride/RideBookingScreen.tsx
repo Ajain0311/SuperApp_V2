@@ -180,7 +180,12 @@ export const RideBookingScreen: React.FC = () => {
     setIsLocating(true);
     setGpsStatus('LOCATING');
     try {
-      const loc = await locationService.getCurrentLocation({ timeoutMs: 10000, throwOnError: true });
+      const loc = await locationService.getCurrentLocation({
+        timeoutMs: 12000,
+        throwOnError: true,
+        forceFresh: true,
+        maxAccuracyMeters: 50,
+      });
       if (!isMountedRef.current) return;
 
       if (loc.isFallback) {
@@ -191,6 +196,7 @@ export const RideBookingScreen: React.FC = () => {
       const newAddress = loc.formattedAddress || `${loc.latitude.toFixed(4)}°, ${loc.longitude.toFixed(4)}°`;
       setPickupCoords(newCoords);
       setPickupAddress(newAddress);
+      setPickupInput(newAddress);
       setGpsStatus('ONLINE');
       if (dropoffCoords) {
         fetchEstimate(newCoords, newAddress, dropoffCoords, dropoffAddress);

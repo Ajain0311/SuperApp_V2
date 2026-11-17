@@ -593,6 +593,13 @@ public class DriverController : ControllerBase
         if (driver == null)
             return Forbid();
 
+        if (request.Latitude < -90m || request.Latitude > 90m ||
+            request.Longitude < -180m || request.Longitude > 180m ||
+            (request.Latitude == 0m && request.Longitude == 0m))
+        {
+            return BadRequest(ApiResponse.Fail("Invalid or out-of-range GPS coordinates."));
+        }
+
         driver.CurrentLatitude = request.Latitude;
         driver.CurrentLongitude = request.Longitude;
         driver.UpdatedAt = DateTime.UtcNow;

@@ -185,6 +185,33 @@ describe('LocationService - Device GPS, Permissions & Geocoding', () => {
       expect(loc.formattedAddress).toBe('12.9716°, 77.5946°');
       expect(loc.isFallback).toBe(false);
     });
+
+    it('bypasses last known position and fetches fresh fix when forceFresh is true', async () => {
+      (Location.hasServicesEnabledAsync as jest.Mock).mockResolvedValueOnce(true);
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+        status: Location.PermissionStatus.GRANTED,
+      });
+
+      const staleTimestamp = Date.now() - 5000;
+      (Location.getLastKnownPositionAsync as jest.Mock).mockResolvedValueOnce({
+        coords: { latitude: 28.5000, longitude: 77.0000, accuracy: 20 },
+        timestamp: staleTimestamp,
+      });
+
+      const freshTimestamp = Date.now();
+      (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValueOnce({
+        coords: { latitude: 28.6139, longitude: 77.2090, accuracy: 15 },
+        timestamp: freshTimestamp,
+      });
+      (Location.reverseGeocodeAsync as jest.Mock).mockResolvedValueOnce([
+        { name: 'Fresh Location', street: 'Kartavya Path', city: 'New Delhi', region: 'Delhi' },
+      ]);
+
+      const loc = await locationService.getCurrentLocation({ forceFresh: true });
+      expect(loc.latitude).toBe(28.6139);
+      expect(loc.longitude).toBe(77.2090);
+      expect(Location.getCurrentPositionAsync).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('Watch Location & Teardown', () => {

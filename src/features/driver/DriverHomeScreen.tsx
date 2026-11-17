@@ -214,6 +214,16 @@ export const DriverHomeScreen: React.FC = () => {
           const unsub = await locationService.watchLocation(
             async (coords) => {
               try {
+                if (
+                  !Number.isFinite(coords.latitude) ||
+                  !Number.isFinite(coords.longitude) ||
+                  coords.latitude < -90 || coords.latitude > 90 ||
+                  coords.longitude < -180 || coords.longitude > 180 ||
+                  (coords.latitude === 0 && coords.longitude === 0)
+                ) {
+                  return;
+                }
+
                 await driverService.updateLocation(
                   coords.latitude,
                   coords.longitude,
