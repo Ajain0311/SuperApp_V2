@@ -83,4 +83,24 @@ public class PunjabGovSmsServiceTests
         var reuseCheck = await otpService.VerifyOtpAsync(testPhone, otpCode, "LOGIN");
         Assert.False(reuseCheck);
     }
+
+    [Fact]
+    public void Fast2SmsService_NormalizesMobileNumber()
+    {
+        Assert.Equal("9876543210", Fast2SmsService.NormalizeMobileNumber("+919876543210"));
+        Assert.Equal("9876543210", Fast2SmsService.NormalizeMobileNumber("09876543210"));
+        Assert.Equal("9876543210", Fast2SmsService.NormalizeMobileNumber("9876543210"));
+        Assert.Equal("9876543210", Fast2SmsService.NormalizeMobileNumber("+91 98765 43210"));
+    }
+
+    [Fact]
+    public async Task Fast2SmsService_ReturnsFalse_WhenApiKeyMissing()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var client = new HttpClient();
+        var service = new Fast2SmsService(client, config, NullLogger<Fast2SmsService>.Instance);
+
+        var result = await service.SendSmsAsync("9876543210", "Test OTP: 1234");
+        Assert.False(result);
+    }
 }
