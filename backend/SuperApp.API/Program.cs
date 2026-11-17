@@ -171,43 +171,17 @@ else
     builder.Services.AddScoped<IStorageService, LocalStorageService>();
 }
 
-// 2. OTP / SMS Provider (Mock in development/testing; PunjabGov / Fast2SMS in production)
+// 2. OTP / SMS Provider (Mock in development/testing; PunjabGov / Live SMS in production)
 var otpTestMode = string.Equals(Environment.GetEnvironmentVariable("OTP_TEST_MODE"), "true", StringComparison.OrdinalIgnoreCase);
 var otpProvider = Environment.GetEnvironmentVariable("OTP_PROVIDER") 
     ?? builder.Configuration["Providers:Otp"] 
     ?? (otpTestMode ? "Mock" : "PunjabGov");
 
-// SMS Provider Selection:
-// 1 = PunjabGov SMS Provider (current)
-// 2 = Fast2SMS Provider (new)
-var smsProviderConfig = Environment.GetEnvironmentVariable("SMS_PROVIDER") 
-    ?? builder.Configuration["Providers:SmsProvider"] 
-    ?? "2"; // Default to 2 (Fast2SMS)
-
 builder.Services.AddHttpClient<PunjabGovSmsService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
 });
-
-builder.Services.AddHttpClient<Fast2SmsService>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(15);
-});
-
-if (smsProviderConfig == "2" || string.Equals(smsProviderConfig, "Fast2Sms", StringComparison.OrdinalIgnoreCase))
-{
-    // Fast2SMS provider active
-    builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<Fast2SmsService>());
-}
-else
-{
-    // Option 1: Current PunjabGov SMS provider
-    builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
-}
-
-// Previous hardcoded provider (commented out as requested):
-// builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
-
+builder.Services.AddScoped<ISmsService>(sp => sp.GetRequiredService<PunjabGovSmsService>());
 builder.Services.AddScoped<MockOtpService>();
 builder.Services.AddScoped<PunjabGovOtpService>();
 ProductionSecurityValidator.ValidateOtpProvider(otpProvider, otpTestMode, isProduction);
